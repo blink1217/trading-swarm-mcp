@@ -2,9 +2,10 @@
 # the guardrails' own invariant suite at the pinned SHA — the same gate pattern as
 # trading-swarm-alpha/.github/workflows/guardrails-invariants.yml.
 #
-# The source repos are private: this job needs GUARDRAILS_CI_TOKEN and does not run on
+# The source repos are private: checkout uses read-only SSH deploy keys stored as
+# DEPLOY_KEY (guardrails) and DEPLOY_KEY_ALPHA (alpha), so this job does not run on
 # fork PRs (no secrets). The vendored subset is committed, so contributors without the
-# token can rely on `ci.yml`'s local pin check (hashes) instead.
+# keys can rely on `ci.yml`'s local pin check (hashes) instead.
 name: vendored-pin-check
 
 on:
@@ -15,6 +16,9 @@ on:
 jobs:
   pin-check:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_KNOWN_HOSTS: |
+        github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +45,8 @@ jobs:
           repository: blink1217/trading-swarm-guardrails
           ref: ${{ steps.pins.outputs.guardrails_sha }}
           path: guardrails-src
-          token: ${{ secrets.GUARDRAILS_CI_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          ssh-known-hosts: ${{ env.GITHUB_KNOWN_HOSTS }}
 
       - name: Checkout alpha at pinned SHA
         uses: actions/checkout@v4
@@ -49,7 +54,8 @@ jobs:
           repository: blink1217/trading-swarm-alpha
           ref: ${{ steps.pins.outputs.alpha_sha }}
           path: alpha-src
-          token: ${{ secrets.GUARDRAILS_CI_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY_ALPHA }}
+          ssh-known-hosts: ${{ env.GITHUB_KNOWN_HOSTS }}
 
       - uses: actions/setup-python@v5
         with:
