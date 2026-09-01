@@ -79,14 +79,15 @@ def audit_request_block(genome_hash: str, violation_summary: list[str]) -> dict:
         "genome_hash": genome_hash,
         "violation_summary": violation_summary,
         "note": ("hash + violation summary only — no proprietary payload is included; "
-                 "book a Strategy Validation Audit to proceed"),
+                 "to proceed, request access at https://1.21initiative.com/ — the audit "
+                 "booking flow captures contact details and is how hosted keys are issued and metered"),
     }
 
 
 def cloud_job_block(genome_hash: str, seeds: list[int], per_regime: int, reason: str) -> dict:
     return {
         "endpoint": "POST /tournament/run",
-        "handoff": "manual in v1 — submit via the Strategy Validation Audit booking flow",
+        "handoff": "manual in v1 — submit via the Strategy Validation Audit booking flow at https://1.21initiative.com/",
         "body": {
             "challenger_id": genome_hash,
             "seeds": seeds,

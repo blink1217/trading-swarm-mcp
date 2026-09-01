@@ -137,8 +137,10 @@ monotonic trials ledger, worst-regime margin across all 5 regimes × seeds), plu
 - an `audit_request` block — genome hash + violation summary, **no proprietary payload**;
 - a `cloud_job` spec accepted verbatim by the hosted `POST /tournament/run`.
 
-In v1 the handoff is manual via the **Strategy Validation Audit** booking flow — no public
-ingress, no new attack surface. The human conversation is the product.
+In v1 the handoff is manual via the **Strategy Validation Audit** booking flow at
+[https://1.21initiative.com/](https://1.21initiative.com/) — no public ingress, no new attack
+surface. Access requests go through the site, which is how contact details are captured and
+how hosted API keys are issued and metered. The human conversation is the product.
 
 ## Telemetry
 
