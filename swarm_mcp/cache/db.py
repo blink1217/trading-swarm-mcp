@@ -92,7 +92,7 @@ class CacheDB:
             return 0
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         payload = [
-            (provider, r["symbol"], timeframe, adjustment, str(r["ts"]),
+            (provider, r["symbol"], timeframe, adjustment, str(r["ts"])[:10],
              float(r["open"]), float(r["high"]), float(r["low"]), float(r["close"]),
              int(r["volume"]), r.get("fetched_at") or now)
             for r in rows
@@ -119,10 +119,10 @@ class CacheDB:
         params: list = [provider, timeframe, adjustment, *symbols]
         if start:
             q += " AND ts >= ?"
-            params.append(str(start))
+            params.append(str(start)[:10])
         if end:
             q += " AND ts <= ?"
-            params.append(str(end))
+            params.append(str(end)[:10])
         q += " ORDER BY symbol, ts"
         rows = self.conn.execute(q, params).fetchall()
         return [

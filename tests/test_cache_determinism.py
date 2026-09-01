@@ -47,3 +47,23 @@ def test_finalized_sessions_served_without_api(monkeypatch):
     result = run_async(cache_bars.get_bars_cached(db, ["DDD"], lookback_days=400))
     assert result["from_api"] == 0
     assert result["from_cache"] == len(rows)
+
+
+def test_ts_canonicalized_to_date(tmp_cache):
+    """1Day sessions are dates: mixed ISO formats (Alpaca T/Z, date-only, space)
+    must collapse to one row per session and range filters must hit the boundary
+    session — lexicographic string comparison only works on a canonical form."""
+    db = get_db()
+    rows = [
+        {"symbol": "AAA", "ts": "2026-09-01", "open": 1, "high": 2, "low": 1, "close": 1.5, "volume": 100},
+        {"symbol": "AAA", "ts": "2026-09-01T04:00:00Z", "open": 1, "high": 2, "low": 1, "close": 1.5, "volume": 100},
+        {"symbol": "AAA", "ts": "2026-09-02 00:00:00", "open": 2, "high": 3, "low": 2, "close": 2.5, "volume": 200},
+    ]
+    db.upsert_bars("alpaca", "1Day", "split", rows)
+    got = db.get_bars("alpaca", ["AAA"])
+    assert [r["ts"] for r in got] == ["2026-09-01", "2026-09-02"], "duplicate session rows must collapse"
+
+    bounded = db.get_bars("alpaca", ["AAA"], end="2026-09-01 00:00:00")
+    assert [r["ts"] for r in bounded] == ["2026-09-01"], "boundary session must be included"
+    started = db.get_bars("alpaca", ["AAA"], start="2026-09-02T00:00:00Z")
+    assert [r["ts"] for r in started] == ["2026-09-02"]
