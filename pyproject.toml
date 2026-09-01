@@ -28,11 +28,13 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+remote = ["uvicorn>=0.30", "starlette>=0.37"]
 
 [project.scripts]
 swarm-data-mcp = "swarm_mcp.servers.data_server:main"
 swarm-warden-mcp = "swarm_mcp.servers.warden_server:main"
 swarm-gym-mcp = "swarm_mcp.servers.gym_server:main"
+swarm-mcp-http = "swarm_mcp.servers.http_server:main"
 
 [project.urls]
 Homepage = "https://github.com/blink1217/trading-swarm-mcp"

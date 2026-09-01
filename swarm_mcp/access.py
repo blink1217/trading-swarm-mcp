@@ -5,8 +5,13 @@ their contact details); the site issues a token and meters its usage. The server
 validates the token and refuses every tool call without a valid one — Cursor and
 Claude still LIST the tools, so trying one is what routes the prospect to the site.
 
+Token resolution order:
+1. Request-scoped token (remote streamable-HTTP servers): set by the HTTP auth
+   middleware from the Authorization header, validated once per request.
+2. SWARM_MCP_ACCESS_TOKEN (local stdio servers): validated with a 300s cache.
+
 Validation order:
-1. No SWARM_MCP_ACCESS_TOKEN -> denied (envelope points at the site).
+1. No token -> denied (envelope points at the site).
 2. Token equals SWARM_MCP_LOCAL_TOKEN (documented dev/offline bootstrap) -> granted.
 3. Otherwise the token is POSTed to SWARM_MCP_TOKEN_VERIFY_URL
    (default https://1.21initiative.com/api/mcp/verify); 200 + {"ok": true} grants
@@ -24,6 +29,8 @@ from __future__ import annotations
 import os
 import time
 
+from swarm_mcp import request_context
+
 SITE_URL = "https://1.21initiative.com/"
 ACCESS_TOKEN_ENV = "SWARM_MCP_ACCESS_TOKEN"
 VERIFY_URL_ENV = "SWARM_MCP_TOKEN_VERIFY_URL"
@@ -31,7 +38,8 @@ DEFAULT_VERIFY_URL = "https://1.21initiative.com/api/mcp/verify"
 LOCAL_TOKEN_ENV = "SWARM_MCP_LOCAL_TOKEN"
 VALID_TTL_S = 300.0
 
-_cache_ok_until = 0.0
+_cache: dict[str, float] = {}
+_MAX_CACHE = 512
 
 
 class AccessRequired(RuntimeError):
@@ -46,43 +54,61 @@ def request_instructions() -> dict:
     }
 
 
+def resolve_token() -> str:
+    return request_context.current_token.get() or os.environ.get(ACCESS_TOKEN_ENV, "").strip()
+
+
+def validate_token(token: str) -> bool:
+    """Validate an explicit token (used by the remote HTTP auth middleware)."""
+    if not token:
+        return False
+    return _verify(token)
+
+
 def check_access() -> None:
-    global _cache_ok_until
-    token = os.environ.get(ACCESS_TOKEN_ENV, "").strip()
+    token = resolve_token()
     if not token:
         raise AccessRequired(
             f"access token required — no {ACCESS_TOKEN_ENV} is set. "
             f"Request one at {SITE_URL}")
+    if not _verify(token):
+        raise AccessRequired(f"access token rejected — request one at {SITE_URL}")
 
+
+def _verify(token: str) -> bool:
     now = time.monotonic()
-    if now < _cache_ok_until:
-        return
+    until = _cache.get(token, 0.0)
+    if now < until:
+        return True
 
     local = os.environ.get(LOCAL_TOKEN_ENV, "").strip()
     if local and token == local:
-        _cache_ok_until = now + VALID_TTL_S
-        return
+        _remember(token, now)
+        return True
 
     import httpx
 
     verify_url = os.environ.get(VERIFY_URL_ENV, "").strip() or DEFAULT_VERIFY_URL
     try:
         r = httpx.post(verify_url, json={"token": token}, timeout=10.0)
-    except httpx.HTTPError as e:
-        raise AccessRequired(
-            f"access token could not be verified ({type(e).__name__} contacting the verify "
-            f"endpoint) — request access at {SITE_URL}") from e
+    except httpx.HTTPError:
+        return False
     if r.status_code == 200:
         try:
             ok = bool(r.json().get("ok"))
         except ValueError:
             ok = False
         if ok:
-            _cache_ok_until = now + VALID_TTL_S
-            return
-    raise AccessRequired(f"access token rejected — request one at {SITE_URL}")
+            _remember(token, now)
+            return True
+    return False
+
+
+def _remember(token: str, now: float) -> None:
+    if len(_cache) >= _MAX_CACHE:
+        _cache.clear()
+    _cache[token] = now + VALID_TTL_S
 
 
 def reset_access_cache() -> None:
-    global _cache_ok_until
-    _cache_ok_until = 0.0
+    _cache.clear()

@@ -13,7 +13,7 @@ import os
 
 import httpx
 
-from swarm_mcp import access
+from swarm_mcp import access, request_context
 
 RELAY_BASE_ENV = "SWARM_MCP_RELAY_URL"
 DEFAULT_RELAY_BASE = "https://1.21initiative.com/api/mcp"
@@ -31,6 +31,9 @@ def relay_base() -> str:
 
 
 def _access_token() -> str:
+    token = request_context.current_token.get()
+    if token:
+        return token
     token = os.environ.get(access.ACCESS_TOKEN_ENV, "").strip()
     if not token:
         raise RelayError(
