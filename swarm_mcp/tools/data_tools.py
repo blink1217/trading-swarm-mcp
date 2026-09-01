@@ -161,25 +161,25 @@ async def build_features(symbol: str, as_of: str) -> dict:
 
     async def _do():
         db = get_db()
-        symbol = symbol.strip().upper()
+        sym = symbol.strip().upper()
         as_of_ts = pd.Timestamp(as_of)
-        rows = db.get_bars(cache_bars.PROVIDER, [symbol], cache_bars.TIMEFRAME,
+        rows = db.get_bars(cache_bars.PROVIDER, [sym], cache_bars.TIMEFRAME,
                            cache_bars.ADJUSTMENT, end=str(as_of_ts.normalize()))
         if not rows:
             raise ValueError(
-                f"no cached bars for {symbol} up to {as_of} — run cache_warm first (or get_bars online)")
+                f"no cached bars for {sym} up to {as_of} — run cache_warm first (or get_bars online)")
         panel = _panel_from_rows(rows)
         if panel.empty:
-            raise ValueError(f"insufficient history to prepare a panel for {symbol} (need >= 30 sessions)")
-        decision = decision_features(panel, symbol, as_of_ts)
+            raise ValueError(f"insufficient history to prepare a panel for {sym} (need >= 30 sessions)")
+        decision = decision_features(panel, sym, as_of_ts)
         if decision is None:
-            raise ValueError(f"no bar for {symbol} exactly at session {as_of_ts.date()} in cache")
+            raise ValueError(f"no bar for {sym} exactly at session {as_of_ts.date()} in cache")
 
-        lookahead = assert_no_lookahead(panel, symbol, as_of_ts, decision)
+        lookahead = assert_no_lookahead(panel, sym, as_of_ts, decision)
         if lookahead:
             raise ValueError(f"no-lookahead guard rejected the decision row: {lookahead[:5]}")
 
-        oldest, newest = db.session_bounds(cache_bars.PROVIDER, symbol, cache_bars.TIMEFRAME,
+        oldest, newest = db.session_bounds(cache_bars.PROVIDER, sym, cache_bars.TIMEFRAME,
                                            cache_bars.ADJUSTMENT)
         tape_started = session_date(oldest) if oldest else session_date(as_of)
         vector = _tier_a_vector(decision)
@@ -197,7 +197,7 @@ async def build_features(symbol: str, as_of: str) -> dict:
                                        "source": BAR_SOURCE, "as_of": str(as_of_ts.date()),
                                        "status": status})
 
-        enrich = db.latest_enrichment(cache_enrich.PROVIDER, symbol, cache_enrich.KIND)
+        enrich = db.latest_enrichment(cache_enrich.PROVIDER, sym, cache_enrich.KIND)
         if "earnings_flag" in FEATURE_ORDER:
             if enrich is not None and str(enrich["fetched_at"])[:10] <= str(as_of_ts.date()):
                 vector["earnings_flag"] = 1.0 if enrich.get("earnings_within_3d") else 0.0
@@ -225,12 +225,12 @@ async def build_features(symbol: str, as_of: str) -> dict:
             violations.append(f"{name}: UNSCORABLE locally (provenance tier {feature_tier(name)})")
 
         limits, escalation = _limits_and_escalation(
-            {symbol: {"oldest_session": oldest, "newest_session": newest}})
-        db.log_provenance("build_features", symbol, "cache+guards",
+            {sym: {"oldest_session": oldest, "newest_session": newest}})
+        db.log_provenance("build_features", sym, "cache+guards",
                           f"as_of={as_of_ts.date()} lookahead=PASS unscoreable={[v.split(':')[0] for v in violations]}")
         out = {
             "tool": "build_features",
-            "symbol": symbol,
+            "symbol": sym,
             "as_of": str(as_of_ts.date()),
             "feature_order": FEATURE_ORDER,
             "vector": vector,
