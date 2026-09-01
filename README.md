@@ -77,7 +77,7 @@ market paths with the promotion gate bypassed and every statistic labelled
 
 ## Install
 
-Requires Python ≥ 3.11. Two kinds of credentials:
+Requires Python ≥ 3.11. One kind of credential:
 
 - **Access token (all three servers, required).** Every tool call is gated on a token
   issued by [https://1.21initiative.com/](https://1.21initiative.com/) — request access
@@ -86,8 +86,14 @@ Requires Python ≥ 3.11. Two kinds of credentials:
   token; every call returns an `ACCESS_REQUIRED` envelope pointing back to the site.
   The token is verified against the site, and that verification is the usage meter —
   only the token itself is ever sent, never symbols, genomes, prices, or provider keys.
-- **Provider keys (swarm-data-mcp only, BYO):** `ALPACA_API_KEY`, `ALPACA_SECRET`,
-  `FINNHUB_API_KEY`.
+
+The same token also feeds the **hosted data relay**: `swarm-data-mcp` serves bars and
+enrichment through `https://1.21initiative.com/api/mcp/...`, so **no Alpaca or Finnhub
+credentials are required** — the site holds the provider keys behind the relay and caches
+historical bars in GCS. The relay is fail-closed: a rejected or unverifiable token means a
+refused data fetch, never partial rows. The point-in-time cache semantics on the client
+side are unchanged — finalized sessions are immutable in local SQLite regardless of which
+data path filled them.
 
 ### Cursor
 
@@ -100,8 +106,7 @@ Requires Python ≥ 3.11. Two kinds of credentials:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-data-mcp"],
       "env": {
-        "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>",
-        "ALPACA_API_KEY": "...", "ALPACA_SECRET": "...", "FINNHUB_API_KEY": "..."
+        "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>"
       }
     },
     "swarm-warden": {
@@ -127,17 +132,21 @@ Once published to PyPI the args simplify to `["--from", "trading-swarm-mcp", "sw
 ### Claude Code
 
 ```bash
-claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> --env ALPACA_API_KEY=... --env ALPACA_SECRET=... --env FINNHUB_API_KEY=... -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-data-mcp
+claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-data-mcp
 claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-warden-mcp
 claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-gym-mcp
 ```
 
-The warden and gym need no *provider* keys — they are pure checkers — but like the data
-server they require the access token.
+The warden and gym are pure checkers and the data server fetches through the hosted
+relay, so **no server needs provider keys** — only the access token.
 
 **Local development:** operators of this repo can bootstrap offline by setting
 `SWARM_MCP_LOCAL_TOKEN` to the same value as `SWARM_MCP_ACCESS_TOKEN` (documented
 bypass; token verification against the site is skipped).
+
+**Swarm operators (internal):** to fetch directly from the providers instead of the
+relay, set `SWARM_MCP_BYOK=1` plus `ALPACA_API_KEY`/`ALPACA_SECRET`/`FINNHUB_API_KEY`
+on `swarm-data-mcp`. Public users should leave `SWARM_MCP_BYOK` unset.
 
 ---
 

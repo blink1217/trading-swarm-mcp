@@ -9,8 +9,9 @@ INSTRUCTIONS = (
     "History is immutable once a session finalizes: finalized sessions are never re-fetched, "
     "the in-progress session refreshes at most every 60s, enrichment every 300s. "
     "Every response carries coverage, limits (vs the tape-depth gates), and an escalation block "
-    "when local depth is insufficient. BYO-key: credentials come from env only "
-    "(ALPACA_API_KEY, ALPACA_SECRET, FINNHUB_API_KEY) and are never accepted as tool arguments. "
+    "when local depth is insufficient. Data is served through the 1.21 Initiative hosted relay "
+    "(https://1.21initiative.com/) — no Alpaca or Finnhub credentials are required; only "
+    "SWARM_MCP_ACCESS_TOKEN. Provider credentials are never accepted as tool arguments. "
     "This server never places, cancels, or routes orders."
 )
 
@@ -55,7 +56,7 @@ async def cache_warm(universe: list[str] | None = None, years: float = 1.0) -> d
     """Backfill history for a universe (default: the swarm's 13-symbol universe).
 
     After warming, every finalized session is immutable in cache — replays cost zero API calls.
-    Requires network and ALPACA credentials; refused in offline_mode.
+    Requires network and a valid SWARM_MCP_ACCESS_TOKEN; refused in offline_mode.
     """
     return await data_tools.cache_warm(universe=universe, years=years)
 

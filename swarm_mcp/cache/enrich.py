@@ -9,7 +9,8 @@ from __future__ import annotations
 import datetime as dt
 import os
 
-from swarm_mcp.cache.bars import OfflineModeError, require_online
+from swarm_mcp import relay
+from swarm_mcp.cache.bars import byok_enabled, require_online
 from swarm_mcp.cache.db import CacheDB
 from swarm_mcp.cache.freshness import is_fresh_enrichment, utcnow
 from swarm_mcp.cache.rate_limit import RateLimitedClient
@@ -22,24 +23,15 @@ FINNHUB_BASE = "https://finnhub.io/api/v1"
 def finnhub_token() -> str:
     token = os.environ.get("FINNHUB_API_KEY", "")
     if not token:
-        raise RuntimeError("FINNHUB_API_KEY not set — this server is BYO-key and reads credentials from env only")
+        raise RuntimeError(
+            "FINNHUB_API_KEY not set — SWARM_MCP_BYOK=1 requires a direct Finnhub token; "
+            "the default relay path needs only SWARM_MCP_ACCESS_TOKEN")
     return token
 
 
-async def enrich_symbol_cached(db: CacheDB, symbol: str,
-                               now: dt.datetime | None = None) -> dict:
-    now = now or utcnow()
-    symbol = symbol.strip().upper()
-    if not symbol:
-        raise ValueError("no symbol given")
-
-    latest = db.latest_enrichment(PROVIDER, symbol, KIND)
-    if latest is not None and is_fresh_enrichment(latest["fetched_at"], now):
-        return {"from_cache": True, **latest}
-
-    require_online(f"enrich_symbol({symbol})")
+async def _enrich_direct(symbol: str) -> dict:
     token = finnhub_token()
-    today = now.date()
+    today = dt.datetime.now(dt.timezone.utc).date()
     frm = (today - dt.timedelta(days=7)).isoformat()
     to = today.isoformat()
 
@@ -55,13 +47,34 @@ async def enrich_symbol_cached(db: CacheDB, symbol: str,
     earn_list = earnings.get("earningsCalendar") or (earnings if isinstance(earnings, list) else [])
     earnings_flag = any(e.get("symbol") == symbol for e in (earn_list or []))
 
-    payload = {
+    return {
         "symbol": symbol,
         "quote": {"c": quote.get("c"), "pc": quote.get("pc"), "h": quote.get("h"), "l": quote.get("l")},
         "news_headlines": [{"headline": n.get("headline"), "datetime": n.get("datetime"),
                             "source": n.get("source")} for n in news],
         "earnings_within_3d": bool(earnings_flag),
     }
+
+
+async def _fetch_enrichment(symbol: str) -> dict:
+    if byok_enabled():
+        return await _enrich_direct(symbol)
+    return await relay.fetch_enrichment(symbol)
+
+
+async def enrich_symbol_cached(db: CacheDB, symbol: str,
+                               now: dt.datetime | None = None) -> dict:
+    now = now or utcnow()
+    symbol = symbol.strip().upper()
+    if not symbol:
+        raise ValueError("no symbol given")
+
+    latest = db.latest_enrichment(PROVIDER, symbol, KIND)
+    if latest is not None and is_fresh_enrichment(latest["fetched_at"], now):
+        return {"from_cache": True, **latest}
+
+    require_online(f"enrich_symbol({symbol})")
+    payload = await _fetch_enrichment(symbol)
     fetched_at = db.append_enrichment(PROVIDER, symbol, KIND, payload)
     db.log_api_call(PROVIDER, "enrich", 1, 3, cached=False)
     return {"from_cache": False, "fetched_at": fetched_at, **payload}

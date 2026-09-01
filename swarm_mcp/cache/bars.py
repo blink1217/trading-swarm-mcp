@@ -5,10 +5,13 @@ from __future__ import annotations
 import datetime as dt
 import os
 
+import httpx
+
 from swarm_mcp import vendor_path  # noqa: F401
 
-from bars_fetch import fetch_daily_bars  # vendored alpha (GCP-free)
+from bars_fetch import fetch_daily_bars as _fetch_daily_bars_direct  # vendored alpha (GCP-free)
 
+from swarm_mcp import relay
 from swarm_mcp.cache.db import CacheDB
 from swarm_mcp.cache.freshness import (
     BAR_IN_PROGRESS_TTL_S,
@@ -52,8 +55,29 @@ def api_keys() -> tuple[str, str]:
     secret = os.environ.get("ALPACA_SECRET", "")
     if not key or not secret:
         raise RuntimeError(
-            "ALPACA_API_KEY / ALPACA_SECRET not set — this server is BYO-key and reads credentials from env only")
+            "ALPACA_API_KEY / ALPACA_SECRET not set — SWARM_MCP_BYOK=1 requires direct "
+            "Alpaca credentials; the default relay path needs only SWARM_MCP_ACCESS_TOKEN")
     return key, secret
+
+
+def byok_enabled() -> bool:
+    return os.environ.get("SWARM_MCP_BYOK", "").strip() == "1"
+
+
+async def fetch_daily_bars(client: httpx.AsyncClient, symbols: list[str], days: int, *,
+                           timeframe: str = TIMEFRAME, adjustment: str = ADJUSTMENT,
+                           api_key: str | None = None, api_secret: str | None = None) -> list[dict]:
+    """Fetch bars via the hosted relay by default; direct Alpaca when SWARM_MCP_BYOK=1.
+
+    The row shape is identical either way, so the SQLite cache and point-in-time
+    semantics never depend on the data path.
+    """
+    if byok_enabled():
+        key, secret = api_keys()
+        return await _fetch_daily_bars_direct(client, symbols, days,
+                                              timeframe=timeframe, adjustment=adjustment,
+                                              api_key=key, api_secret=secret)
+    return await relay.fetch_bars(symbols, days, timeframe=timeframe, adjustment=adjustment)
 
 
 def _need_api(symbols: list[str], by_symbol: dict[str, list[dict]], now: dt.datetime) -> list[str]:
@@ -92,12 +116,10 @@ async def get_bars_cached(db: CacheDB, symbols: list[str], lookback_days: int,
     if not OFFLINE["enabled"]:
         need = _need_api(symbols, by_symbol, now)
         if need:
-            key, secret = api_keys()
             days = max(1, int(lookback_days)) + 1
             async with RateLimitedClient(PROVIDER) as client:
                 fetched = await fetch_daily_bars(client, need, days,
-                                                 timeframe=TIMEFRAME, adjustment=ADJUSTMENT,
-                                                 api_key=key, api_secret=secret)
+                                                 timeframe=TIMEFRAME, adjustment=ADJUSTMENT)
             from_api = db.upsert_bars(PROVIDER, TIMEFRAME, ADJUSTMENT, fetched)
             db.log_api_call(PROVIDER, "bars", len(need), from_api, cached=False)
             cached = db.get_bars(PROVIDER, symbols, TIMEFRAME, ADJUSTMENT, start=start)
@@ -158,11 +180,9 @@ async def warm_cache(db: CacheDB, symbols: list[str], years: float,
                 "note": "all symbols already covered to the requested depth — zero API calls; "
                         "finalized sessions are immutable"}
 
-    key, secret = api_keys()
     async with RateLimitedClient(PROVIDER) as client:
         fetched = await fetch_daily_bars(client, need, days,
-                                         timeframe=TIMEFRAME, adjustment=ADJUSTMENT,
-                                         api_key=key, api_secret=secret)
+                                         timeframe=TIMEFRAME, adjustment=ADJUSTMENT)
     n = db.upsert_bars(PROVIDER, TIMEFRAME, ADJUSTMENT, fetched)
     db.log_api_call(PROVIDER, "bars_warm", len(need), n, cached=False)
     summary = {}
