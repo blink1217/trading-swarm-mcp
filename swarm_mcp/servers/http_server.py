@@ -34,7 +34,12 @@ PUBLIC_PATHS = {"/", "/health"}
 
 
 class BearerAuthMiddleware:
-    """Validate the per-request Bearer token and scope it to the request."""
+    """Validate the per-request token and scope it to the request.
+
+    The token may arrive either as `Authorization: Bearer <token>` or as the
+    `?apiToken=<token>` query parameter (how Smithery's gateway forwards the
+    apiToken connection parameter). Both are validated against the site.
+    """
 
     def __init__(self, app):
         self.app = app
@@ -49,9 +54,15 @@ class BearerAuthMiddleware:
 
         headers = dict(scope.get("headers") or [])
         auth = headers.get(b"authorization", b"")
-        if not auth.lower().startswith(b"bearer "):
-            return await self._deny(send)
-        token = auth[7:].decode("utf-8", "replace").strip()
+        token = None
+        if auth.lower().startswith(b"bearer "):
+            token = auth[7:].decode("utf-8", "replace").strip()
+        if not token:
+            query = scope.get("query_string", b"").decode("utf-8", "replace")
+            params = dict(
+                part.split("=", 1) for part in query.split("&") if "=" in part
+            )
+            token = params.get("apiToken", "").strip()
         if not token or not access.validate_token(token):
             return await self._deny(send)
 

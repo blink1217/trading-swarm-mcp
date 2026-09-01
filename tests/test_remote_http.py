@@ -74,6 +74,22 @@ def test_http_denies_bad_token(monkeypatch):
         assert r.status_code == 401
 
 
+def test_http_accepts_query_api_token(monkeypatch):
+    monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "good-token")
+    access.reset_access_cache()
+    headers = {"Accept": "application/json, text/event-stream"}
+    with TestClient(http_server.build_app()) as c:
+        r = c.post("/mcp/data?apiToken=good-token", json=INIT_PAYLOAD,
+                   headers=headers)
+        assert r.status_code == 200
+        body = _post_body(r)
+        assert body["result"]["serverInfo"]["name"] == "swarm-data-mcp"
+    with TestClient(http_server.build_app()) as c:
+        r = c.post("/mcp/data?apiToken=bad-token", json=INIT_PAYLOAD,
+                   headers=headers)
+        assert r.status_code == 401
+
+
 def test_http_mcp_handshake_with_token(monkeypatch):
     monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "good-token")
     access.reset_access_cache()
