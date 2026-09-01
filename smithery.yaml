@@ -1,0 +1,34 @@
+# Smithery deployment config for the trading-swarm-mcp servers.
+# Register this repo at https://smithery.ai to make swarm-data-mcp installable
+# in one click. The warden and gym servers live in the same package; after
+# registering swarm-data-mcp, add the other two servers with the same repo and
+# the matching args/name below.
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      apiToken:
+        type: string
+        description: >-
+          Access token issued by https://1.21initiative.com/ (request access
+          there — the site captures your contact details and issues the token).
+          Set as SWARM_MCP_ACCESS_TOKEN.
+      relayUrl:
+        type: string
+        description: >-
+          Optional. Hosted data relay base URL. Defaults to
+          https://1.21initiative.com/api/mcp (requires no provider credentials).
+        default: https://1.21initiative.com/api/mcp
+    required:
+      - apiToken
+  commandFunction: |-
+    (config) => ({
+      command: 'uvx',
+      args: ['--from', 'trading-swarm-mcp', 'swarm-data-mcp'],
+      env: {
+        SWARM_MCP_ACCESS_TOKEN: config.apiToken,
+        SWARM_MCP_RELAY_URL: config.relayUrl || 'https://1.21initiative.com/api/mcp'
+      }
+    })

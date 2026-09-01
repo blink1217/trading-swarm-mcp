@@ -104,19 +104,19 @@ data path filled them.
   "mcpServers": {
     "swarm-data": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-data-mcp"],
+      "args": ["--from", "trading-swarm-mcp", "swarm-data-mcp"],
       "env": {
         "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>"
       }
     },
     "swarm-warden": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-warden-mcp"],
+      "args": ["--from", "trading-swarm-mcp", "swarm-warden-mcp"],
       "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
     },
     "swarm-gym": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-gym-mcp"],
+      "args": ["--from", "trading-swarm-mcp", "swarm-gym-mcp"],
       "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
     }
   }
@@ -132,9 +132,9 @@ Once published to PyPI the args simplify to `["--from", "trading-swarm-mcp", "sw
 ### Claude Code
 
 ```bash
-claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-data-mcp
-claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-warden-mcp
-claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-gym-mcp
+claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from trading-swarm-mcp swarm-data-mcp
+claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from trading-swarm-mcp swarm-warden-mcp
+claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from trading-swarm-mcp swarm-gym-mcp
 ```
 
 The warden and gym are pure checkers and the data server fetches through the hosted
@@ -210,3 +210,4 @@ licensed.
 *The gym is the tier-A price subset. The tape_replay service does not exist publicly.
 Tier-B/C scoring is hosted-only. Anything else would be fabricated evidence — and this
 repo refuses to fabricate.*
+
