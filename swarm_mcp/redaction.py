@@ -4,7 +4,8 @@ from __future__ import annotations
 import os
 import re
 
-SECRET_ENV_VARS = ("ALPACA_API_KEY", "ALPACA_SECRET", "FINNHUB_API_KEY")
+SECRET_ENV_VARS = ("ALPACA_API_KEY", "ALPACA_SECRET", "FINNHUB_API_KEY",
+                   "SWARM_MCP_ACCESS_TOKEN", "SWARM_MCP_LOCAL_TOKEN")
 
 _KEY_ARG_RE = re.compile(r"(api[_-]?key|apikey|secret|token|password|credential|auth)", re.I)
 _ALPACA_KEY_RE = re.compile(r"\bAK[A-Z0-9]{8,}\b")

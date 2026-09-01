@@ -21,7 +21,7 @@ from provenance import (  # vendored
 )
 from tiers import highest_mutated_tier  # vendored
 
-from swarm_mcp import envelope, redaction, telemetry
+from swarm_mcp import access, envelope, redaction, telemetry
 
 LIVE_CAPITAL_NOTE = ("these are the same checker functions that gate live capital in the swarm's "
                      "warden service; floors drift is caught by the parity tests")
@@ -41,9 +41,15 @@ HOUSE_SIZING_FLOORS = {
 async def _run(tool: str, fn):
     t0 = time.perf_counter()
     try:
+        access.check_access()
         out = await fn()
         telemetry.record(tool, True, (time.perf_counter() - t0) * 1000.0)
         return redaction.redact(out)
+    except access.AccessRequired as e:
+        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
+        return {"tool": tool, "access": "REQUIRED",
+                "error": redaction.redact_text(str(e)),
+                **access.request_instructions()}
     except Exception as e:
         telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
         return {"tool": tool, "error": redaction.redact_text(f"{type(e).__name__}: {e}")}

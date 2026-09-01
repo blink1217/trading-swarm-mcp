@@ -77,7 +77,17 @@ market paths with the promotion gate bypassed and every statistic labelled
 
 ## Install
 
-Requires Python ≥ 3.11. Keys are BYO: `ALPACA_API_KEY`, `ALPACA_SECRET`, `FINNHUB_API_KEY`.
+Requires Python ≥ 3.11. Two kinds of credentials:
+
+- **Access token (all three servers, required).** Every tool call is gated on a token
+  issued by [https://1.21initiative.com/](https://1.21initiative.com/) — request access
+  there (that's also the Strategy Validation Audit booking flow), then set
+  `SWARM_MCP_ACCESS_TOKEN` in the server's `env`. Clients still list the tools without a
+  token; every call returns an `ACCESS_REQUIRED` envelope pointing back to the site.
+  The token is verified against the site, and that verification is the usage meter —
+  only the token itself is ever sent, never symbols, genomes, prices, or provider keys.
+- **Provider keys (swarm-data-mcp only, BYO):** `ALPACA_API_KEY`, `ALPACA_SECRET`,
+  `FINNHUB_API_KEY`.
 
 ### Cursor
 
@@ -89,15 +99,20 @@ Requires Python ≥ 3.11. Keys are BYO: `ALPACA_API_KEY`, `ALPACA_SECRET`, `FINN
     "swarm-data": {
       "command": "uvx",
       "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-data-mcp"],
-      "env": { "ALPACA_API_KEY": "...", "ALPACA_SECRET": "...", "FINNHUB_API_KEY": "..." }
+      "env": {
+        "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>",
+        "ALPACA_API_KEY": "...", "ALPACA_SECRET": "...", "FINNHUB_API_KEY": "..."
+      }
     },
     "swarm-warden": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-warden-mcp"]
+      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-warden-mcp"],
+      "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
     },
     "swarm-gym": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-gym-mcp"]
+      "args": ["--from", "git+https://github.com/blink1217/trading-swarm-mcp", "swarm-gym-mcp"],
+      "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
     }
   }
 }
@@ -112,12 +127,17 @@ Once published to PyPI the args simplify to `["--from", "trading-swarm-mcp", "sw
 ### Claude Code
 
 ```bash
-claude mcp add swarm-data   --env ALPACA_API_KEY=... --env ALPACA_SECRET=... --env FINNHUB_API_KEY=... -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-data-mcp
-claude mcp add swarm-warden -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-warden-mcp
-claude mcp add swarm-gym    -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-gym-mcp
+claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> --env ALPACA_API_KEY=... --env ALPACA_SECRET=... --env FINNHUB_API_KEY=... -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-data-mcp
+claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-warden-mcp
+claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from git+https://github.com/blink1217/trading-swarm-mcp swarm-gym-mcp
 ```
 
-The warden and gym need no API keys at all — they are pure checkers.
+The warden and gym need no *provider* keys — they are pure checkers — but like the data
+server they require the access token.
+
+**Local development:** operators of this repo can bootstrap offline by setting
+`SWARM_MCP_LOCAL_TOKEN` to the same value as `SWARM_MCP_ACCESS_TOKEN` (documented
+bypass; token verification against the site is skipped).
 
 ---
 
@@ -147,6 +167,12 @@ how hosted API keys are issued and metered. The human conversation is the produc
 Off by default, opt-in only (`SWARM_MCP_TELEMETRY_OPT_IN=opt-in`), counters only
 (tool name, success flag, coarse duration). Never symbols, genomes, prices, or
 credentials. Institutional buyers read the source; silent phone-home destroys the wedge.
+
+The one exception is by contract: **access-token verification**. When a token is set and
+no local bootstrap token matches, the token is POSTed to the verify endpoint (default
+`https://1.21initiative.com/api/mcp/verify`, override `SWARM_MCP_TOKEN_VERIFY_URL`).
+That call is how usage is metered. Only the token is sent; the gate fails closed if the
+endpoint is unreachable or rejects the token.
 
 ## Development
 

@@ -25,8 +25,21 @@ def tmp_cache(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clean_cache_state(tmp_cache):
+    from swarm_mcp import access
     from swarm_mcp.cache import bars as cache_bars
 
     cache_bars.set_offline(False)
     yield
     cache_bars.set_offline(False)
+
+
+@pytest.fixture(autouse=True)
+def _access_bootstrap(monkeypatch):
+    from swarm_mcp import access
+
+    monkeypatch.setenv("SWARM_MCP_ACCESS_TOKEN", "test-access-token")
+    monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "test-access-token")
+    monkeypatch.delenv("SWARM_MCP_TOKEN_VERIFY_URL", raising=False)
+    access.reset_access_cache()
+    yield
+    access.reset_access_cache()

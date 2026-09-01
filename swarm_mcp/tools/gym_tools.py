@@ -23,7 +23,7 @@ from gym.regime import (  # vendored alpha
 from gym.simulator import TierScoringRefusal, evaluate_genome  # vendored alpha
 from objective import hard_constraint_violations  # vendored guardrails
 
-from swarm_mcp import envelope, redaction, telemetry
+from swarm_mcp import access, envelope, redaction, telemetry
 from swarm_mcp.cache.db import get_db
 
 MAX_LOCAL_SEEDS = 8
@@ -37,9 +37,15 @@ LOCAL_POWER_NOTE = ("local compute is capped for statistical honesty — the hos
 async def _run(tool: str, fn):
     t0 = time.perf_counter()
     try:
+        access.check_access()
         out = await fn()
         telemetry.record(tool, True, (time.perf_counter() - t0) * 1000.0)
         return redaction.redact(out)
+    except access.AccessRequired as e:
+        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
+        return {"tool": tool, "access": "REQUIRED",
+                "error": redaction.redact_text(str(e)),
+                **access.request_instructions()}
     except Exception as e:
         telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
         return {"tool": tool, "error": redaction.redact_text(f"{type(e).__name__}: {e}")}
