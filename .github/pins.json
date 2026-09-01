@@ -1,0 +1,106 @@
+{
+  "alpha": {
+    "files": {
+      "bars_fetch.py": {
+        "origin": "verbatim",
+        "sha256": "8ae60cbffd335fcd4b1a7312231634d2728b6b4781715535e51ed736725adedf",
+        "source": "services/data-bridge/bars_fetch.py"
+      },
+      "gym/__init__.py": {
+        "origin": "verbatim",
+        "sha256": "637692567c2413baeb92eaeed841cb62848d50bdf8d0aa3c3b2b42b73fcd386e",
+        "source": "gym/__init__.py"
+      },
+      "gym/panel.py": {
+        "origin": "verbatim",
+        "sha256": "110b9ecf50778992bc2a43c336ad1ccfa5030475a31d3be47bbccc12b8c274af",
+        "source": "gym/panel.py"
+      },
+      "gym/policy_head.py": {
+        "origin": "verbatim",
+        "sha256": "2a6ccefc6ff581fbd3f67ba040e40355c2046adc023ef26b37912fef3e30fd82",
+        "source": "gym/policy_head.py"
+      },
+      "gym/regime.py": {
+        "origin": "verbatim",
+        "sha256": "b011685de84bc4a99a8e0ac5c02e8e644098457c335326da43dac8930ca54074",
+        "source": "gym/regime.py"
+      },
+      "gym/simulator.py": {
+        "origin": "verbatim",
+        "sha256": "9acf5987a968cc4f9ab5f66f5569588d7f474a4ccda2aaa1be3a2091cf4057db",
+        "source": "gym/simulator.py"
+      },
+      "order_checks.py": {
+        "origin": "verbatim",
+        "sha256": "2307aaa5369a020a03f0a5429faafc7f3f2c8883ef968bf8c7c66bdc001ba53e",
+        "source": "services/warden/order_checks.py"
+      },
+      "shared/__init__.py": {
+        "origin": "verbatim",
+        "sha256": "f569425643daf010e0f1d0d238e95f479ddcf60f92da6e120e845d7f73a88598",
+        "source": "shared/__init__.py"
+      },
+      "shared/swing_screens.py": {
+        "origin": "verbatim",
+        "sha256": "04e230412a42ce215d40fb01513273f9c8c3cd9ebc7c4752e10f9d3983743bd7",
+        "source": "shared/swing_screens.py"
+      }
+    },
+    "repo": "blink1217/trading-swarm-alpha",
+    "sha": "7e99b111b3904e18ae8aafa79182b0c63e3167e6"
+  },
+  "guardrails": {
+    "files": {
+      "budget.py": {
+        "origin": "verbatim",
+        "sha256": "ce7d2d452f5142ea7a4d117e132f93abf11f521bd2b417988fc40d784f827c3a"
+      },
+      "fill_model.py": {
+        "origin": "verbatim",
+        "sha256": "fda8ee5a16ab3f7ab8de892cf2013267ec30f29ddae4c9415ee21506dcbcc724"
+      },
+      "gates.py": {
+        "excluded": [
+          "should_promote"
+        ],
+        "origin": "stripped",
+        "sha256": "877bacb71562246eea023d7b99bdff56cbb28cf6fe408f4eeaef4e0e6b625250"
+      },
+      "genome_schema.json": {
+        "origin": "verbatim",
+        "sha256": "d9b4dcd5e7bea90146061dbd715f79b9f37d074d5095ea9b4e8f9734fa866a71"
+      },
+      "genome_schema.py": {
+        "origin": "verbatim",
+        "sha256": "afbb548d4a86ac6ef4ee9fc7e76f5c41748d96fbf52c288b40761b9494986aed"
+      },
+      "objective.py": {
+        "excluded": [
+          "deflated_sharpe",
+          "_norm_ppf",
+          "score"
+        ],
+        "origin": "stripped",
+        "sha256": "93c6dc728709748a059fc4b68716f6e9aae825054a7f969c0a19ee2331bb74f7"
+      },
+      "provenance.py": {
+        "origin": "verbatim",
+        "sha256": "e39b71cbe0f0e229673feb3b428c8cc92060d36309b6c4a398b5c431c2b3e80f"
+      },
+      "tiers.py": {
+        "origin": "verbatim",
+        "sha256": "9c03751f829858a01452cfea83dda32ea3c65ac352c84ce37d30f7662b6b6c8a"
+      }
+    },
+    "repo": "blink1217/trading-swarm-guardrails",
+    "sha": "b3654b98ede3a9c8144a325dda8dcf6ef11fa0f7"
+  },
+  "local": {
+    "guardrails/LICENSE.md": "241d6017bd540a69f6754f9d6aad817f737e9a7907ec8a3b1600b3a5648c7bbe",
+    "guardrails/guardrails_path_shim": "2ce8fd8fb8cb623ecc0222756e38f053b747a1f446644fbef81a3a2d67f2beed"
+  },
+  "schema": 1,
+  "vendored_at": "2026-09-01T11:08:41.298216+00:00",
+  "worktree_pin": false
+}

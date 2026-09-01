@@ -1,0 +1,65 @@
+# Verifies the committed vendored checker subset against the pinned SHAs and runs
+# the guardrails' own invariant suite at the pinned SHA — the same gate pattern as
+# trading-swarm-alpha/.github/workflows/guardrails-invariants.yml.
+#
+# The source repos are private: this job needs GUARDRAILS_CI_TOKEN and does not run on
+# fork PRs (no secrets). The vendored subset is committed, so contributors without the
+# token can rely on `ci.yml`'s local pin check (hashes) instead.
+name: vendored-pin-check
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+jobs:
+  pin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pins
+        id: pins
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          pins = json.load(open(".github/pins.json"))
+          print(f"guardrails_sha={pins['guardrails']['sha']}")
+          print(f"alpha_sha={pins['alpha']['sha']}")
+          print(f"worktree_pin={'true' if pins.get('worktree_pin') else 'false'}")
+          EOF
+
+      - name: Refuse to publish a worktree pin
+        if: steps.pins.outputs.worktree_pin == 'true'
+        run: |
+          echo "::error::pins.json is a WORKTREE pin — commit the alpha change and re-run scripts/vendor.ps1 before pushing."
+          exit 1
+
+      - name: Checkout guardrails at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: blink1217/trading-swarm-guardrails
+          ref: ${{ steps.pins.outputs.guardrails_sha }}
+          path: guardrails-src
+          token: ${{ secrets.GUARDRAILS_CI_TOKEN }}
+
+      - name: Checkout alpha at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: blink1217/trading-swarm-alpha
+          ref: ${{ steps.pins.outputs.alpha_sha }}
+          path: alpha-src
+          token: ${{ secrets.GUARDRAILS_CI_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify vendored tree against pinned sources
+        run: python scripts/check_pin.py --guardrails-src guardrails-src --alpha-src alpha-src
+
+      - name: Run guardrails invariant suite at pinned SHA
+        working-directory: guardrails-src
+        run: |
+          pip install pytest numpy pandas
+          python -m pytest invariants -q

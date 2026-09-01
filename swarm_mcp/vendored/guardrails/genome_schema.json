@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://guardrails.local/genome.schema.json",
+  "title": "Swarm Genome",
+  "description": "Bounded, schema-validated configuration that the evolution loop may mutate. Risk invariants are NOT part of the genome and cannot be mutated here. Every gene group carries a const `data_tier` declaring the HIGHEST provenance tier of any gene in the group (A=10y bars, B=degraded ~1y enrichment, C=tape-only/zero-history). Per-gene tiers live in guardrails/tiers.py; promotion gates use them to pick the evidence path. `finviz_score` is deliberately absent: it is an opaque vendor number with zero history and may never enter the genome (plan decision 6).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 2 },
+    "screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_tier": { "type": "string", "const": "A" },
+        "enable_momentum": { "type": "boolean" },
+        "enable_mean_reversion": { "type": "boolean" },
+        "enable_episodic_pivot": { "type": "boolean" },
+        "momentum_quantile": { "type": "number", "minimum": 0.50, "maximum": 0.99 },
+        "reversion_quantile": { "type": "number", "minimum": 0.50, "maximum": 0.99 },
+        "vol_spike_ratio": { "type": "number", "minimum": 1.2, "maximum": 3.0 },
+        "breakout_dist_min": { "type": "number", "minimum": -0.05, "maximum": 0.02 },
+        "min_cross_section": { "type": "integer", "minimum": 5, "maximum": 50 }
+      },
+      "required": ["data_tier", "enable_momentum", "enable_mean_reversion", "enable_episodic_pivot", "momentum_quantile", "reversion_quantile", "vol_spike_ratio", "breakout_dist_min", "min_cross_section"]
+    },
+    "analyst": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_tier": { "type": "string", "const": "A" },
+        "lgbm_threshold": { "type": "number", "minimum": 0.30, "maximum": 0.90 },
+        "max_candidates": { "type": "integer", "minimum": 3, "maximum": 200 }
+      },
+      "required": ["data_tier", "lgbm_threshold", "max_candidates"]
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_tier": { "type": "string", "const": "A" },
+        "atr_period": { "type": "integer", "minimum": 5, "maximum": 30 },
+        "atr_sizing_mult": { "type": "number", "minimum": 0.5, "maximum": 3.0 },
+        "risk_pct_per_trade": { "type": "number", "minimum": 0.001, "maximum": 0.02 },
+        "hold_days": { "type": "integer", "minimum": 1, "maximum": 10 }
+      },
+      "required": ["data_tier", "atr_period", "atr_sizing_mult", "risk_pct_per_trade", "hold_days"]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_tier": { "type": "string", "const": "A" },
+        "exit_on_moc": { "type": "boolean" },
+        "slippage_bps": { "type": "number", "minimum": 0.0, "maximum": 50.0 },
+        "spread_bps": { "type": "number", "minimum": 0.0, "maximum": 50.0 },
+        "adverse_selection_bps": { "type": "number", "minimum": 0.0, "maximum": 100.0 }
+      },
+      "required": ["data_tier", "exit_on_moc", "slippage_bps", "spread_bps", "adverse_selection_bps"]
+    },
+    "weekend_gate": {
+      "type": "object",
+      "description": "Group tier C: max_earnings_proximity_days consumes the earnings calendar (tier B gene) and min_energy_bias consumes the forecast-anomaly energy bias (tier C gene). The bar-price genes inside are individually tier A — gates use guardrails.tiers.GENE_TIERS, which resolves to the max across mutated GENES, not groups.",
+      "additionalProperties": false,
+      "properties": {
+        "data_tier": { "type": "string", "const": "C" },
+        "max_earnings_proximity_days": { "type": "number", "minimum": 0.0, "maximum": 10.0 },
+        "max_atr_pct": { "type": "number", "minimum": 0.005, "maximum": 0.10 },
+        "max_gap_risk_pct": { "type": "number", "minimum": 0.005, "maximum": 0.10 },
+        "min_energy_bias": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+        "conviction_smooth": { "type": "number", "minimum": 0.1, "maximum": 10.0 },
+        "trim_threshold": { "type": "number", "minimum": 0.30, "maximum": 0.70 },
+        "flatten_threshold": { "type": "number", "minimum": 0.10, "maximum": 0.45 }
+      },
+      "required": ["data_tier", "max_earnings_proximity_days", "max_atr_pct", "max_gap_risk_pct", "min_energy_bias", "conviction_smooth", "trim_threshold", "flatten_threshold"]
+    },
+    "prompt_variant_id": {
+      "description": "Tier C: LLM prompt variants are irreproducible (model drift + retrieval) and score only against the tape.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    }
+  },
+  "required": ["schema_version", "screen", "analyst", "risk", "execution", "weekend_gate", "prompt_variant_id"]
+}

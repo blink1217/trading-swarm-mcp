@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with test deps
+        run: pip install -e ".[test]"
+
+      - name: Run test suite
+        run: python -m pytest -q
+
+      - name: Vendored tree matches pins.json
+        run: python scripts/check_pin.py
