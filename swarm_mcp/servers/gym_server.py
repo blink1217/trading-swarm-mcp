@@ -18,13 +18,15 @@ from swarm_mcp.server_meta import (
     SITE_URL,
     annotations,
 )
-from swarm_mcp.tools import gym_tools
+from swarm_mcp.tools import gym_tools, tournament_tools
 
 SERVER_TITLE = "Swarm Gym MCP"
 SERVER_DESCRIPTION = (
     "Regime-fragility probing on the 1.21 Initiative trading swarm's deterministic replay "
-    "gym: label causal market regimes, replay genomes on a capped episode-seed matrix, and "
-    "estimate hosted runs. No promotion verdicts are ever issued locally."
+    "gym, plus the Shadow Tournament: label causal market regimes, replay genomes on a capped "
+    "episode-seed matrix locally, then submit a genome to be scored against the swarm's live "
+    "champion on identical hosted paths (paired outcome + ELO). No promotion verdicts are ever "
+    "issued locally."
 )
 
 INSTRUCTIONS = (
@@ -33,9 +35,67 @@ INSTRUCTIONS = (
     "even large enough to have an opinion? Reads bars from the shared cache warmed by "
     "swarm-data-mcp (or accepts inline bars). Local runs are seed-capped for statistical "
     "honesty, tier-B/C mutations refuse to score (never neutral-filled), every statistic is "
-    "labelled with its power, and promotion verdicts are NEVER issued locally — "
-    "undecidable outputs end with a cloud_job spec for the hosted tournament."
+    "labelled with its power, and promotion verdicts are NEVER issued locally. When a local "
+    "result is UNDERPOWERED, call tournament.submit: the hosted Shadow Tournament replays the "
+    "genome and the swarm's current champion on the same 100 paired episodes, returns the "
+    "paired outcome and ELO, and (with contribute=true, half price) licenses the genome to the "
+    "swarm's evolution loop. Poll with tournament.verdict; tournament.leaderboard is free."
 )
+
+
+class TournamentSubmitOut(TypedDict, total=False):
+    tool: str
+    status: str
+    job_id: str
+    genome_hash: str
+    contribute: bool
+    credits_charged: int
+    quota: dict
+    geometry: dict
+    what_was_sent: str
+    retention: str
+    next: str
+    valid_genome: bool
+    errors: list[str]
+    note: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class TournamentVerdictOut(TypedDict, total=False):
+    tool: str
+    job_id: str
+    status: str
+    genome_hash: str
+    contribute: bool
+    credits_charged: int
+    rating: float
+    result: dict
+    verdict_semantics: str
+    next: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class TournamentLeaderboardOut(TypedDict, total=False):
+    tool: str
+    updated_at: str
+    champion_rating: float
+    total_runs: int
+    contributed_runs: int
+    challenger_wins: int
+    top: list[dict]
+    geometry: dict
+    pricing: dict
+    anonymised: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
 
 
 class LabelRegimesOut(TypedDict, total=False):
@@ -235,12 +295,66 @@ async def estimate_cloud_run(
     n_genomes: Annotated[int, Field(
         description="Number of genomes in the run.", ge=1, le=100)] = 1,
 ) -> EstimateCloudRunOut:
-    """Estimate the hosted run: required episodes (5 regimes x per_regime x seeds x genomes),
-    wall-clock, budget semantics (MONTHLY_CAP_USD=150, breaker at 80%), and a submit-ready
-    POST /tournament/run body for the Strategy Validation Audit booking flow.
+    """Estimate a hosted run: required episodes (5 regimes x per_regime x seeds x genomes),
+    wall-clock, the credit cost at the published rate card (1 credit per hosted episode;
+    fixed price for a Shadow Tournament submit), and the tournament.submit shape.
     """
     return await gym_tools.estimate_cloud_run(seeds=seeds, per_regime=per_regime,
                                               n_genomes=n_genomes)
+
+
+@mcp.tool(
+    name="tournament.submit",
+    title="Shadow Tournament: Submit",
+    annotations=annotations(read_only=False, idempotent=False, open_world=True),
+    structured_output=True,
+)
+async def tournament_submit(
+    genome: Annotated[dict, Field(
+        description="Genome parameter vector (public schema) to score against the swarm's live "
+                    "champion. Validate locally with warden.validate_genome first.")],
+    contribute: Annotated[bool, Field(
+        description="true: license the genome vector + outcome to the swarm's evolution loop as an "
+                    "external challenger and pay half price. false (default): the vector is deleted "
+                    "after scoring; only hash + outcome remain.")] = False,
+) -> TournamentSubmitOut:
+    """Submit a genome to the hosted Shadow Tournament. Charges credits (200, or 100 with
+    contribute=true), then replays the genome AND the swarm's current champion over the identical
+    100-episode seed matrix on the hosted bars_1day panel — the geometry a local run cannot reach.
+    Sends only the genome vector, its hash and the contribute flag; never symbols, bars or code.
+    Returns a job_id to poll with tournament.verdict.
+    """
+    return await tournament_tools.submit(genome=genome, contribute=contribute)
+
+
+@mcp.tool(
+    name="tournament.verdict",
+    title="Shadow Tournament: Verdict",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def tournament_verdict(
+    job_id: Annotated[str, Field(description="job_id returned by tournament.submit.")],
+) -> TournamentVerdictOut:
+    """Poll a Shadow Tournament job. Returns the paired outcome vs the champion
+    (CHALLENGER_BEATS_CHAMPION / CHALLENGER_LOSES / INCONCLUSIVE), Wilcoxon p, bootstrap CI,
+    worst-regime margin, violations, and the challenger's ELO rating. Not a promotion: the
+    promotion gate stays inside the swarm's registry. No charge to poll.
+    """
+    return await tournament_tools.verdict(job_id=job_id)
+
+
+@mcp.tool(
+    name="tournament.leaderboard",
+    title="Shadow Tournament: Leaderboard",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def tournament_leaderboard() -> TournamentLeaderboardOut:
+    """Anonymised Shadow Tournament board: champion rating, top challengers by ELO (12-char hash
+    prefixes only), run counts and the current credit prices. Free on every plan.
+    """
+    return await tournament_tools.leaderboard()
 
 
 def main() -> None:

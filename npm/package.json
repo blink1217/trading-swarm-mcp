@@ -1,6 +1,6 @@
 {
   "name": "quant-swarm-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Node launcher for the quant-swarm MCP servers (swarm-data-mcp, swarm-warden-mcp, swarm-gym-mcp): pre-trade checkers that gate live capital. Shells to uvx for stdio, or npx mcp-remote for the hosted endpoints.",
   "license": "MIT",
   "author": "The 1.21 Initiative",

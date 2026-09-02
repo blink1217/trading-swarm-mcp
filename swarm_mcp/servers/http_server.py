@@ -17,6 +17,15 @@ stdio surface): a tools/call for a Pro tool on a non-paid entitlement is refused
 with HTTP 402 and a JSON-RPC error carrying the upgrade_url. Pro tools still
 LIST so each attempt is a conversion event, not a dead end.
 
+Hosted COMPUTE is metered (swarm_mcp.metering): before a Pro compute tool runs
+the middleware charges the site's /api/mcp/meter in credits (1 per simulated
+gym episode, 1 per single-shot tool). A refusal (empty/expired pool, burst) is
+a JSON-RPC -32003 with the structured reason; an unreachable meter refuses too.
+
+  /internal/tournament/run  site -> runner dispatch for the Shadow Tournament
+                            (X-Swarm-Internal-Key shared secret, 202 + background
+                            scoring, callback to /api/mcp/tournament/complete).
+
 Run: python -m swarm_mcp.servers.http_server  (PORT env, default 8080)
 """
 from __future__ import annotations
@@ -41,6 +50,8 @@ SERVERS = {
 }
 
 PUBLIC_PATHS = {"/", "/health"}
+INTERNAL_PREFIX = "/internal/"
+TOURNAMENT_RUN_PATH = "/internal/tournament/run"
 
 
 async def _read_body(receive) -> bytes:
@@ -67,25 +78,57 @@ def _replay_receive(body: bytes):
     return receive
 
 
+def _tool_calls(body: bytes) -> list[tuple[str, dict]]:
+    """Every (tool name, arguments) pair this JSON-RPC payload tries to call.
+    Handles single messages and batches."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return []
+    messages = payload if isinstance(payload, list) else [payload]
+    calls: list[tuple[str, dict]] = []
+    for msg in messages:
+        if not isinstance(msg, dict) or msg.get("method") != "tools/call":
+            continue
+        params = msg.get("params")
+        name = params.get("name") if isinstance(params, dict) else None
+        args = params.get("arguments") if isinstance(params, dict) else None
+        if isinstance(name, str):
+            calls.append((name, args if isinstance(args, dict) else {}))
+    return calls
+
+
 def _gated_tool_name(body: bytes, ent: access.Entitlement) -> str | None:
     """Return the Pro tool name this JSON-RPC payload tries to call, if any.
 
     Handles single messages and batches; a batch is refused as soon as any
     member targets a gated tool (the batch does not execute).
     """
-    try:
-        payload = json.loads(body.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
-        return None
-    messages = payload if isinstance(payload, list) else [payload]
-    for msg in messages:
-        if not isinstance(msg, dict) or msg.get("method") != "tools/call":
-            continue
-        params = msg.get("params")
-        name = params.get("name") if isinstance(params, dict) else None
-        if isinstance(name, str) and not ent.allows_tool(name):
+    for name, _args in _tool_calls(body):
+        if not ent.allows_tool(name):
             return name
     return None
+
+
+def _compute_units(body: bytes) -> tuple[int, str | None]:
+    """Total hosted-compute credits this payload costs (per plans.COMPUTE_RATES)
+    and the first metered tool name — 0 when nothing here is compute-metered."""
+    from swarm_mcp import metering
+
+    total = 0
+    first: str | None = None
+    for name, args in _tool_calls(body):
+        units = metering.compute_units(name, args)
+        if units > 0:
+            total += units
+            first = first or name
+    return total, first
+
+
+def _const_eq(a: str, b: str) -> bool:
+    import hmac
+
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 
 def _token_from_query(query_string: bytes) -> str | None:
@@ -140,7 +183,8 @@ class BearerAuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if path in PUBLIC_PATHS:
+        if path in PUBLIC_PATHS or path.startswith(INTERNAL_PREFIX):
+            # Internal routes authenticate with the shared secret inside _app.
             return await self.app(scope, receive, send)
 
         headers = dict(scope.get("headers") or [])
@@ -159,6 +203,18 @@ class BearerAuthMiddleware:
             gated = _gated_tool_name(body, ent)
             if gated:
                 return await self._upgrade_required(send, gated, ent)
+            # Hosted compute is metered BEFORE it runs: gym replays cost 1 credit
+            # per simulated episode, single-shot Pro tools 1 credit. The site
+            # decrements the pool and answers with the same structured 402s the
+            # relay uses; unreachable meter => refuse (never serve unmetered).
+            units, metered_tool = _compute_units(body)
+            if units > 0 and metered_tool:
+                from swarm_mcp import metering
+
+                try:
+                    await asyncio.to_thread(metering.charge, token, metered_tool, units)
+                except metering.MeterRefused as e:
+                    return await self._meter_refused(send, metered_tool, units, e)
             receive = _replay_receive(body)
 
         tok_ctx = request_context.current_token.set(token)
@@ -181,6 +237,34 @@ class BearerAuthMiddleware:
         await send({
             "type": "http.response.start",
             "status": 401,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    @staticmethod
+    async def _meter_refused(send, tool: str, units: int, err):
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32003,
+                "message": (f"'{tool}' needs {units} credits of hosted compute — {err} "
+                            f"(manage credits at {err.upgrade_url or access.SITE_URL})"),
+                "data": {
+                    "reason": err.reason or "compute_refused",
+                    "tool": tool,
+                    "units": units,
+                    "upgrade_url": err.upgrade_url or access.SITE_URL,
+                    "quota": err.quota,
+                },
+            },
+        }).encode()
+        await send({
+            "type": "http.response.start",
+            "status": err.status_code,
             "headers": [
                 (b"content-type", b"application/json"),
                 (b"content-length", str(len(body)).encode()),
@@ -319,6 +403,33 @@ def build_app() -> BearerAuthMiddleware:
                 await send({"type": "lifespan.shutdown.complete"})
                 break
 
+    background: set = set()
+
+    async def _internal_tournament_run(scope, receive, send):
+        """Site -> runner dispatch. Shared secret, 202 immediately, score in the
+        background and call the site back (see swarm_mcp.tournament_runner)."""
+        from swarm_mcp import tournament_runner
+
+        headers = dict(scope.get("headers") or [])
+        presented = headers.get(b"x-swarm-internal-key", b"").decode("utf-8", "replace")
+        expected = tournament_runner.internal_key()
+        if scope.get("method") != "POST":
+            return await JSONResponse({"error": "method not allowed"}, status_code=405)(scope, receive, send)
+        if not expected or not presented or not _const_eq(presented, expected):
+            return await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
+        body = await _read_body(receive)
+        try:
+            job = json.loads(body.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            job = None
+        if not isinstance(job, dict) or not isinstance(job.get("job_id"), str) or not isinstance(job.get("genome"), dict):
+            return await JSONResponse({"error": "job_id and genome required"}, status_code=400)(scope, receive, send)
+        task = asyncio.create_task(tournament_runner.run_job(job))
+        background.add(task)
+        task.add_done_callback(background.discard)
+        return await JSONResponse({"accepted": True, "job_id": job["job_id"]}, status_code=202)(
+            scope, receive, send)
+
     async def _app(scope, receive, send):
         if scope["type"] == "lifespan":
             return await _handle_lifespan(receive, send)
@@ -326,6 +437,10 @@ def build_app() -> BearerAuthMiddleware:
             return
 
         path = scope.get("path", "")
+        if path == TOURNAMENT_RUN_PATH:
+            return await _internal_tournament_run(scope, receive, send)
+        if path.startswith(INTERNAL_PREFIX):
+            return await JSONResponse({"error": "not found"}, status_code=404)(scope, receive, send)
         if path == "/health":
             return await JSONResponse({"status": "ok"})(scope, receive, send)
         if path == "/":

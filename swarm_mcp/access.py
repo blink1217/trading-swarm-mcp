@@ -71,12 +71,21 @@ class Entitlement:
 
         return self.plan in plans.PAID_PLANS
 
+    @property
+    def is_funded(self) -> bool:
+        """Paid plan with a live entitlement. The site reports ``exhausted`` /
+        ``expired`` for a pro token whose credit pool is empty or past its
+        90-day window; such a token is NOT funded and gets the free surface."""
+        from swarm_mcp import plans
+
+        return self.plan in plans.PAID_PLANS and self.status == "active"
+
     def allows_tool(self, tool: str) -> bool:
         """Server-authoritative tool allowance when the site sends a features
         list; falls back to the client's advisory plan sets."""
         from swarm_mcp import plans
 
-        if self.plan in plans.PAID_PLANS and self.status == "active":
+        if self.is_funded:
             return True
         if self.features is not None:
             return tool in self.features

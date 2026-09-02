@@ -28,13 +28,16 @@ startCommand:
           Optional access token issued by https://1.21initiative.com/ (free
           signup at https://1.21initiative.com/mcp/ — token issued instantly).
           Without one, tools still list; calls return an access-required
-          envelope pointing to the signup page. Free plan: all warden checkers
-          plus derived-only market.pulse/market.sentiment/market.regime
-          snapshots (~250 relay data calls/month, 10 symbols/call). Pro is paid
-          by one-time credit packs (10k or 100k relay calls, 90-day validity —
-          no subscription, no unlimited plan) that unlock the rest
-          (features.build, cache.warm, all gym tools, Pro derived tools, 50
-          symbols/call). Set as SWARM_MCP_ACCESS_TOKEN.
+          envelope pointing to the signup page. Free plan: all warden checkers,
+          derived-only market.pulse/market.sentiment/market.regime snapshots
+          (250 relay calls/month, 10 symbols/call) and the Shadow Tournament
+          leaderboard. Pro is paid by one-time credit packs (10,000 credits
+          for GBP 19 or 100,000 for GBP 149, 90-day validity — no subscription,
+          no unlimited plan). One credit = one relay data call, one hosted
+          simulated episode, or 1/200th of a Shadow Tournament run (1/100th as
+          a contributor) — the run that scores your genome against the
+          self-evolving swarm's live champion on identical market paths. Set as
+          SWARM_MCP_ACCESS_TOKEN.
         default: ""
       relayUrl:
         type: string

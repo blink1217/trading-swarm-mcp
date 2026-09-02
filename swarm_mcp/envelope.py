@@ -85,18 +85,34 @@ def audit_request_block(genome_hash: str, violation_summary: list[str]) -> dict:
 
 
 def cloud_job_block(genome_hash: str, seeds: list[int], per_regime: int, reason: str) -> dict:
+    from swarm_mcp import plans
+
     return {
-        "endpoint": "POST /tournament/run",
-        "handoff": "manual in v1 — submit via the Strategy Validation Audit booking flow at https://1.21initiative.com/",
+        "endpoint": "tournament.submit",
+        "handoff": ("call tournament.submit(genome=<the genome>, contribute=<bool>) — the Shadow "
+                    "Tournament re-scores it against the swarm's live champion on the hosted panel "
+                    f"({plans.TOURNAMENT['episodes']} paired episodes, above MIN_EPISODES) and returns "
+                    "a job_id to poll with tournament.verdict"),
         "body": {
             "challenger_id": genome_hash,
             "seeds": seeds,
             "per_regime": per_regime,
             "panel": "bars_1day",
         },
+        "hosted_geometry": {
+            "seeds": plans.TOURNAMENT["seeds"],
+            "per_regime": plans.TOURNAMENT["per_regime"],
+            "episodes": plans.TOURNAMENT["episodes"],
+        },
+        "credits": {
+            "full": plans.TOURNAMENT["credits_full"],
+            "contribute": plans.TOURNAMENT["credits_contribute"],
+            "note": ("contribute=true licenses the genome vector + outcome to the swarm's evolution "
+                     "loop and halves the price; contribute=false deletes the vector after scoring"),
+        },
         "prerequisites": (
-            "the genome must first be registered in the hosted registry (done during the audit booking); "
-            "challenger_id is the genome_hash emitted by warden.validate_genome"),
+            "a funded credit pack (Pro); challenger_id is the genome_hash emitted by "
+            "warden.validate_genome and must match the submitted genome"),
         "reason_local_insufficient": reason,
     }
 
@@ -135,11 +151,13 @@ def upgrade_required(tool: str, plan: str, upgrade_url: str) -> dict:
         "reason": "plan_required",
         "plan": plan,
         "upgrade_url": upgrade_url,
-        "note": ("this tool needs the Pro plan — Pro is credit-based: buy a one-time credit "
-                 "pack at the URL above (10k or 100k relay calls, 90-day validity, no "
-                 "subscription). Free tokens include the warden checkers, market.pulse, "
-                 "market.sentiment, market.regime, cache.stats, and cache.offline. This "
-                 "client-side check is advisory; quota and plan enforcement happen server-side."),
+        "note": ("this tool needs a funded credit pack (Pro) — buy a one-time pack at the URL "
+                 "above (10k or 100k credits, 90-day validity, no subscription). Credits pay for "
+                 "relay data calls, hosted compute (1 credit per simulated episode) and Shadow "
+                 "Tournament runs. Free tokens include the warden checkers, market.pulse, "
+                 "market.sentiment, market.regime, cache.stats, cache.offline and "
+                 "tournament.leaderboard. This client-side check is advisory; quota and plan "
+                 "enforcement happen server-side."),
     }
 
 

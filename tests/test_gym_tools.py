@@ -5,6 +5,7 @@ from __future__ import annotations
 from gates import REGIMES
 from genome_schema import genome_hash
 from helpers import run_async, synthetic_bars
+from swarm_mcp import plans
 from swarm_mcp.tools import gym_tools
 
 from genomes import baseline, mutate_a, mutate_b
@@ -102,5 +103,29 @@ def test_estimate_cloud_run_shapes_the_handoff():
     assert r["episodes_required"] == len(REGIMES) * 4 * 5 * 2
     assert r["budget"]["monthly_cap_usd"] == 150.0
     assert r["budget"]["breaker_fraction"] == 0.80
-    body = r["submit_bodies"]["POST /tournament/run"]
-    assert body["panel"] == "bars_1day" and body["per_regime"] == 4
+    body = r["submit_bodies"]["tournament.submit"]
+    assert body["hosted_geometry"]["panel"] == "bars_1day"
+    assert body["hosted_geometry"]["per_regime"] == plans.TOURNAMENT["per_regime"]
+    # Rate card: hosted episodes are 1 credit each; the tournament is a fixed price
+    # for the full paired geometry, and the Starter pack affords >= 40 of them.
+    assert r["credits"]["hosted_gym_episode"] == plans.COMPUTE_RATES["hosted.episode"]
+    assert r["credits"]["this_geometry_on_hosted_gym"] == r["episodes_required"]
+    assert r["credits"]["shadow_tournament_full"] == plans.TOURNAMENT["credits_full"] == 200
+    assert r["credits"]["shadow_tournament_contribute"] == plans.TOURNAMENT["credits_contribute"] == 100
+    assert plans.CREDIT_PACKS["credits-10k"]["calls"] // plans.TOURNAMENT["credits_full"] >= 40
+
+
+def test_paired_stats_reports_worst_regime_margin():
+    from swarm_mcp.tools.gym_tools import paired_stats
+
+    champ = {"episodes": [{"date": "2026-01-02", "regime": "chop", "weekly_net_bps": 1.0},
+                          {"date": "2026-01-09", "regime": "melt_up", "weekly_net_bps": 5.0}]}
+    chal = {"episodes": [{"date": "2026-01-02", "regime": "chop", "weekly_net_bps": 3.0},
+                         {"date": "2026-01-09", "regime": "melt_up", "weekly_net_bps": 4.0}]}
+    s = paired_stats(champ, chal)
+    assert s["n_paired_episodes"] == 2
+    assert s["deltas"] == [2.0, -1.0]
+    assert s["per_regime_delta_bps"]["chop"] == 2.0
+    assert s["per_regime_delta_bps"]["melt_up"] == -1.0
+    assert s["worst_regime_margin_bps"] == -1.0
+    assert s["paired_p_value"] is None, "fewer than 5 deltas: no p-value, never a fake one"

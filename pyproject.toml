@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quant-swarm"
-version = "0.3.0"
-description = "Local stdio MCP servers extracted from the trading swarm: point-in-time data assembly, pre-trade invariant + leakage auditing, and regime-fragility probing."
+version = "0.4.0"
+description = "MCP servers extracted from the trading swarm: point-in-time data, pre-trade invariant + leakage audits, regime-fragility probes, and the Shadow Tournament bridge that scores your genome against the swarm's live champion."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "The 1.21 Initiative" }]
-keywords = ["mcp", "trading", "backtest-audit", "point-in-time", "regimes"]
+keywords = ["mcp", "trading", "backtest-audit", "point-in-time", "regimes", "tournament", "evolution"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",
@@ -45,6 +45,7 @@ include = ["swarm_mcp*"]
 [tool.setuptools.package-data]
 "swarm_mcp.vendored.guardrails" = ["*.json", "*.md"]
 "swarm_mcp.vendored.alpha" = ["*.md"]
+"swarm_mcp.data" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

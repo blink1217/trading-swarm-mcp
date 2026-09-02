@@ -41,6 +41,35 @@ CREDIT_PACKS: dict[str, dict] = {
 
 CREDITS_VALIDITY_DAYS = 90
 
+# Compute rate card (mirror of src/mcp/plans.ts COMPUTE_RATES). One credit is
+# the unit for everything that costs the operator money: a relay data call, a
+# hosted single-shot Pro tool, one simulated gym episode on the hosted
+# endpoint, or a Shadow Tournament submit. Local stdio execution is NEVER
+# metered — your CPU, your electricity.
+COMPUTE_RATES: dict[str, int] = {
+    "relay.call": 1,
+    "hosted.tool": 1,
+    "hosted.episode": 1,
+    "tournament.submit": 200,
+}
+
+# Shadow Tournament geometry (mirror of plans.ts TOURNAMENT): the submitted
+# genome is re-scored against the swarm's live champion on the hosted panel,
+# 5 regimes x 4 per regime x 5 seeds x 2 genomes = 200 paired episodes.
+TOURNAMENT: dict = {
+    "seeds": [0, 1, 2, 3, 4],
+    "per_regime": 4,
+    "regimes": 5,
+    "genomes": 2,
+    "episodes": 200,
+    "credits_full": 200,
+    "credits_contribute": 100,
+}
+
+# Contributors license the genome vector + outcome to the swarm's own
+# evolution loop (external challengers for the proposer) and pay half.
+CONTRIBUTE_DISCOUNT = 0.5
+
 FREE_TOOLS = frozenset({
     "warden.validate_order",
     "warden.cost_check",
@@ -52,6 +81,7 @@ FREE_TOOLS = frozenset({
     "market.sentiment",
     "cache.stats",
     "cache.offline",
+    "tournament.leaderboard",
 })
 
 PRO_TOOLS = frozenset({
@@ -68,8 +98,11 @@ PRO_TOOLS = frozenset({
     "market.rank",
     "tournament.verdict",
     "tournament.submit",
-    "tournament.leaderboard",
 })
+
+
+def tournament_credits(contribute: bool) -> int:
+    return int(TOURNAMENT["credits_contribute"] if contribute else TOURNAMENT["credits_full"])
 
 
 def tool_requires_paid_plan(tool: str, plan: str | None, status: str | None = "active") -> bool:
@@ -77,7 +110,9 @@ def tool_requires_paid_plan(tool: str, plan: str | None, status: str | None = "a
 
     Used by the stdio servers' shared runner. A missing plan (entitlement
     unknown) fails open — advice only; real enforcement lives on the site's
-    relay/verify endpoints and the hosted HTTP server.
+    relay/verify endpoints and the hosted HTTP server. A paid plan whose
+    status is not ``active`` (``exhausted``/``expired`` credit pool,
+    ``inactive``) is treated as free.
     """
     if plan in PAID_PLANS and status == "active":
         return False

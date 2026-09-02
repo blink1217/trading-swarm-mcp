@@ -115,6 +115,35 @@ def _depth_meta(panel: pd.DataFrame) -> dict:
     return {"oldest_session": str(lo), "newest_session": str(hi), **envelope.limits_block(weeks)}
 
 
+def paired_stats(champ_run: dict, chal_run: dict) -> dict:
+    """Paired champion-vs-challenger statistics on the common episode dates.
+
+    Shared by the local ``gym.paired_preview`` (capped, UNDERPOWERED) and the
+    hosted Shadow Tournament runner (full geometry). Pure statistics only — no
+    promotion decision lives here (that machinery is server-side by design).
+    """
+    champ_eps = {e["date"]: e for e in champ_run["episodes"]}
+    chal_eps = {e["date"]: e for e in chal_run["episodes"]}
+    common = sorted(set(champ_eps) & set(chal_eps))
+    deltas = [chal_eps[d]["weekly_net_bps"] - champ_eps[d]["weekly_net_bps"] for d in common]
+    champ_regime = _regime_scores(champ_run["episodes"])
+    chal_regime = _regime_scores(chal_run["episodes"])
+    per_regime_delta = {r: chal_regime.get(r, 0.0) - champ_regime.get(r, 0.0) for r in REGIMES}
+    ci_lo, ci_hi = _bootstrap_ci(deltas)
+    return {
+        "n_paired_episodes": len(common),
+        "deltas": deltas,
+        "mean_delta_bps": float(np.mean(deltas)) if deltas else 0.0,
+        "paired_p_value": _wilcoxon_paired(deltas),
+        "delta_ci_95": [ci_lo, ci_hi],
+        "per_regime_champion": champ_regime,
+        "per_regime_challenger": chal_regime,
+        "per_regime_delta_bps": per_regime_delta,
+        # maximin: the challenger's margin in its WORST regime relative to the champion
+        "worst_regime_margin_bps": float(min(per_regime_delta.values())) if per_regime_delta else 0.0,
+    }
+
+
 async def label_regimes(symbols: list[str] | None = None, bars: list[dict] | None = None,
                         min_symbols: int = 8) -> dict:
     redaction.reject_keylike_args({"symbols": symbols, "bars": bars, "min_symbols": min_symbols})
@@ -262,18 +291,14 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
             out["verdict"] = "UNSCORABLE"
             return out
 
-        champ_eps = {e["date"]: e for e in champ_run["episodes"]}
-        chal_eps = {e["date"]: e for e in chal_run["episodes"]}
-        common = sorted(set(champ_eps) & set(chal_eps))
-        deltas = [chal_eps[d]["weekly_net_bps"] - champ_eps[d]["weekly_net_bps"] for d in common]
-        p_value = _wilcoxon_paired(deltas)
-        ci_lo, ci_hi = _bootstrap_ci(deltas)
-        champ_regime = _regime_scores(champ_run["episodes"])
-        chal_regime = _regime_scores(chal_run["episodes"])
+        stats = paired_stats(champ_run, chal_run)
+        n_common = stats["n_paired_episodes"]
+        champ_regime = stats["per_regime_champion"]
+        chal_regime = stats["per_regime_challenger"]
 
         episodes_per_seed = per_regime * len(REGIMES)
         seeds_needed = math.ceil(MIN_EPISODES / episodes_per_seed) if episodes_per_seed else None
-        underpowered_label = (f"UNDERPOWERED — n={len(common)} < MIN_EPISODES={MIN_EPISODES}; "
+        underpowered_label = (f"UNDERPOWERED — n={n_common} < MIN_EPISODES={MIN_EPISODES}; "
                               f"needs >= {seeds_needed} seeds x {per_regime}/regime on identical paths")
 
         return {
@@ -282,16 +307,16 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
             "promotion": None,
             "champion_hash": champ_h,
             "challenger_hash": chal_h,
-            "n_paired_episodes": len(common),
+            "n_paired_episodes": n_common,
             "seeds": use_seeds,
             "per_regime": per_regime,
             "statistics": {
-                "mean_delta_bps": {"value": float(np.mean(deltas)) if deltas else 0.0,
-                                   "power": underpowered_label},
-                "paired_p_value": {"value": p_value, "power": underpowered_label},
-                "delta_ci_95": {"value": [ci_lo, ci_hi], "power": underpowered_label},
+                "mean_delta_bps": {"value": stats["mean_delta_bps"], "power": underpowered_label},
+                "paired_p_value": {"value": stats["paired_p_value"], "power": underpowered_label},
+                "delta_ci_95": {"value": stats["delta_ci_95"], "power": underpowered_label},
                 "worst_regime_champion": {"value": min(champ_regime.values()), "power": underpowered_label},
                 "worst_regime_challenger": {"value": min(chal_regime.values()), "power": underpowered_label},
+                "worst_regime_margin_bps": {"value": stats["worst_regime_margin_bps"], "power": underpowered_label},
                 "per_regime_champion": champ_regime,
                 "per_regime_challenger": chal_regime,
             },
@@ -318,7 +343,9 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
     redaction.reject_keylike_args({"seeds": seeds, "per_regime": per_regime, "n_genomes": n_genomes})
 
     async def _do():
-        use_seeds = list(seeds) if seeds else [0, 1, 2, 3, 4]
+        from swarm_mcp import plans
+
+        use_seeds = list(seeds) if seeds else list(plans.TOURNAMENT["seeds"])
         episodes = len(REGIMES) * per_regime * len(use_seeds) * max(1, n_genomes)
         est_wall_s = episodes * SECONDS_PER_EPISODE_EST
         return {
@@ -328,16 +355,29 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
             "regimes": REGIMES,
             "wall_clock_estimate_s": round(est_wall_s, 1),
             "wall_clock_note": "order-of-magnitude only; hosted runners parallelize per genome",
+            "credits": {
+                "hosted_gym_episode": plans.COMPUTE_RATES["hosted.episode"],
+                "this_geometry_on_hosted_gym": episodes * plans.COMPUTE_RATES["hosted.episode"],
+                "shadow_tournament_full": plans.TOURNAMENT["credits_full"],
+                "shadow_tournament_contribute": plans.TOURNAMENT["credits_contribute"],
+                "note": ("hosted gym.probe_fragility / gym.paired_preview charge 1 credit per simulated "
+                         "episode; tournament.submit is a fixed price for the full paired geometry "
+                         f"({plans.TOURNAMENT['episodes']} episodes vs the live champion); local stdio "
+                         "runs are never metered"),
+            },
             "budget": envelope.budget_reference(),
             "submit_bodies": {
-                "POST /tournament/run": {
-                    "challenger_id": "<genome_hash from warden.validate_genome>",
-                    "seeds": use_seeds,
-                    "per_regime": per_regime,
-                    "panel": "bars_1day",
+                "tournament.submit": {
+                    "genome": "<the genome dict — validated locally first with warden.validate_genome>",
+                    "contribute": "<true halves the price and licenses the vector to the swarm>",
+                    "hosted_geometry": {
+                        "seeds": plans.TOURNAMENT["seeds"],
+                        "per_regime": plans.TOURNAMENT["per_regime"],
+                        "panel": "bars_1day",
+                    },
                 },
-                "POST /cycle/run": {
-                    "note": "league cycle — book via the Strategy Validation Audit for multi-genome runs",
+                "league cycle": {
+                    "note": "multi-genome league runs are booked via the Strategy Validation Audit",
                 },
             },
             "handoff": envelope.indeterminate_local()["why"],

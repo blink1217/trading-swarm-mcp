@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.blink1217/quant-swarm",
   "title": "quant-swarm",
-  "description": "Risk-first pre-trade checks: point-in-time data, invariant and leakage audits, regime probes.",
-  "version": "0.3.0",
+  "description": "Risk-first pre-trade checks plus the Shadow Tournament: point-in-time data, invariant and leakage audits, regime probes, and hosted paired scoring of your genome against the trading swarm's live champion.",
+  "version": "0.4.0",
   "websiteUrl": "https://1.21initiative.com/mcp/",
   "repository": {
     "url": "https://github.com/blink1217/trading-swarm-mcp",
@@ -14,7 +14,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -47,7 +47,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -80,7 +80,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -105,7 +105,7 @@
         {
           "type": "positional",
           "value": "swarm-gym-mcp",
-          "description": "Launch the gym: regime-fragility probing and backtest audits"
+          "description": "Launch the gym: regime-fragility probing, paired previews, and tournament.submit / tournament.verdict / tournament.leaderboard (Shadow Tournament vs the swarm's champion)"
         }
       ]
     }
@@ -118,6 +118,30 @@
         {
           "name": "Authorization",
           "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL).",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/warden",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL).",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/gym",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL). Hosted gym compute is metered in credits (1 per simulated episode).",
           "isRequired": false,
           "isSecret": true
         }

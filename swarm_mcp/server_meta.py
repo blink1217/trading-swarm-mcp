@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from mcp.types import ToolAnnotations
 
-PACKAGE_VERSION = "0.3.0"
+PACKAGE_VERSION = "0.4.0"
 SITE_URL = "https://1.21initiative.com/mcp/"
 HOME_URL = "https://1.21initiative.com/"
 ICON_URL = "https://1.21initiative.com/icons/icon-192.png"
