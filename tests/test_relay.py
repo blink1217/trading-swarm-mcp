@@ -80,6 +80,92 @@ def test_fetch_bars_fail_closed_on_rejection(monkeypatch):
         run_async(relay.fetch_bars(["AAA"], days=30))
 
 
+def test_fetch_bars_402_quota_exceeded_surfaces_reason(monkeypatch):
+    payload = {
+        "ok": False,
+        "error": "monthly relay quota exceeded",
+        "reason": "quota_exceeded",
+        "upgrade_url": "https://1.21initiative.com/mcp/",
+        "quota": {"used": 250, "limit": 250, "resets_at": "2026-10-01T00:00:00Z"},
+    }
+
+    def handler(url, json, headers):
+        return FakeResponse(402, payload)
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    with pytest.raises(relay.RelayError) as ei:
+        run_async(relay.fetch_bars(["AAA"], days=30))
+    e = ei.value
+    assert e.reason == "quota_exceeded"
+    assert e.upgrade_url == "https://1.21initiative.com/mcp/"
+    assert e.quota["limit"] == 250
+    msg = str(e)
+    assert "quota_exceeded" in msg
+    assert "250/250" in msg
+    assert "2026-10-01" in msg
+    assert "https://1.21initiative.com/mcp/" in msg
+
+
+def test_fetch_bars_402_plan_required_surfaces_reason(monkeypatch):
+    payload = {
+        "ok": False,
+        "error": "deep backfill requires the Pro plan",
+        "reason": "plan_required",
+        "upgrade_url": "https://1.21initiative.com/mcp/",
+    }
+
+    def handler(url, json, headers):
+        return FakeResponse(402, payload)
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    with pytest.raises(relay.RelayError) as ei:
+        run_async(relay.fetch_bars(["AAA"], days=900))
+    e = ei.value
+    assert e.reason == "plan_required"
+    assert e.upgrade_url == "https://1.21initiative.com/mcp/"
+    assert "plan_required" in str(e)
+
+
+def test_fetch_enrichment_402_surfaces_reason(monkeypatch):
+    payload = {"ok": False, "error": "quota", "reason": "quota_exceeded",
+               "upgrade_url": "https://1.21initiative.com/mcp/",
+               "quota": {"used": 250, "limit": 250}}
+
+    def handler(url, json, headers):
+        return FakeResponse(402, payload)
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    with pytest.raises(relay.RelayError) as ei:
+        run_async(relay.fetch_enrichment("AAA"))
+    assert ei.value.reason == "quota_exceeded"
+
+
+def test_fetch_bars_non200_without_structured_body_stays_generic(monkeypatch):
+    def handler(url, json, headers):
+        return FakeResponse(500, ValueError("not json"))
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    with pytest.raises(relay.RelayError) as ei:
+        run_async(relay.fetch_bars(["AAA"], days=30))
+    assert ei.value.reason is None
+    assert "HTTP 500" in str(ei.value)
+
+
+def test_check_parses_structured_refusal_in_200_body(monkeypatch):
+    payload = {"ok": False, "error": "symbol cap exceeded for free plan",
+               "reason": "plan_required",
+               "upgrade_url": "https://1.21initiative.com/mcp/"}
+
+    def handler(url, json, headers):
+        return FakeResponse(200, payload)
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    with pytest.raises(relay.RelayError) as ei:
+        run_async(relay.fetch_bars(["AAA"], days=30))
+    assert ei.value.reason == "plan_required"
+    assert "upgrade" in str(ei.value).lower()
+
+
 def test_fetch_bars_fail_closed_on_network_error(monkeypatch):
     def handler(url, json, headers):
         raise httpx.ConnectError("boom")

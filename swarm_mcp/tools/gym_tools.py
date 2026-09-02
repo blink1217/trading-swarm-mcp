@@ -6,7 +6,6 @@ rule that promotion verdicts are never issued locally.
 from __future__ import annotations
 
 import math
-import time
 
 import numpy as np
 import pandas as pd
@@ -23,8 +22,9 @@ from gym.regime import (  # vendored alpha
 from gym.simulator import TierScoringRefusal, evaluate_genome  # vendored alpha
 from objective import hard_constraint_violations  # vendored guardrails
 
-from swarm_mcp import access, envelope, redaction, telemetry
+from swarm_mcp import envelope, redaction
 from swarm_mcp.cache.db import get_db
+from swarm_mcp.tool_runner import run_tool
 
 MAX_LOCAL_SEEDS = 8
 MAX_LOCAL_PER_REGIME = 2
@@ -32,23 +32,6 @@ SECONDS_PER_EPISODE_EST = 0.5
 
 LOCAL_POWER_NOTE = ("local compute is capped for statistical honesty — the hosted tournament runs "
                     "uncapped seeds on the full bars_1day panel with the monotonic trial ledger")
-
-
-async def _run(tool: str, fn):
-    t0 = time.perf_counter()
-    try:
-        access.check_access()
-        out = await fn()
-        telemetry.record(tool, True, (time.perf_counter() - t0) * 1000.0)
-        return redaction.redact(out)
-    except access.AccessRequired as e:
-        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
-        return {"tool": tool, "access": "REQUIRED",
-                "error": redaction.redact_text(str(e)),
-                **access.request_instructions()}
-    except Exception as e:
-        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
-        return {"tool": tool, "error": redaction.redact_text(f"{type(e).__name__}: {e}")}
 
 
 def _panel_from_bars(rows: list[dict]) -> pd.DataFrame:
@@ -74,7 +57,7 @@ def _load_panel(symbols: list[str] | None, bars: list[dict] | None) -> pd.DataFr
         rows = db.get_bars("alpaca", symbols)
         if not rows:
             raise ValueError(
-                f"no cached bars for {symbols} — warm the cache with swarm-data-mcp cache_warm first "
+                f"no cached bars for {symbols} — warm the cache with swarm-data-mcp cache.warm first "
                 "(the gym reads the shared cache and never places API calls itself)")
         panel = _panel_from_bars(rows)
     if panel.empty:
@@ -145,7 +128,7 @@ async def label_regimes(symbols: list[str] | None = None, bars: list[dict] | Non
             counts[ep["regime"]] = counts.get(ep["regime"], 0) + 1
         thin = sorted(r for r, n in counts.items() if n < 3)
         out = {
-            "tool": "label_regimes",
+            "tool": "gym.label_regimes",
             "regimes": REGIMES,
             "regime_counts": counts,
             "pool_size": len(pool),
@@ -160,7 +143,7 @@ async def label_regimes(symbols: list[str] | None = None, bars: list[dict] | Non
                 [f"panel depth {out['depth']['local_depth_weeks']} weeks is below the tape-eligible gate"])
         return out
 
-    return await _run("label_regimes", _do)
+    return await run_tool("gym.label_regimes", _do)
 
 
 async def probe_fragility(genome: dict, champion_genome: dict | None = None,
@@ -175,7 +158,7 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
         errors = validate_genome(genome)
         gh = genome_hash(genome)
         if errors:
-            return {"tool": "probe_fragility", "valid_genome": False, "errors": errors,
+            return {"tool": "gym.probe_fragility", "valid_genome": False, "errors": errors,
                     "genome_hash": gh}
         use_seeds = list(seeds) if seeds else [0, 1]
         _check_caps(use_seeds, per_regime)
@@ -195,7 +178,7 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
                 per_regime=per_regime,
                 reason="tier-B/C mutations need hosted tape-fidelity replay (roadmap); never neutral-filled",
             )
-            out["tool"] = "probe_fragility"
+            out["tool"] = "gym.probe_fragility"
             out["verdict"] = "UNSCORABLE"
             out["fidelity_note"] = "the gym is the tier-A price subset; refusal is the correct verdict"
             return out
@@ -209,7 +192,7 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
 
         n = run["n_episodes"]
         out = {
-            "tool": "probe_fragility",
+            "tool": "gym.probe_fragility",
             "verdict": "FRAGILITY_REPORT — local tools never issue promotion verdicts",
             "genome_hash": gh,
             "fidelity": run["fidelity"],
@@ -236,7 +219,7 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
         }
         return out
 
-    return await _run("probe_fragility", _do)
+    return await run_tool("gym.probe_fragility", _do)
 
 
 async def paired_preview(champion_genome: dict, challenger_genome: dict,
@@ -253,7 +236,7 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
         champ_h = genome_hash(champion_genome)
         chal_h = genome_hash(challenger_genome)
         if errors:
-            return {"tool": "paired_preview", "valid_genomes": False, "errors": errors,
+            return {"tool": "gym.paired_preview", "valid_genomes": False, "errors": errors,
                     "champion_hash": champ_h, "challenger_hash": chal_h}
         use_seeds = list(seeds) if seeds else [0, 1]
         _check_caps(use_seeds, per_regime)
@@ -275,7 +258,7 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
                 per_regime=per_regime,
                 reason="tier-B/C challenger mutations need hosted tape-fidelity replay (roadmap)",
             )
-            out["tool"] = "paired_preview"
+            out["tool"] = "gym.paired_preview"
             out["verdict"] = "UNSCORABLE"
             return out
 
@@ -294,7 +277,7 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
                               f"needs >= {seeds_needed} seeds x {per_regime}/regime on identical paths")
 
         return {
-            "tool": "paired_preview",
+            "tool": "gym.paired_preview",
             "verdict": "UNDERPOWERED_PREVIEW — promotion is NEVER issued locally",
             "promotion": None,
             "champion_hash": champ_h,
@@ -327,7 +310,7 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
                 reason=LOCAL_POWER_NOTE),
         }
 
-    return await _run("paired_preview", _do)
+    return await run_tool("gym.paired_preview", _do)
 
 
 async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4,
@@ -339,7 +322,7 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
         episodes = len(REGIMES) * per_regime * len(use_seeds) * max(1, n_genomes)
         est_wall_s = episodes * SECONDS_PER_EPISODE_EST
         return {
-            "tool": "estimate_cloud_run",
+            "tool": "gym.estimate_cloud_run",
             "episodes_required": episodes,
             "formula": "len(REGIMES) x per_regime x seeds x genomes",
             "regimes": REGIMES,
@@ -348,7 +331,7 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
             "budget": envelope.budget_reference(),
             "submit_bodies": {
                 "POST /tournament/run": {
-                    "challenger_id": "<genome_hash from validate_genome>",
+                    "challenger_id": "<genome_hash from warden.validate_genome>",
                     "seeds": use_seeds,
                     "per_regime": per_regime,
                     "panel": "bars_1day",
@@ -360,4 +343,4 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
             "handoff": envelope.indeterminate_local()["why"],
         }
 
-    return await _run("estimate_cloud_run", _do)
+    return await run_tool("gym.estimate_cloud_run", _do)

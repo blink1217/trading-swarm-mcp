@@ -31,6 +31,11 @@
         "sha256": "9acf5987a968cc4f9ab5f66f5569588d7f474a4ccda2aaa1be3a2091cf4057db",
         "source": "gym/simulator.py"
       },
+      "microstructure.py": {
+        "origin": "verbatim",
+        "sha256": "6645e9b757ff5d22c92ac9a4f320ed272dfc2904d9ccca1b11f7ce9c743e0666",
+        "source": "trade_bot_volume_predictor/microstructure_engine.py"
+      },
       "order_checks.py": {
         "origin": "verbatim",
         "sha256": "2307aaa5369a020a03f0a5429faafc7f3f2c8883ef968bf8c7c66bdc001ba53e",

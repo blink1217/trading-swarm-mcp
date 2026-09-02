@@ -10,3 +10,9 @@ import contextvars
 
 current_token: contextvars.ContextVar[str] = contextvars.ContextVar(
     "swarm_mcp_request_token", default="")
+
+# Entitlement (plan/status/features/quota) resolved for the current request by
+# the hosted HTTP auth middleware; None when the token carries no entitlement
+# info or outside a request scope.
+current_entitlement: contextvars.ContextVar = contextvars.ContextVar(
+    "swarm_mcp_request_entitlement", default=None)

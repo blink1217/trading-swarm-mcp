@@ -1,0 +1,29 @@
+{
+  "name": "quant-swarm-mcp",
+  "version": "0.3.0",
+  "description": "Node launcher for the quant-swarm MCP servers (swarm-data-mcp, swarm-warden-mcp, swarm-gym-mcp): pre-trade checkers that gate live capital. Shells to uvx for stdio, or npx mcp-remote for the hosted endpoints.",
+  "license": "MIT",
+  "author": "The 1.21 Initiative",
+  "homepage": "https://1.21initiative.com/mcp/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blink1217/trading-swarm-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "trading",
+    "quant",
+    "backtest-audit",
+    "point-in-time"
+  ],
+  "bin": {
+    "quant-swarm-mcp": "bin/quant-swarm-mcp.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

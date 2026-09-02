@@ -1,34 +1,62 @@
-# Smithery deployment config for the trading-swarm-mcp servers.
-# Register this repo at https://smithery.ai to make swarm-data-mcp installable
-# in one click. The warden and gym servers live in the same package; after
-# registering swarm-data-mcp, add the other two servers with the same repo and
-# the matching args/name below.
+# Smithery deployment config for quant-swarm.
+#
+# Live listing: https://smithery.ai/servers/blink-kt/quant-swarm
+# (package and Smithery slug are both `quant-swarm`
+# — the three servers share this one package).
+#
+# apiToken is forwarded to the server as the SWARM_MCP_ACCESS_TOKEN env var
+# for the stdio transport (commandFunction below); the hosted streamable-HTTP
+# endpoints accept it as `?apiToken=` (see swarm_mcp/servers/http_server.py).
+#
+# Configuration is fully optional: the server connects with ZERO configuration
+# (relay URL has a working default, token can be empty) — every tool still
+# lists, and calls without a token return an access-required envelope pointing
+# at the free signup page.
 
 startCommand:
   type: stdio
   configSchema:
     type: object
+    description: >-
+      Optional configuration for the swarm-data-mcp server. Everything has a
+      working default — add a token any time from https://1.21initiative.com/mcp/.
     properties:
       apiToken:
         type: string
+        title: Access token (optional)
         description: >-
-          Access token issued by https://1.21initiative.com/ (request access
-          there — the site captures your contact details and issues the token).
-          Set as SWARM_MCP_ACCESS_TOKEN.
+          Optional access token issued by https://1.21initiative.com/ (free
+          signup at https://1.21initiative.com/mcp/ — token issued instantly).
+          Without one, tools still list; calls return an access-required
+          envelope pointing to the signup page. Free plan: all warden checkers
+          plus derived-only market.pulse/market.sentiment/market.regime
+          snapshots (~250 relay data calls/month, 10 symbols/call). Pro is paid
+          by one-time credit packs (10k or 100k relay calls, 90-day validity —
+          no subscription, no unlimited plan) that unlock the rest
+          (features.build, cache.warm, all gym tools, Pro derived tools, 50
+          symbols/call). Set as SWARM_MCP_ACCESS_TOKEN.
+        default: ""
       relayUrl:
         type: string
+        title: Relay URL (optional)
         description: >-
-          Optional. Hosted data relay base URL. Defaults to
+          Hosted data relay base URL. Defaults to
           https://1.21initiative.com/api/mcp (requires no provider credentials).
         default: https://1.21initiative.com/api/mcp
-    required:
-      - apiToken
+    additionalProperties: false
+  exampleConfig:
+    apiToken: ""
   commandFunction: |-
-    (config) => ({
-      command: 'uvx',
-      args: ['--from', 'trading-swarm-mcp', 'swarm-data-mcp'],
-      env: {
-        SWARM_MCP_ACCESS_TOKEN: config.apiToken,
+    (config) => {
+      const env = {
         SWARM_MCP_RELAY_URL: config.relayUrl || 'https://1.21initiative.com/api/mcp'
+      };
+      if (config.apiToken) {
+        env.SWARM_MCP_ACCESS_TOKEN = config.apiToken;
       }
-    })
+      return {
+        command: 'uvx',
+        args: ['--from', 'quant-swarm', 'swarm-data-mcp'],
+        env
+      };
+    }

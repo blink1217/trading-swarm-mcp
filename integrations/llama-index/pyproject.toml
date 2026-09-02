@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llama-index-tools-quant-swarm"
+version = "0.3.0"
+description = "LlamaIndex tool-spec wrapper for the quant-swarm MCP servers (swarm-data, swarm-warden, swarm-gym)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "The 1.21 Initiative" }]
+keywords = ["llama-index", "mcp", "trading", "backtest-audit", "point-in-time"]
+dependencies = [
+    "llama-index-core>=0.12",
+    "llama-index-tools-mcp>=0.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/blink1217/trading-swarm-mcp"
+
+[tool.setuptools.packages.find]
+include = ["llama_index*"]

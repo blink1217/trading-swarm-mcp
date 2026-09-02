@@ -1,5 +1,5 @@
 """Cached bar access: immutable past served from cache, in-progress session
-refetchable under TTL, explicit backfill only via cache_warm."""
+refetchable under TTL, explicit backfill only via cache.warm."""
 from __future__ import annotations
 
 import datetime as dt
@@ -47,7 +47,7 @@ def offline_enabled() -> bool:
 def require_online(action: str) -> None:
     if OFFLINE["enabled"]:
         raise OfflineModeError(
-            f"offline_mode is enabled — {action} requires network; disable offline_mode or rely on cached rows")
+            f"cache.offline is enabled — {action} requires network; disable cache.offline or rely on cached rows")
 
 
 def api_keys() -> tuple[str, str]:
@@ -157,7 +157,7 @@ def _covered_to_depth(db: CacheDB, symbol: str, window_start: dt.date,
 
 async def warm_cache(db: CacheDB, symbols: list[str], years: float,
                      now: dt.datetime | None = None) -> dict:
-    require_online("cache_warm backfill")
+    require_online("cache.warm backfill")
     now = now or utcnow()
     symbols = sorted({s.strip().upper() for s in symbols if s and s.strip()})
     if not symbols:

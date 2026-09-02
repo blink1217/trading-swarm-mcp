@@ -1,0 +1,127 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.blink1217/quant-swarm",
+  "title": "quant-swarm",
+  "description": "Risk-first pre-trade checks: point-in-time data, invariant and leakage audits, regime probes.",
+  "version": "0.3.0",
+  "websiteUrl": "https://1.21initiative.com/mcp/",
+  "repository": {
+    "url": "https://github.com/blink1217/trading-swarm-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "quant-swarm",
+      "version": "0.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SWARM_MCP_ACCESS_TOKEN",
+          "description": "Optional access token from https://1.21initiative.com/mcp/ (free plan issued instantly). Without one, tools still list; calls return an access-required envelope pointing at the signup page.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ],
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "quant-swarm"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "swarm-data-mcp",
+          "description": "Launch the data server: point-in-time market data assembly and derived analytics"
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "quant-swarm",
+      "version": "0.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SWARM_MCP_ACCESS_TOKEN",
+          "description": "Optional access token from https://1.21initiative.com/mcp/.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ],
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "quant-swarm"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "swarm-warden-mcp",
+          "description": "Launch the warden: pre-trade invariant and leakage checks"
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "quant-swarm",
+      "version": "0.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SWARM_MCP_ACCESS_TOKEN",
+          "description": "Optional access token from https://1.21initiative.com/mcp/.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ],
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "quant-swarm"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "swarm-gym-mcp",
+          "description": "Launch the gym: regime-fragility probing and backtest audits"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL).",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

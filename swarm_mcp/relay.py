@@ -6,6 +6,11 @@ provider keys behind the access token and returns the same bar rows / enrichment
 payload shapes the direct paths produce, so the SQLite cache, provenance, and
 point-in-time semantics are unchanged. The relay is fail-closed: any non-200
 or network failure raises, never returns partial rows as if they were complete.
+
+Refusal semantics: quota/plan refusals arrive as HTTP 402 with a structured
+body ({ok:false, error, reason:'quota_exceeded'|'plan_required', upgrade_url,
+quota:{...}}). Non-200 bodies are parsed BEFORE raising so users see the real
+reason and the upgrade URL instead of a generic "token rejected" message.
 """
 from __future__ import annotations
 
@@ -21,9 +26,19 @@ TIMEOUT_S = 60.0
 
 BAR_FIELDS = ("symbol", "ts", "open", "high", "low", "close", "volume")
 
+REFUSAL_REASONS = ("quota_exceeded", "plan_required", "inactive")
+
 
 class RelayError(RuntimeError):
-    pass
+    """The relay refused or failed. `reason`/`upgrade_url` are set when the
+    refusal body carried a structured quota/plan explanation."""
+
+    def __init__(self, message: str, *, reason: str | None = None,
+                 upgrade_url: str | None = None, quota: dict | None = None):
+        super().__init__(message)
+        self.reason = reason
+        self.upgrade_url = upgrade_url
+        self.quota = quota or {}
 
 
 def relay_base() -> str:
@@ -42,8 +57,54 @@ def _access_token() -> str:
     return token
 
 
+def _refusal(status_code: int, r) -> RelayError:
+    """Build the RelayError for a non-200 relay response.
+
+    Parses the JSON body first: a structured quota/plan refusal (HTTP 402 with
+    reason/upgrade_url) must surface the real reason instead of the generic
+    fallback.
+    """
+    body = None
+    try:
+        body = r.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        reason = body.get("reason")
+        if reason in REFUSAL_REASONS:
+            upgrade_url = body.get("upgrade_url") or access.SITE_URL
+            quota = body.get("quota") if isinstance(body.get("quota"), dict) else {}
+            error = body.get("error") or reason
+            parts = [f"data relay refused ({reason}): {error}"]
+            if quota:
+                used = quota.get("used")
+                limit = quota.get("limit")
+                resets = quota.get("resets_at")
+                if used is not None and limit is not None:
+                    parts.append(f"quota {used}/{limit} calls")
+                if resets:
+                    parts.append(f"resets {resets}")
+            parts.append(f"upgrade or manage at {upgrade_url}")
+            return RelayError(" — ".join(parts), reason=str(reason),
+                              upgrade_url=upgrade_url, quota=quota)
+        error = body.get("error")
+        if error:
+            return RelayError(f"data relay refused (HTTP {status_code}): {error}")
+    return RelayError(
+        f"data relay refused (HTTP {status_code}) — token rejected or relay "
+        f"unavailable; request access at {access.SITE_URL}")
+
+
 def _check(body: dict) -> None:
     if not body.get("ok"):
+        reason = body.get("reason")
+        if reason in REFUSAL_REASONS:
+            upgrade_url = body.get("upgrade_url") or access.SITE_URL
+            raise RelayError(
+                f"data relay refused ({reason}): {body.get('error', reason)} — "
+                f"upgrade or manage at {upgrade_url}",
+                reason=str(reason), upgrade_url=upgrade_url,
+                quota=body.get("quota") if isinstance(body.get("quota"), dict) else {})
         raise RelayError(
             f"data relay refused: {body.get('error', 'unknown error')} — "
             f"request access at {access.SITE_URL}")
@@ -73,9 +134,7 @@ async def fetch_bars(symbols: list[str], days: int, *,
                 f"data relay unreachable ({type(e).__name__}) — request access at "
                 f"{access.SITE_URL}") from e
     if r.status_code != 200:
-        raise RelayError(
-            f"data relay refused (HTTP {r.status_code}) — token rejected or relay "
-            f"unavailable; request access at {access.SITE_URL}")
+        raise _refusal(r.status_code, r)
     try:
         body = r.json()
     except ValueError as e:
@@ -123,9 +182,7 @@ async def fetch_enrichment(symbol: str) -> dict:
                 f"data relay unreachable ({type(e).__name__}) — request access at "
                 f"{access.SITE_URL}") from e
     if r.status_code != 200:
-        raise RelayError(
-            f"data relay refused (HTTP {r.status_code}) — token rejected or relay "
-            f"unavailable; request access at {access.SITE_URL}")
+        raise _refusal(r.status_code, r)
     try:
         body = r.json()
     except ValueError as e:

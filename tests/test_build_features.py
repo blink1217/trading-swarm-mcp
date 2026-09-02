@@ -29,7 +29,7 @@ def test_build_features_happy_path(tmp_cache):
     }, fetched_at=f"{as_of}T10:00:00+00:00")
 
     out = run_async(data_tools.build_features(symbol=ticker, as_of=str(as_of)))
-    assert out["tool"] == "build_features"
+    assert out["tool"] == "features.build"
     assert out["as_of"] == str(as_of)
     assert out["no_lookahead"] is not None
     assert any(v is not None for v in out["vector"].values()), out
@@ -44,7 +44,7 @@ def test_build_features_happy_path(tmp_cache):
 
 def test_build_features_requires_cached_bars(tmp_cache):
     out = run_async(data_tools.build_features(symbol="AAA", as_of="2026-01-05"))
-    assert out["tool"] == "build_features"
+    assert out["tool"] == "features.build"
     assert "no cached bars" in out["error"]
 
 
@@ -53,7 +53,7 @@ def test_build_features_insufficient_history(tmp_cache):
     db.upsert_bars("alpaca", "1Day", "split", synthetic_bars(["AAA"], days=10, seed=5))
     out = run_async(
         data_tools.build_features(symbol="AAA", as_of=str(dt.datetime.now(dt.timezone.utc).date())))
-    assert out["tool"] == "build_features"
+    assert out["tool"] == "features.build"
     assert "panel" in out["error"]
 
 
@@ -66,5 +66,5 @@ def test_build_features_no_bar_exactly_at_as_of(tmp_cache):
     while weekend.weekday() not in (5, 6):
         weekend += dt.timedelta(days=1)
     out = run_async(data_tools.build_features(symbol=ticker, as_of=str(weekend)))
-    assert out["tool"] == "build_features"
+    assert out["tool"] == "features.build"
     assert "no bar" in out["error"]

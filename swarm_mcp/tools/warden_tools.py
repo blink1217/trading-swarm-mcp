@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import datetime as dt
 import math
-import time
 
 from swarm_mcp import vendor_path  # noqa: F401
 
@@ -21,7 +20,8 @@ from provenance import (  # vendored
 )
 from tiers import highest_mutated_tier  # vendored
 
-from swarm_mcp import access, envelope, redaction, telemetry
+from swarm_mcp import envelope, redaction
+from swarm_mcp.tool_runner import run_tool
 
 LIVE_CAPITAL_NOTE = ("these are the same checker functions that gate live capital in the swarm's "
                      "warden service; floors drift is caught by the parity tests")
@@ -38,23 +38,6 @@ HOUSE_SIZING_FLOORS = {
 }
 
 
-async def _run(tool: str, fn):
-    t0 = time.perf_counter()
-    try:
-        access.check_access()
-        out = await fn()
-        telemetry.record(tool, True, (time.perf_counter() - t0) * 1000.0)
-        return redaction.redact(out)
-    except access.AccessRequired as e:
-        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
-        return {"tool": tool, "access": "REQUIRED",
-                "error": redaction.redact_text(str(e)),
-                **access.request_instructions()}
-    except Exception as e:
-        telemetry.record(tool, False, (time.perf_counter() - t0) * 1000.0)
-        return {"tool": tool, "error": redaction.redact_text(f"{type(e).__name__}: {e}")}
-
-
 async def validate_order(order: dict, equity: float,
                          current_positions: dict | None = None,
                          floor_overrides: dict | None = None) -> dict:
@@ -66,7 +49,7 @@ async def validate_order(order: dict, equity: float,
         result = check_order(order, equity, current_positions)
         house = {"max_position_pct": MAX_POSITION_PCT, "max_gross_exposure_pct": MAX_GROSS_EXPOSURE_PCT}
         out = {
-            "tool": "validate_order",
+            "tool": "warden.validate_order",
             "verdict": "APPROVED" if result["ok"] else "REJECTED",
             "violations": result["violations"],
             "post_position_pct": result["post_position_pct"],
@@ -96,7 +79,7 @@ async def validate_order(order: dict, equity: float,
                 + "; ".join(result["violations"]) + f" — {LIVE_CAPITAL_NOTE}")
         return out
 
-    return await _run("validate_order", _do)
+    return await run_tool("warden.validate_order", _do)
 
 
 async def audit_features(manifest: list[dict], tape_started: str | None = None,
@@ -157,7 +140,7 @@ async def audit_features(manifest: list[dict], tape_started: str | None = None,
             }
 
         return {
-            "tool": "audit_features",
+            "tool": "warden.audit_features",
             "verdict": "CLEAN" if not violations else "VIOLATIONS_FOUND",
             "features": features,
             "violations": violations,
@@ -167,7 +150,7 @@ async def audit_features(manifest: list[dict], tape_started: str | None = None,
                            "never leak into a past decision; unscorable beats fabricated"),
         }
 
-    return await _run("audit_features", _do)
+    return await run_tool("warden.audit_features", _do)
 
 
 async def cost_check(gross_edge_bps: float, spread_bps: float, slippage_bps: float,
@@ -181,7 +164,7 @@ async def cost_check(gross_edge_bps: float, spread_bps: float, slippage_bps: flo
         rt = round_trip_cost_bps(spread_bps, slippage_bps, adverse_selection_bps)
         net = net_return_after_costs(gross_edge_bps, spread_bps, slippage_bps, adverse_selection_bps)
         return {
-            "tool": "cost_check",
+            "tool": "warden.cost_check",
             "one_way_cost_bps": one_way,
             "round_trip_cost_bps": rt,
             "gross_edge_bps": gross_edge_bps,
@@ -192,7 +175,7 @@ async def cost_check(gross_edge_bps: float, spread_bps: float, slippage_bps: flo
                            "against the position"),
         }
 
-    return await _run("cost_check", _do)
+    return await run_tool("warden.cost_check", _do)
 
 
 async def validate_genome_tool(genome: dict) -> dict:
@@ -205,7 +188,7 @@ async def validate_genome_tool(genome: dict) -> dict:
                           f"(current {CURRENT_SCHEMA_VERSION})")
         gh = genome_hash(genome)
         return {
-            "tool": "validate_genome",
+            "tool": "warden.validate_genome",
             "valid": not errors,
             "errors": errors,
             "genome_hash": gh,
@@ -215,7 +198,7 @@ async def validate_genome_tool(genome: dict) -> dict:
                      "tournament and in audit requests — reproducible across key order"),
         }
 
-    return await _run("validate_genome", _do)
+    return await run_tool("warden.validate_genome", _do)
 
 
 async def explain_sizing(equity: float, atr_14: float, close: float,
@@ -239,7 +222,9 @@ async def explain_sizing(equity: float, atr_14: float, close: float,
         steps = []
         reasons = []
         if equity <= 0 or atr_14 <= 0 or close <= 0:
-            return {"tool": "explain_sizing", "verdict": "REJECTED",
+            return {
+            "tool": "warden.explain_sizing",
+            "verdict": "REJECTED",
                     "reasons": ["missing_market_data_or_equity"],
                     "house_floors": HOUSE_SIZING_FLOORS, "overrides_deviation": deviation}
 
@@ -278,7 +263,7 @@ async def explain_sizing(equity: float, atr_14: float, close: float,
             verdict = "REDUCED" if reasons else "APPROVED"
 
         return {
-            "tool": "explain_sizing",
+            "tool": "warden.explain_sizing",
             "verdict": verdict,
             "qty": qty,
             "notional": round(qty * close, 2),
@@ -293,7 +278,7 @@ async def explain_sizing(equity: float, atr_14: float, close: float,
             "safety": NO_ORDER_PLACEMENT,
         }
 
-    return await _run("explain_sizing", _do)
+    return await run_tool("warden.explain_sizing", _do)
 
 
 async def request_promotion_verdict(challenger_genome: dict,
@@ -317,9 +302,9 @@ async def request_promotion_verdict(challenger_genome: dict,
             reason=(f"local probes run capped seeds on the local cache window; PBO/DSR inputs exist "
                     f"only on the hosted side ({len(REGIMES)} regimes: {', '.join(REGIMES)})"),
         )
-        out["tool"] = "request_promotion_verdict"
+        out["tool"] = "warden.promotion_verdict"
         out["regimes_required"] = REGIMES
         out["safety"] = NO_ORDER_PLACEMENT
         return out
 
-    return await _run("request_promotion_verdict", _do)
+    return await run_tool("warden.promotion_verdict", _do)

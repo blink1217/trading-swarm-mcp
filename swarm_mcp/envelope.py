@@ -96,7 +96,7 @@ def cloud_job_block(genome_hash: str, seeds: list[int], per_regime: int, reason:
         },
         "prerequisites": (
             "the genome must first be registered in the hosted registry (done during the audit booking); "
-            "challenger_id is the genome_hash emitted by validate_genome"),
+            "challenger_id is the genome_hash emitted by warden.validate_genome"),
         "reason_local_insufficient": reason,
     }
 
@@ -119,6 +119,28 @@ def indeterminate_local(missing_inputs: list[str] | None = None, *,
         out["cloud_job"] = cloud_job_block(genome_hash, seeds, per_regime,
                                            reason or "local compute is capped for statistical honesty")
     return out
+
+
+def upgrade_required(tool: str, plan: str, upgrade_url: str) -> dict:
+    """Non-error envelope for a Pro tool attempted on a non-paid plan.
+
+    The tool stays LISTED in Cursor/Claude; each attempt returns this instead of
+    an error, so every attempt is a conversion opportunity rather than a failure.
+    Advisory on the open-source stdio servers; hard-enforced on the hosted
+    streamable-HTTP endpoint.
+    """
+    return {
+        "tool": tool,
+        "access": "UPGRADE_REQUIRED",
+        "reason": "plan_required",
+        "plan": plan,
+        "upgrade_url": upgrade_url,
+        "note": ("this tool needs the Pro plan — Pro is credit-based: buy a one-time credit "
+                 "pack at the URL above (10k or 100k relay calls, 90-day validity, no "
+                 "subscription). Free tokens include the warden checkers, market.pulse, "
+                 "market.sentiment, market.regime, cache.stats, and cache.offline. This "
+                 "client-side check is advisory; quota and plan enforcement happen server-side."),
+    }
 
 
 def budget_reference() -> dict:

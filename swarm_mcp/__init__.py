@@ -1,4 +1,4 @@
-"""trading-swarm-mcp — local stdio MCP servers from the trading swarm.
+"""quant-swarm — local stdio MCP servers from the trading swarm.
 
 Three servers:
 - swarm-data-mcp   point-in-time bars + enrichment cache with as_of provenance
@@ -11,4 +11,4 @@ are never issued locally — statistically undecidable outputs route to the
 hosted tournament / Strategy Validation Audit.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"

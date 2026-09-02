@@ -43,6 +43,7 @@ GUARDRAILS_STRIPPED = {
 ALPHA_FILES = {
     "bars_fetch.py": "services/data-bridge/bars_fetch.py",
     "order_checks.py": "services/warden/order_checks.py",
+    "microstructure.py": "trade_bot_volume_predictor/microstructure_engine.py",
     "gym/__init__.py": "gym/__init__.py",
     "gym/panel.py": "gym/panel.py",
     "gym/regime.py": "gym/regime.py",
