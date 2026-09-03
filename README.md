@@ -12,7 +12,9 @@ Authored by the Principal Quantitative Technologist at [The 1.21 Initiative](htt
 
 Behind this package is a swarm that does not hand-tune strategies. A **champion** genome runs live; every cycle the swarm breeds **challengers** (tier-capped mutations), replays champion and challenger on the *identical* episode-seed matrix across five labelled market regimes (high-vol, drawdown, chop, melt-up, gap-heavy), and records the paired outcome in an **ELO ledger**. A surrogate prior pre-scores candidates so expensive replays are spent where they matter. Nothing is promoted on a single good backtest: promotion requires `MIN_EPISODES=20` paired episodes, a Wilcoxon-significant delta, a positive **worst-regime** margin (maximin, not mean), a **deflated-Sharpe** margin against the monotonic count of every trial ever attempted, and a **PBO** cap. This is the champion/challenger, self-play-style loop popularised by AlphaZero-style systems, applied honestly to markets — with the two things that do *not* transfer stated plainly: the market does not react to us, so there is no true self-play, and there is no learned dynamics model or tree search; selection is done by paired replay, ELO and statistical gates.
 
-What that means for you: a local backtest tells you how a strategy did on one path. The Shadow Tournament tells you whether it beats an *evolving* champion on the same paths, in the regime that hurts it most, at a sample size that can actually have an opinion — and your result enters the swarm's ELO ledger. Opt in as a **contributor** and your genome becomes an external challenger in the swarm's next breeding cycle (at half price). That is the flywheel: every honest submission makes the champion harder to beat, and every user gets a harder benchmark.
+Replay is only half of it. Every Sunday the swarm also runs a **forward league**: each league genome — the champion, the top-ELO challengers, contributed genomes, and a *planner* entrant whose weekend moves are chosen by a learned model — seals its positions for the coming week from Friday's causal features, and the SHA-256 commitment is stored before the week happens. The next cycle marks every sealed position against the realised closes (net of each genome's own cost model), ranks the field on the identical real week, and updates ELO on that. Sealed forecasts cannot be overfit to the week that follows; that is the swarm's ground truth, and it feeds a replay buffer where every position is decomposed into its component **moves** (screen, entry, size, weekend) so credit is assigned per move and regime, not to the strategy as a blob. The forward league started on 2026-09-02; the first realised settlements land mid-September, and the swarm runs untouched for eight weeks to collect them.
+
+What that means for you: a local backtest tells you how a strategy did on one path. The Shadow Tournament tells you whether it beats an *evolving* champion on the same paths, in the regime that hurts it most, at a sample size that can actually have an opinion — and your result enters the swarm's ELO ledger. Opt in as a **contributor** and your genome becomes an external challenger in the swarm's next breeding cycle (at half price), scored in replay and, if it earns a league seat, on real weeks. That is the flywheel: every honest submission makes the champion harder to beat, and every user gets a harder benchmark.
 
 ## Why risk-first
 
@@ -69,7 +71,10 @@ is how a genome leaves that ceiling:
 
 The outcome is a *tournament result*, not a promotion. The promotion gate — deflated-Sharpe
 margin, PBO cap, the monotonic trials ledger — runs inside the swarm's private registry on
-genomes that qualify. That boundary is deliberate (see **The IP boundary** below).
+genomes that qualify. That boundary is deliberate (see **The IP boundary** below). Replay
+results are the swarm's fast signal; forward-league settlements on real weeks are its slow,
+unfakeable one — a contributed genome that beats the champion in replay is what earns a league
+seat, and only realised weeks can keep it there.
 
 **What is sent:** the genome parameter vector, its hash, and the `contribute` flag. Never symbols,
 bars, features, orders, or code. **Retention:** with `contribute=false` the vector is deleted from
