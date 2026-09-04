@@ -159,12 +159,23 @@ async def fetch_bars(symbols: list[str], days: int, *,
     return rows
 
 
-async def fetch_enrichment(symbol: str) -> dict:
-    """Fetch the Finnhub enrichment composite via the relay.
+def _day_change_bucket(c, pc) -> str | None:
+    """Derived intraday-change label from current/previous close."""
+    if isinstance(c, (int, float)) and isinstance(pc, (int, float)) and pc:
+        chg = (c - pc) / pc
+        return (
+            "strong_up" if chg >= 0.03 else "up" if chg > 0.003 else
+            "strong_down" if chg <= -0.03 else "down" if chg < -0.003 else "flat")
+    return None
 
-    Returns the same payload shape the direct path builds:
-    {symbol, quote: {c, pc, h, l}, news_headlines: [...], earnings_within_3d}.
-    The caller appends its own fetched_at via the append-only enrichment store.
+
+async def fetch_enrichment(symbol: str) -> dict:
+    """Fetch the Finnhub enrichment composite via the relay — DERIVED ONLY (M-04).
+
+    The relay contract still returns raw quote/news from the site, but raw
+    provider content (headline text, quote values) is no longer persisted to
+    the caller's cache: this client reduces it to a headline count, a
+    day-change bucket, and the earnings flag before anything is stored.
     """
     symbol = symbol.strip().upper()
     if not symbol:
@@ -195,12 +206,7 @@ async def fetch_enrichment(symbol: str) -> dict:
         news = []
     return {
         "symbol": symbol,
-        "quote": {"c": quote.get("c"), "pc": quote.get("pc"),
-                  "h": quote.get("h"), "l": quote.get("l")},
-        "news_headlines": [
-            {"headline": n.get("headline"), "datetime": n.get("datetime"),
-             "source": n.get("source")}
-            for n in news if isinstance(n, dict)
-        ],
+        "news_count_7d": sum(1 for n in news if isinstance(n, dict)),
+        "day_change_bucket": _day_change_bucket(quote.get("c"), quote.get("pc")),
         "earnings_within_3d": bool(body.get("earnings_within_3d")),
     }

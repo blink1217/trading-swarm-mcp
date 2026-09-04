@@ -7,7 +7,7 @@ import os
 
 import httpx
 
-from swarm_mcp import vendor_path  # noqa: F401
+from swarm_mcp import request_context, vendor_path  # noqa: F401
 
 from bars_fetch import fetch_daily_bars as _fetch_daily_bars_direct  # vendored alpha (GCP-free)
 
@@ -32,20 +32,33 @@ class OfflineModeError(RuntimeError):
     pass
 
 
-OFFLINE = {"enabled": False}
+class LocalOnlyToolError(RuntimeError):
+    """A local-only tool was called on the hosted endpoint (M-01)."""
+
+
+# M-01: offline mode is a LOCAL switch. The hosted endpoint refuses it
+# outright, so the old attack (one free token flipping a process-global flag
+# for every tenant and every paid tournament run) is gone. On a local stdio
+# server the switch is process-wide by design: one user, one machine, and the
+# state must persist across tool calls (contextvar scoping would drop it
+# between requests).
+_OFFLINE = {"enabled": False}
 
 
 def set_offline(enabled: bool) -> bool:
-    OFFLINE["enabled"] = bool(enabled)
-    return OFFLINE["enabled"]
+    if request_context.is_hosted():
+        raise LocalOnlyToolError(
+            "cache.offline is a local-only tool — the hosted endpoint is always online")
+    _OFFLINE["enabled"] = bool(enabled)
+    return _OFFLINE["enabled"]
 
 
 def offline_enabled() -> bool:
-    return OFFLINE["enabled"]
+    return _OFFLINE["enabled"]
 
 
 def require_online(action: str) -> None:
-    if OFFLINE["enabled"]:
+    if offline_enabled():
         raise OfflineModeError(
             f"cache.offline is enabled — {action} requires network; disable cache.offline or rely on cached rows")
 
@@ -113,7 +126,7 @@ async def get_bars_cached(db: CacheDB, symbols: list[str], lookback_days: int,
     from_cache = len(cached)
 
     from_api = 0
-    if not OFFLINE["enabled"]:
+    if not offline_enabled():
         need = _need_api(symbols, by_symbol, now)
         if need:
             days = max(1, int(lookback_days)) + 1

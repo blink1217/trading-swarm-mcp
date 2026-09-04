@@ -3,7 +3,7 @@
   "name": "io.github.blink1217/quant-swarm",
   "title": "quant-swarm",
   "description": "Risk-first pre-trade checks plus the Shadow Tournament: point-in-time data, invariant and leakage audits, regime probes, and hosted paired scoring of your genome against the trading swarm's live champion.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "websiteUrl": "https://1.21initiative.com/mcp/",
   "repository": {
     "url": "https://github.com/blink1217/trading-swarm-mcp",
@@ -14,7 +14,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -47,7 +47,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -80,7 +80,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

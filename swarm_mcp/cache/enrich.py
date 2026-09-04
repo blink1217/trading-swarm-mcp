@@ -30,6 +30,11 @@ def finnhub_token() -> str:
 
 
 async def _enrich_direct(symbol: str) -> dict:
+    """BYOK Finnhub path — derived-only payload, same shape as the relay (M-04):
+    headline text and raw quote values are reduced to a count and a change
+    bucket before anything is cached."""
+    from swarm_mcp.relay import _day_change_bucket
+
     token = finnhub_token()
     today = dt.datetime.now(dt.timezone.utc).date()
     frm = (today - dt.timedelta(days=7)).isoformat()
@@ -49,9 +54,8 @@ async def _enrich_direct(symbol: str) -> dict:
 
     return {
         "symbol": symbol,
-        "quote": {"c": quote.get("c"), "pc": quote.get("pc"), "h": quote.get("h"), "l": quote.get("l")},
-        "news_headlines": [{"headline": n.get("headline"), "datetime": n.get("datetime"),
-                            "source": n.get("source")} for n in news],
+        "news_count_7d": sum(1 for n in news if isinstance(n, dict)),
+        "day_change_bucket": _day_change_bucket(quote.get("c"), quote.get("pc")),
         "earnings_within_3d": bool(earnings_flag),
     }
 

@@ -25,6 +25,25 @@ REGIME_COUNT = int(plans.TOURNAMENT["regimes"])
 DEFAULT_LOCAL_SEEDS = 2
 TIMEOUT_S = 15.0
 
+# Step 28: charge for what the tool will ACTUALLY run. The old pricing took the
+# caller's raw `seeds` list and `per_regime` unbounded, so a caller could be
+# charged (or attempt to burn) arbitrary episode counts. The caps mirror the
+# gym tools' own _check_caps so billed units and executed work match; calls
+# over the caps are refused BEFORE charging (assert_within_caps).
+MAX_SEEDS = 8
+MAX_PER_REGIME = 2
+
+# M-03: caller-supplied `bars` on hosted is metered per 1000 rows — it is real
+# compute (panel prep + regime labelling), previously free and unbounded.
+BARS_ROWS_PER_CREDIT = 1000
+BARS_ARG_TOOLS = frozenset({
+    "market.pulse",
+    "market.regime",
+    "market.screen",
+    "market.rank",
+    "market.microstructure",
+})
+
 # Pro tools whose hosted cost is one cheap computation.
 SINGLE_SHOT_TOOLS = frozenset({
     "features.build",
@@ -65,18 +84,45 @@ class MeterRefused(RuntimeError):
 
 def _episodes(arguments: dict, genomes: int) -> int:
     seeds = arguments.get("seeds")
-    n_seeds = len(seeds) if isinstance(seeds, list) and seeds else DEFAULT_LOCAL_SEEDS
+    n_seeds = min(len(seeds), MAX_SEEDS) if isinstance(seeds, list) and seeds else DEFAULT_LOCAL_SEEDS
     per_regime = arguments.get("per_regime", 2)
     try:
         per_regime = max(1, int(per_regime))
     except (TypeError, ValueError):
         per_regime = 2
+    per_regime = min(per_regime, MAX_PER_REGIME)
     return REGIME_COUNT * per_regime * n_seeds * genomes
+
+
+def assert_within_caps(tool: str, arguments: dict | None) -> None:
+    """Refuse BEFORE charging when arguments exceed what the tool will run.
+
+    Charging first and letting the tool reject afterwards would bill credits
+    for work that never executes (the old charge-before-validate hole).
+    """
+    if tool not in EPISODE_TOOLS:
+        return
+    args = arguments if isinstance(arguments, dict) else {}
+    seeds = args.get("seeds")
+    if isinstance(seeds, list) and len(seeds) > MAX_SEEDS:
+        raise ValueError(f"seeds exceeds the cap of {MAX_SEEDS}")
+    per_regime = args.get("per_regime", 2)
+    try:
+        per_regime = int(per_regime)
+    except (TypeError, ValueError):
+        return  # non-integer per_regime fails the tool's own schema instead
+    if per_regime < 1 or per_regime > MAX_PER_REGIME:
+        raise ValueError(f"per_regime must be in [1, {MAX_PER_REGIME}]")
 
 
 def compute_units(tool: str, arguments: dict | None) -> int:
     """Credits the hosted endpoint charges for this tools/call (0 = not metered here)."""
     args = arguments if isinstance(arguments, dict) else {}
+    if tool in BARS_ARG_TOOLS:
+        bars = args.get("bars")
+        if isinstance(bars, list) and bars:
+            return max(1, math.ceil(len(bars) / BARS_ROWS_PER_CREDIT))
+        return 0
     if tool in EPISODE_TOOLS:
         return max(1, _episodes(args, EPISODE_TOOLS[tool]) * plans.COMPUTE_RATES["hosted.episode"])
     if tool in SINGLE_SHOT_TOOLS:

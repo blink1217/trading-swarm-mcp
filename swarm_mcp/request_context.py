@@ -16,3 +16,13 @@ current_token: contextvars.ContextVar[str] = contextvars.ContextVar(
 # info or outside a request scope.
 current_entitlement: contextvars.ContextVar = contextvars.ContextVar(
     "swarm_mcp_request_entitlement", default=None)
+
+
+def is_hosted() -> bool:
+    """True when executing under the hosted streamable-HTTP middleware.
+
+    The middleware scopes a per-request token before the tool runs; local stdio
+    servers resolve tokens from env and never set ``current_token``, so this is
+    a reliable hosted/local discriminator (M-01/M-02).
+    """
+    return bool(current_token.get())

@@ -208,12 +208,15 @@ def test_fetch_enrichment_relay_roundtrip(monkeypatch):
 
     monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
     out = run_async(relay.fetch_enrichment("aaa"))
+    # M-04: the relay client reduces raw provider content to derived fields —
+    # headline text and raw quote values never reach the caller's cache.
     assert out == {
         "symbol": "AAA",
-        "quote": {"c": 101.7, "pc": 100.9, "h": 102.0, "l": 100.4},
-        "news_headlines": [{"headline": "h", "datetime": 1725000000, "source": "s"}],
+        "news_count_7d": 1,
+        "day_change_bucket": "up",  # (101.7 - 100.9) / 100.9 ~= +0.79%
         "earnings_within_3d": True,
     }
+    assert "quote" not in out and "news_headlines" not in out
 
 
 def test_bars_dispatch_byok_prefers_direct(monkeypatch):

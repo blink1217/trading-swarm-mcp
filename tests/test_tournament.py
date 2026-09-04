@@ -8,6 +8,7 @@ identical paths (never a promotion); and the tournament.* client tools.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 from starlette.testclient import TestClient
@@ -254,8 +255,18 @@ def test_run_job_reports_errors_back_so_credits_refund(monkeypatch):
     assert calls and calls[0]["error"] and calls[0]["result"] is None
 
 
-def test_default_champion_loads_and_validates(monkeypatch):
+def test_champion_requires_registry_path(monkeypatch):
+    # Step 29: the packaged champion fallback is gone — a public wheel must not
+    # ship a baseline that paying users are scored against.
     monkeypatch.delenv("SWARM_MCP_CHAMPION_GENOME", raising=False)
+    with pytest.raises(RuntimeError, match="SWARM_MCP_CHAMPION_GENOME"):
+        tournament_runner.load_champion()
+
+
+def test_champion_loads_from_registry_path(monkeypatch):
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(here, "swarm_mcp", "data", "champion_genome.json")
+    monkeypatch.setenv("SWARM_MCP_CHAMPION_GENOME", path)
     champ = tournament_runner.load_champion()
     assert champ["schema_version"] == 2 and "_note" not in champ
 

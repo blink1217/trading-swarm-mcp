@@ -11,4 +11,9 @@ are never issued locally — statistically undecidable outputs route to the
 hosted tournament / Strategy Validation Audit.
 """
 
-__version__ = "0.3.0"
+try:
+    from importlib.metadata import version as _pkg_version
+
+    __version__ = _pkg_version("quant-swarm")
+except Exception:  # running from source without installation
+    __version__ = "0.4.1"

@@ -49,6 +49,13 @@ SERVERS = {
     "/mcp/gym": gym_server.mcp,
 }
 
+# M-01: local-only tools are refused on the hosted endpoint. cache.offline
+# used to be a FREE, process-global toggle — one free token could DoS every
+# tenant (and every paid tournament run) until it was flipped back; cache.stats
+# inventories a local cache that does not exist server-side (and used to leak
+# the server db_path). They stay available on the local stdio servers.
+HOSTED_LOCAL_ONLY_TOOLS = frozenset({"cache.offline", "cache.stats"})
+
 PUBLIC_PATHS = {"/", "/health"}
 INTERNAL_PREFIX = "/internal/"
 TOURNAMENT_RUN_PATH = "/internal/tournament/run"
@@ -110,19 +117,34 @@ def _gated_tool_name(body: bytes, ent: access.Entitlement) -> str | None:
     return None
 
 
-def _compute_units(body: bytes) -> tuple[int, str | None]:
-    """Total hosted-compute credits this payload costs (per plans.COMPUTE_RATES)
-    and the first metered tool name — 0 when nothing here is compute-metered."""
+def _local_only_tool_name(body: bytes) -> str | None:
+    """First local-only tool this payload tries to call on the hosted endpoint."""
+    for name, _args in _tool_calls(body):
+        if name in HOSTED_LOCAL_ONLY_TOOLS:
+            return name
+    return None
+
+
+def _compute_units(body: bytes) -> tuple[int, str | None, str | None]:
+    """Total hosted-compute credits this payload costs (per plans.COMPUTE_RATES),
+    the first metered tool name, and the first cap violation (refused BEFORE
+    any charge — step 28) — 0/None when nothing here is compute-metered."""
     from swarm_mcp import metering
 
     total = 0
     first: str | None = None
+    invalid: str | None = None
     for name, args in _tool_calls(body):
+        try:
+            metering.assert_within_caps(name, args)
+        except ValueError as e:
+            invalid = invalid or f"{name}: {e}"
+            continue
         units = metering.compute_units(name, args)
         if units > 0:
             total += units
             first = first or name
-    return total, first
+    return total, first, invalid
 
 
 def _const_eq(a: str, b: str) -> bool:
@@ -194,12 +216,17 @@ class BearerAuthMiddleware:
             token = auth[7:].decode("utf-8", "replace").strip()
         if not token:
             token = _token_from_query(scope.get("query_string", b""))
-        ent = access.verify_entitlement(token) if token else None
+        # M-05: async verification (worker thread + negative cache) — the old
+        # sync httpx.post here stalled the whole event loop per request.
+        ent = await access.verify_entitlement_async(token) if token else None
         if ent is None:
             return await self._deny(send)
 
         if scope.get("method") == "POST" and path in SERVERS:
             body = await _read_body(receive)
+            local_only = _local_only_tool_name(body)
+            if local_only:
+                return await self._local_only_refused(send, local_only)
             gated = _gated_tool_name(body, ent)
             if gated:
                 return await self._upgrade_required(send, gated, ent)
@@ -207,7 +234,11 @@ class BearerAuthMiddleware:
             # per simulated episode, single-shot Pro tools 1 credit. The site
             # decrements the pool and answers with the same structured 402s the
             # relay uses; unreachable meter => refuse (never serve unmetered).
-            units, metered_tool = _compute_units(body)
+            # Step 28: arguments over the tool caps are refused BEFORE charging
+            # so a rejected call never bills credits.
+            units, metered_tool, invalid = _compute_units(body)
+            if invalid:
+                return await self._invalid_args(send, invalid)
             if units > 0 and metered_tool:
                 from swarm_mcp import metering
 
@@ -237,6 +268,49 @@ class BearerAuthMiddleware:
         await send({
             "type": "http.response.start",
             "status": 401,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    @staticmethod
+    async def _local_only_refused(send, tool: str):
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32004,
+                "message": (f"'{tool}' is a local-only tool — run quant-swarm locally "
+                            "(stdio) to use it; the hosted endpoint does not expose it"),
+                "data": {"reason": "local_only_tool", "tool": tool},
+            },
+        }).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    @staticmethod
+    async def _invalid_args(send, detail: str):
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32602,
+                "message": f"hosted compute arguments out of bounds — {detail}",
+                "data": {"reason": "args_exceed_caps", "detail": detail},
+            },
+        }).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 200,
             "headers": [
                 (b"content-type", b"application/json"),
                 (b"content-length", str(len(body)).encode()),

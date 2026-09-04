@@ -19,7 +19,9 @@ Configuration (hosted service env):
                                 panel through the relay (users are never
                                 billed for the runner's own data pulls)
   SWARM_MCP_CHAMPION_GENOME     path to the registry's current champion JSON
-                                (default: packaged swarm_mcp/data/champion_genome.json)
+                                (REQUIRED — step 29: no packaged fallback; a
+                                public wheel must never ship a champion that
+                                paying users are scored against)
   SWARM_MCP_TOURNAMENT_UNIVERSE comma-separated symbols (default: the data
                                 server's DEFAULT_UNIVERSE)
   SWARM_MCP_TOURNAMENT_LOOKBACK_DAYS  panel depth (default 1010 ~ 4 years)
@@ -29,7 +31,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from importlib import resources
 
 import httpx
 
@@ -67,12 +68,20 @@ def internal_key() -> str:
 
 
 def load_champion() -> dict:
+    """The registry's current champion, from SWARM_MCP_CHAMPION_GENOME.
+
+    Step 29: the packaged fallback is gone. Shipping a champion genome in the
+    public wheel meant users could pay 200 credits to beat a stale, public
+    baseline; the hosted runner now refuses to start a tournament unless the
+    registry's live champion is provided.
+    """
     path = os.environ.get(CHAMPION_ENV, "").strip()
-    if path:
-        with open(path, "r", encoding="utf-8") as fh:
-            genome = json.load(fh)
-    else:
-        genome = json.loads(resources.files("swarm_mcp.data").joinpath("champion_genome.json").read_text("utf-8"))
+    if not path:
+        raise RuntimeError(
+            f"{CHAMPION_ENV} is not set — the tournament runner requires the registry's "
+            "current champion genome path (no packaged fallback)")
+    with open(path, "r", encoding="utf-8") as fh:
+        genome = json.load(fh)
     genome.pop("_note", None)
     errors = validate_genome(genome)
     if errors:

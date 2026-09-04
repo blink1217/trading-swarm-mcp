@@ -96,6 +96,6 @@ const server = SERVERS[argv[0]];
 if (!server) {
   fail(`unknown server '${argv[0]}'\n\n${USAGE}`);
 }
-runNoShell('uvx', ['--from', 'quant-swarm', server],
+runNoShell('uvx', ['--from', 'quant-swarm==0.4.1', server],
   'uv not found — install it from https://docs.astral.sh/uv/ (the servers ship as the ' +
   'quant-swarm Python package); alternatively use: quant-swarm-mcp --remote data');

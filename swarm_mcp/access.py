@@ -33,6 +33,8 @@ Plan vocabulary note: "plan" (free/pro/institutional) is the commercial gate;
 """
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import os
 import time
 from dataclasses import dataclass, field
@@ -45,9 +47,17 @@ VERIFY_URL_ENV = "SWARM_MCP_TOKEN_VERIFY_URL"
 DEFAULT_VERIFY_URL = "https://1.21initiative.com/api/mcp/verify"
 LOCAL_TOKEN_ENV = "SWARM_MCP_LOCAL_TOKEN"
 VALID_TTL_S = 300.0
+# M-05: recently-REJECTED tokens are refused without hitting the site again
+# for NEG_TTL_S. The old path re-verified every request for a bad token — a
+# free, unauthenticated amplification of traffic against the site's verify
+# endpoint (and a sync httpx call on the ASGI event loop per request).
+NEG_TTL_S = 30.0
 
 _cache: dict[str, tuple[float, "Entitlement"]] = {}
 _MAX_CACHE = 512
+
+_neg_cache: dict[str, float] = {}
+_MAX_NEG_CACHE = 10_000
 
 
 class AccessRequired(RuntimeError):
@@ -107,12 +117,34 @@ def resolve_token() -> str:
 def verify_entitlement(token: str) -> Entitlement | None:
     """Validate an explicit token and return its entitlement (None = rejected).
 
-    Used by the remote HTTP auth middleware; the entitlement is stashed on the
-    request context there so the hosted endpoint can hard-refuse Pro tools.
+    Synchronous form (local stdio servers, tests). The hosted HTTP middleware
+    must use :func:`verify_entitlement_async` so the site round-trip never
+    blocks the ASGI event loop (M-05).
     """
     if not token:
         return None
     return _verify(token)
+
+
+async def verify_entitlement_async(token: str) -> Entitlement | None:
+    """Event-loop-safe verification for the hosted middleware (M-05).
+
+    Runs the blocking site round-trip in a worker thread and keeps a short
+    negative cache keyed by the token hash: a rejected/forged token costs one
+    site call per NEG_TTL_S window instead of one per request.
+    """
+    if not token:
+        return None
+    h = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = time.monotonic()
+    if _neg_cache.get(h, 0.0) > now:
+        return None
+    ent = await asyncio.to_thread(_verify, token)
+    if ent is None:
+        if len(_neg_cache) >= _MAX_NEG_CACHE:
+            _neg_cache.clear()
+        _neg_cache[h] = now + NEG_TTL_S
+    return ent
 
 
 def validate_token(token: str) -> bool:
@@ -206,3 +238,4 @@ def _remember(token: str, now: float, ent: Entitlement) -> None:
 
 def reset_access_cache() -> None:
     _cache.clear()
+    _neg_cache.clear()

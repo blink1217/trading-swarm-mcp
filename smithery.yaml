@@ -59,7 +59,7 @@ startCommand:
       }
       return {
         command: 'uvx',
-        args: ['--from', 'quant-swarm', 'swarm-data-mcp'],
+        args: ['--from', 'quant-swarm==0.4.1', 'swarm-data-mcp'],
         env
       };
     }

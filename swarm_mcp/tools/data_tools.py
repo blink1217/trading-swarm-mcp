@@ -31,6 +31,13 @@ _PANEL_COL = {"vol_ratio_20d": "vol_ratio_20"}
 TIER_A_ORDER = [n for n in FEATURE_ORDER if feature_tier(n) == "A"]
 BAR_SOURCE = "bars_1day"
 
+# M-03: caller-supplied `bars` used to be unbounded on the hosted endpoint —
+# panel prep + regime labelling is super-linear, so one payload could pin a
+# shared Cloud Run CPU. Hard caps; hosted metering additionally charges
+# ceil(rows/1000) credits for bars-path calls (swarm_mcp.metering).
+MAX_BARS_ROWS = 20_000
+MAX_BARS_SYMBOLS = 50
+
 DEFAULT_UNIVERSE = [
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "AMD", "NFLX",
     "SPY", "QQQ", "IWM",
@@ -66,9 +73,18 @@ def _limits_and_escalation(sessions_by_symbol: dict) -> tuple[dict, dict | None]
 
 
 def _panel_from_rows(rows: list[dict]) -> pd.DataFrame:
+    if len(rows) > MAX_BARS_ROWS:
+        raise ValueError(
+            f"bars payload has {len(rows)} rows — max is {MAX_BARS_ROWS} "
+            f"(MAX_BARS_ROWS); split the request")
     df = pd.DataFrame(rows)
     if df.empty:
         return df
+    n_symbols = df["symbol"].nunique() if "symbol" in df.columns else 0
+    if n_symbols > MAX_BARS_SYMBOLS:
+        raise ValueError(
+            f"bars payload covers {n_symbols} symbols — max is {MAX_BARS_SYMBOLS} "
+            f"(MAX_BARS_SYMBOLS); split the request")
     df["ts"] = pd.to_datetime(df["ts"], utc=True).dt.tz_localize(None).dt.normalize()
     df = df.drop_duplicates(subset=["symbol", "ts"], keep="last")
     df = df.sort_values(["symbol", "ts"]).reset_index(drop=True)
@@ -257,6 +273,16 @@ async def cache_warm(universe: list[str] | None = None, years: float = 1.0) -> d
 
 async def cache_stats() -> dict:
     async def _do():
+        from swarm_mcp import request_context
+        from swarm_mcp.cache.bars import LocalOnlyToolError
+
+        # M-01/M-02: on the hosted endpoint cache.stats would inventory a
+        # tenant's cache (and used to echo the server db_path). It is a
+        # local-only tool.
+        if request_context.is_hosted():
+            raise LocalOnlyToolError(
+                "cache.stats is a local-only tool — it inspects your local cache, "
+                "which does not exist on the hosted endpoint")
         db = get_db()
         stats = db.stats()
         per_symbol = {}
@@ -371,26 +397,32 @@ async def sentiment_pulse(symbol: str) -> dict:
         db = get_db()
         sym = symbol.strip().upper()
         payload = await cache_enrich.enrich_symbol_cached(db, sym)
-        headlines = payload.get("news_headlines") or []
-        quote = payload.get("quote") or {}
-        c, pc = quote.get("c"), quote.get("pc")
-        day_change_bucket = None
-        if isinstance(c, (int, float)) and isinstance(pc, (int, float)) and pc:
-            chg = (c - pc) / pc
-            day_change_bucket = (
-                "strong_up" if chg >= 0.03 else "up" if chg > 0.003 else
-                "strong_down" if chg <= -0.03 else "down" if chg < -0.003 else "flat")
+        # M-04 payloads carry derived fields directly; legacy cached rows (raw
+        # quote/headlines) are still tolerated until they expire.
+        if "news_count_7d" in payload:
+            headline_count = int(payload.get("news_count_7d") or 0)
+        else:
+            headline_count = len(payload.get("news_headlines") or [])
+        day_change_bucket = payload.get("day_change_bucket")
+        if day_change_bucket is None and "quote" in payload:
+            quote = payload.get("quote") or {}
+            c, pc = quote.get("c"), quote.get("pc")
+            if isinstance(c, (int, float)) and isinstance(pc, (int, float)) and pc:
+                chg = (c - pc) / pc
+                day_change_bucket = (
+                    "strong_up" if chg >= 0.03 else "up" if chg > 0.003 else
+                    "strong_down" if chg <= -0.03 else "down" if chg < -0.003 else "flat")
         db.log_provenance("market.sentiment", sym, "derived",
                           f"from_cache={payload['from_cache']} — no raw quote/headline text returned")
         return {
             "tool": "market.sentiment",
             "symbol": sym,
             "as_of": payload["fetched_at"],
-            "headline_count_7d": len(headlines),
+            "headline_count_7d": headline_count,
             "earnings_within_3d": bool(payload.get("earnings_within_3d")),
             "day_change_bucket": day_change_bucket,
             "provenance": {"tier": "B",
-                          "note": "quantized/derived only — no raw quote values or headline text exposed"},
+                           "note": "quantized/derived only — no raw quote values or headline text exposed"},
             "not_investment_advice": True,
             "learn_more": access.SITE_URL,
         }

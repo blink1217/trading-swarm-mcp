@@ -218,10 +218,40 @@ class CacheDB:
 
 
 _DB: CacheDB | None = None
+_HOSTED_DBS: dict[str, CacheDB] = {}
+_MAX_HOSTED_DBS = 64
+
+
+def _hosted_db_path() -> Path:
+    """M-02: one cache database per hosted token.
+
+    The hosted endpoint used to share ONE SQLite file across every tenant:
+    cross-tenant data reads, shared quota accounting, and cache.stats echoing
+    the server's db_path to any free token. Keying the file name on the token
+    hash isolates tenants; the hash never reveals the token.
+    """
+    import hashlib
+
+    from swarm_mcp import request_context
+
+    digest = hashlib.sha256(request_context.current_token.get().encode("utf-8")).hexdigest()[:16]
+    base = Path(os.environ.get("SWARM_MCP_CACHE_DB") or default_db_path())
+    return base.with_name(f"{base.stem}-{digest}{base.suffix}")
 
 
 def get_db() -> CacheDB:
     global _DB
+    from swarm_mcp import request_context
+
+    if request_context.is_hosted():
+        path = _hosted_db_path()
+        db = _HOSTED_DBS.get(path.name)
+        if db is None:
+            if len(_HOSTED_DBS) >= _MAX_HOSTED_DBS:
+                _HOSTED_DBS.pop(next(iter(_HOSTED_DBS))).close()
+            db = CacheDB(path)
+            _HOSTED_DBS[path.name] = db
+        return db
     if _DB is None:
         _DB = CacheDB(os.environ.get("SWARM_MCP_CACHE_DB") or None)
     return _DB
@@ -230,3 +260,6 @@ def get_db() -> CacheDB:
 def reset_db() -> None:
     global _DB
     _DB = None
+    for db in _HOSTED_DBS.values():
+        db.close()
+    _HOSTED_DBS.clear()
