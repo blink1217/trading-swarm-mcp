@@ -79,6 +79,7 @@ FREE_TOOLS = frozenset({
     "market.pulse",
     "market.regime",
     "market.sentiment",
+    "market.climate",
     "cache.stats",
     "cache.offline",
     "tournament.leaderboard",

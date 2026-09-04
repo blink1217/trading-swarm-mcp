@@ -28,7 +28,7 @@ Risk gates are not post-hoc reports — they are the pre-condition for every act
 - **Statistically honest refusals.** Promotion verdicts are **never** issued locally. Statistically undecidable outputs return `INDETERMINATE_LOCAL`/`UNDERPOWERED`/`UNSCORABLE`, name the exact missing inputs (`MIN_EPISODES=20`, PBO, DSR, worst-regime margins), and hand off to the hosted Shadow Tournament (`tournament.submit`).
 
 - Local-first, BYO-key: your Alpaca/Finnhub keys are read from env only when operating in BYOK mode; otherwise data flows through the hosted relay.
-- Your symbols, bars, features and orders never leave your machine. The **only** thing that ever leaves is the genome parameter vector you explicitly pass to `tournament.submit` (public schema fields — no code, no symbols), and by default even that is deleted from the hosted side once scored.
+- Your symbols, bars, features and orders never leave your machine. What can leave is only what you explicitly pass to `tournament.submit`: the genome parameter vector (public schema fields), and — for the **strategy-contributor** tier — an author-written disclosure and/or your strategy code. Submitted code is **never executed**: it is treated as inert text, read statically by the hosted LLM reviewer, reduced to a structured explanation plus a code hash, and the raw code is discarded after review. By default even the vector is deleted from the hosted side once scored.
 
 **One-click install on [Smithery](https://smithery.ai/servers/blink-kt/quant-swarm):**
 the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/quant-swarm) (package and Smithery slug are both `quant-swarm`); the Smithery stdio launcher starts `swarm-data-mcp`, and the hosted streamable-HTTP endpoints below serve all three servers. Configuration is optional — without a token the servers still start and list every tool; the first call points you at the free signup. Add a token any time to unlock the relay-backed and hosted tools.
@@ -39,7 +39,7 @@ the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/qua
 
 | Server | Hook | Tools |
 | --- | --- | --- |
-| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
+| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
 | `swarm-warden-mcp` | Pre-trade invariant + leakage gate — the live-capital floors and the point-in-time guards | `warden.validate_order`, `warden.audit_features`, `warden.cost_check`, `warden.validate_genome`, `warden.explain_sizing`, `warden.promotion_verdict` |
 | `swarm-gym-mcp` | Regime fragility locally, then the **Shadow Tournament** against the swarm's live champion | `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, `gym.estimate_cloud_run`, `tournament.submit`, `tournament.verdict`, `tournament.leaderboard` |
 
@@ -48,6 +48,23 @@ registered as tools — those paths echo raw provider values, and the data polic
 derived-only: ratios, percentile ranks, labels, buckets and counts. `market.pulse` and
 `market.sentiment` are the general-purpose replacements; both accept an optional `bars`
 argument so you can supply your own OHLCV rows for symbols we don'"'"'t carry.
+
+### Operating-area weather (`market.climate`)
+
+`market.climate` is area-specific weather research for weather-exposed underlyings. For
+each symbol it fetches the keyless Open-Meteo 14-day forecast **and the same 14 calendar
+days one year earlier** for every **operating area** where the product is made and/or sold
+(a shipped 10-K-style exposure-weighted registry of energy, agriculture, airline/travel,
+retail, utility and homebuilder footprints), then exposure-weights per-area temperature
+anomaly, HDD/CDD, precipitation/snow, wind and freeze/heat-day counts into symbol
+aggregates — per-area detail is preserved so a heat wave in one harvest region stays
+visible. The weather is tied to the underlying's actual geographies, never the listing
+exchange or HQ city: a London forecast is not substituted for a product made and sold in
+New York. For underlyings outside the shipped registry, pass `areas` (made/sold
+geographies) and `market.climate` researches exactly those. Free tool, no provider
+credentials; returns derived sums/means/ratios/counts/buckets only, never raw per-day
+series. Forecast values are current research context and are never valid for past decision
+dates.
 
 ### The Shadow Tournament
 
@@ -58,6 +75,10 @@ is how a genome leaves that ceiling:
 1. **Validate locally** — `warden.validate_genome` returns the `genome_hash`; nothing is sent.
 2. **Submit** — `tournament.submit(genome, contribute=false|true)`. The site charges credits
    (200, or 100 with `contribute=true`) and dispatches the job to the hosted runner.
+   `contribute=true` is the **genome-contributor** tier (vector licensed as an external
+   challenger). Add `disclosure` and/or `strategy_code` to enter the **strategy-contributor**
+   tier: author-written decision logic and/or code for a static LLM review — the code is
+   never executed, and leaderboard attribution plus league-seat eligibility follow review.
 3. **Hosted replay on identical paths** — the runner replays *your genome and the swarm's
    current champion* over the same 5 regimes × 4 per regime × 5 seeds = **100 paired episodes**
    on the hosted `bars_1day` panel (above `MIN_EPISODES=20`), computes the Wilcoxon paired
@@ -76,13 +97,19 @@ results are the swarm's fast signal; forward-league settlements on real weeks ar
 unfakeable one — a contributed genome that beats the champion in replay is what earns a league
 seat, and only realised weeks can keep it there.
 
-**What is sent:** the genome parameter vector, its hash, and the `contribute` flag. Never symbols,
-bars, features, orders, or code. **Retention:** with `contribute=false` the vector is deleted from
-the job record once scored — hash and outcome remain. With `contribute=true` you license the vector
-and outcome to the swarm's evolution loop, where it is registered as an external challenger
-(`origin=external_contribution`) and put through the same tier-capped tournament and promotion gates
-as the swarm's own mutants. That is why contributors pay half: your genome is the swarm's proposer
-diversity, and every accepted contribution makes the next champion harder to beat — for everyone.
+**What is sent:** the genome parameter vector, its hash, and the `contribute` flag — plus, on the
+strategy-contributor tier only, a disclosure and/or `strategy_code` (code is never executed;
+the hosted reviewer reads it statically with an LLM and keeps only the structured explanation
+and a code hash). Never symbols, bars, features, orders, or credentials. **Retention:** with
+`contribute=false` the vector is deleted from the job record once scored — hash and outcome
+remain. With `contribute=true` (genome or strategy tier) you license the vector and outcome to
+the swarm's evolution loop, where it is registered as an external challenger
+(`origin=external_contribution`) and put through the same tier-capped tournament and promotion
+gates as the swarm's own mutants. That is why contributors pay half: your genome is the swarm's
+proposer diversity, and every accepted contribution makes the next champion harder to beat — for
+everyone. The strategy tier's disclosure is what additionally earns leaderboard attribution and
+a league seat after review — a contributed genome that beats the champion in replay earns the
+seat, and only realised forward-league weeks can keep it there.
 
 ## Plans and the credit rate card
 
@@ -100,7 +127,8 @@ we never run hosted compute at a loss.
 | `tournament.verdict`, `tournament.leaderboard`, all warden checkers, `cache.*`, local stdio runs of any tool | 0 | local execution is never metered — your CPU, your electricity |
 
 - **Free** (instant token at signup): all warden checkers, the derived snapshots
-  `market.pulse` / `market.sentiment` / `market.regime` (10 symbols/call, 250 relay calls/month,
+  `market.pulse` / `market.sentiment` / `market.climate` / `market.regime`
+  (10 symbols/call, 250 relay calls/month,
   365-day backfill), `cache.stats`, `cache.offline`, and `tournament.leaderboard`. No hosted compute,
   no GCP spend on your behalf beyond the relay allowance.
 - **Pro** — one-time credit packs, self-serve: **10,000 credits for £19** or **100,000 for £149**,

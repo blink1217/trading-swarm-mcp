@@ -39,7 +39,10 @@ INSTRUCTIONS = (
     "result is UNDERPOWERED, call tournament.submit: the hosted Shadow Tournament replays the "
     "genome and the swarm's current champion on the same 100 paired episodes, returns the "
     "paired outcome and ELO, and (with contribute=true, half price) licenses the genome to the "
-    "swarm's evolution loop. Poll with tournament.verdict; tournament.leaderboard is free."
+    "swarm's evolution loop. The strategy-contributor tier (contribute=true plus a disclosure "
+    "and/or strategy_code — code is NEVER executed, only read statically by the hosted LLM "
+    "reviewer) unlocks leaderboard attribution and league-seat eligibility after review. "
+    "Poll with tournament.verdict; tournament.leaderboard is free."
 )
 
 
@@ -49,6 +52,14 @@ class TournamentSubmitOut(TypedDict, total=False):
     job_id: str
     genome_hash: str
     contribute: bool
+    contribution: str
+    disclosure_status: str
+    strategy_code_sent: bool
+    analysis_contract: str
+    valid_disclosure: bool
+    disclosure_errors: list[str]
+    valid_strategy_code: bool
+    strategy_code_errors: list[str]
     credits_charged: int
     quota: dict
     geometry: dict
@@ -83,7 +94,7 @@ class TournamentVerdictOut(TypedDict, total=False):
 
 class TournamentLeaderboardOut(TypedDict, total=False):
     tool: str
-    updated_at: str
+    updated_at: str | None
     champion_rating: float
     total_runs: int
     contributed_runs: int
@@ -147,7 +158,7 @@ class ProbeFragilityOut(TypedDict, total=False):
 class PairedPreviewOut(TypedDict, total=False):
     tool: str
     verdict: str
-    promotion: str
+    promotion: str | None
     champion_hash: str
     challenger_hash: str
     n_paired_episodes: int
@@ -315,16 +326,32 @@ async def tournament_submit(
                     "champion. Validate locally with warden.validate_genome first.")],
     contribute: Annotated[bool, Field(
         description="true: license the genome vector + outcome to the swarm's evolution loop as an "
-                    "external challenger and pay half price. false (default): the vector is deleted "
+                    "external challenger and pay half price. Combine with `disclosure` and/or "
+                    "`strategy_code` for the strategy-contributor tier (leaderboard attribution + "
+                    "league-seat eligibility after review). false (default): the vector is deleted "
                     "after scoring; only hash + outcome remain.")] = False,
+    disclosure: Annotated[dict | None, Field(
+        description="Strategy-contributor tier: author-written decision-logic disclosure "
+                    "(version 1; fields hypothesis, universe, selection, entry_timing, risk_sizing, "
+                    "weekend_hold, expected_edge — describe how the strategy decides, never code, "
+                    "data dumps, or secrets). Requires contribute=true. Validated locally before "
+                    "anything is sent.")] = None,
+    strategy_code: Annotated[str | None, Field(
+        description="Strategy-contributor tier: submit strategy CODE for STATIC LLM review. The code "
+                    "is treated as inert text — it is NEVER executed by us or the swarm; the hosted "
+                    "reviewer reads it with an LLM and stores only the structured explanation + a "
+                    "code hash (raw code is discarded after review). Remove keys/secrets first. "
+                    "Requires contribute=true.")] = None,
 ) -> TournamentSubmitOut:
     """Submit a genome to the hosted Shadow Tournament. Charges credits (200, or 100 with
     contribute=true), then replays the genome AND the swarm's current champion over the identical
     100-episode seed matrix on the hosted bars_1day panel — the geometry a local run cannot reach.
-    Sends only the genome vector, its hash and the contribute flag; never symbols, bars or code.
+    Sends only the genome vector, its hash and the contribute flag, plus (strategy tier) a
+    disclosure and/or strategy_code — never symbols, bars or credentials, and never executes code.
     Returns a job_id to poll with tournament.verdict.
     """
-    return await tournament_tools.submit(genome=genome, contribute=contribute)
+    return await tournament_tools.submit(genome=genome, contribute=contribute,
+                                         disclosure=disclosure, strategy_code=strategy_code)
 
 
 @mcp.tool(

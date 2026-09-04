@@ -1,0 +1,1095 @@
+{
+  "schema": 1,
+  "description": "Operating-area registry of weather/seasonally-exposed underlyings: the geographies where each product is made and/or sold (10-K-style operational footprint, exposure-weighted). Weather is fetched per area here \u2014 never for the listing exchange or HQ city.",
+  "source": "C:\\Users\\kevin\\source\\repos\\trading-swarm-alpha\\services\\energy_research\\regions.py",
+  "symbols": 37,
+  "areas_total": 144,
+  "registry": {
+    "XOM": {
+      "sector": "energy",
+      "segment": "integrated",
+      "areas": [
+        {
+          "name": "US Gulf Coast (refining/LNG)",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.35
+        },
+        {
+          "name": "Permian Basin",
+          "lat": 32.0,
+          "lon": -102.08,
+          "weight": 0.25
+        },
+        {
+          "name": "Guyana Stabroek (offshore)",
+          "lat": 6.8,
+          "lon": -57.5,
+          "weight": 0.15
+        },
+        {
+          "name": "North Sea (UK/Norway)",
+          "lat": 58.0,
+          "lon": 1.0,
+          "weight": 0.1
+        },
+        {
+          "name": "Singapore (refining hub)",
+          "lat": 1.35,
+          "lon": 103.82,
+          "weight": 0.08
+        },
+        {
+          "name": "Nigeria (upstream)",
+          "lat": 5.6,
+          "lon": 5.9,
+          "weight": 0.07
+        }
+      ]
+    },
+    "CVX": {
+      "sector": "energy",
+      "segment": "integrated",
+      "areas": [
+        {
+          "name": "Permian Basin",
+          "lat": 32.0,
+          "lon": -102.08,
+          "weight": 0.3
+        },
+        {
+          "name": "Kazakhstan (Tengiz)",
+          "lat": 46.15,
+          "lon": 53.2,
+          "weight": 0.2
+        },
+        {
+          "name": "Australia (Gorgon LNG, NW shelf)",
+          "lat": -19.5,
+          "lon": 114.5,
+          "weight": 0.2
+        },
+        {
+          "name": "US Gulf Coast (refining)",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.15
+        },
+        {
+          "name": "Brazil (deepwater)",
+          "lat": -23.0,
+          "lon": -43.0,
+          "weight": 0.15
+        }
+      ]
+    },
+    "COP": {
+      "sector": "energy",
+      "segment": "e&p",
+      "areas": [
+        {
+          "name": "US Lower 48 (Permian/Bakken/Eagle Ford)",
+          "lat": 31.85,
+          "lon": -102.3,
+          "weight": 0.45
+        },
+        {
+          "name": "Alaska North Slope (Willow)",
+          "lat": 70.3,
+          "lon": -148.5,
+          "weight": 0.15
+        },
+        {
+          "name": "Norway (Ekofisk)",
+          "lat": 56.5,
+          "lon": 3.2,
+          "weight": 0.15
+        },
+        {
+          "name": "Australia (Qatar Energy LNG partner)",
+          "lat": -20.0,
+          "lon": 114.0,
+          "weight": 0.1
+        },
+        {
+          "name": "Qatar (North Field)",
+          "lat": 25.9,
+          "lon": 51.4,
+          "weight": 0.1
+        },
+        {
+          "name": "Canada (Surmont oil sands)",
+          "lat": 56.7,
+          "lon": -111.2,
+          "weight": 0.05
+        }
+      ]
+    },
+    "OXY": {
+      "sector": "energy",
+      "segment": "e&p",
+      "areas": [
+        {
+          "name": "Permian Basin",
+          "lat": 32.0,
+          "lon": -102.08,
+          "weight": 0.45
+        },
+        {
+          "name": "DJ Basin (Rockies)",
+          "lat": 39.7,
+          "lon": -104.8,
+          "weight": 0.2
+        },
+        {
+          "name": "Gulf of Mexico (deepwater)",
+          "lat": 27.5,
+          "lon": -91.5,
+          "weight": 0.15
+        },
+        {
+          "name": "Middle East (Oman/UAE concessions)",
+          "lat": 23.6,
+          "lon": 58.4,
+          "weight": 0.1
+        },
+        {
+          "name": "US Gulf chemicals",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.1
+        }
+      ]
+    },
+    "SLB": {
+      "sector": "energy",
+      "segment": "services",
+      "areas": [
+        {
+          "name": "Houston HQ / US operations",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.3
+        },
+        {
+          "name": "Saudi Arabia (Ghawar/Dhahran)",
+          "lat": 26.3,
+          "lon": 50.1,
+          "weight": 0.2
+        },
+        {
+          "name": "Brazil (deepwater services)",
+          "lat": -23.0,
+          "lon": -43.0,
+          "weight": 0.15
+        },
+        {
+          "name": "North Sea",
+          "lat": 58.0,
+          "lon": 1.0,
+          "weight": 0.1
+        },
+        {
+          "name": "West Africa (Nigeria/Angola)",
+          "lat": 5.6,
+          "lon": 5.9,
+          "weight": 0.1
+        },
+        {
+          "name": "Middle East (UAE/Qatar)",
+          "lat": 24.45,
+          "lon": 54.65,
+          "weight": 0.15
+        }
+      ]
+    },
+    "EQT": {
+      "sector": "energy",
+      "segment": "gas",
+      "areas": [
+        {
+          "name": "Appalachia (Marcellus/Utica)",
+          "lat": 40.44,
+          "lon": -80.0,
+          "weight": 0.7
+        },
+        {
+          "name": "US Northeast demand (HDD)",
+          "lat": 40.71,
+          "lon": -74.0,
+          "weight": 0.3
+        }
+      ]
+    },
+    "FANG": {
+      "sector": "energy",
+      "segment": "e&p",
+      "areas": [
+        {
+          "name": "Permian (Midland/Delaware)",
+          "lat": 32.0,
+          "lon": -102.08,
+          "weight": 0.85
+        },
+        {
+          "name": "Eagle Ford / Anadarko",
+          "lat": 28.5,
+          "lon": -98.5,
+          "weight": 0.15
+        }
+      ]
+    },
+    "DVN": {
+      "sector": "energy",
+      "segment": "e&p",
+      "areas": [
+        {
+          "name": "Anadarko / STACK (Oklahoma)",
+          "lat": 35.47,
+          "lon": -97.52,
+          "weight": 0.45
+        },
+        {
+          "name": "Delaware Basin",
+          "lat": 31.8,
+          "lon": -103.0,
+          "weight": 0.3
+        },
+        {
+          "name": "Eagle Ford",
+          "lat": 28.5,
+          "lon": -98.5,
+          "weight": 0.15
+        },
+        {
+          "name": "Williston / Powder River",
+          "lat": 47.8,
+          "lon": -103.4,
+          "weight": 0.1
+        }
+      ]
+    },
+    "HES": {
+      "sector": "energy",
+      "segment": "e&p",
+      "areas": [
+        {
+          "name": "Guyana Stabroek (offshore)",
+          "lat": 6.8,
+          "lon": -57.5,
+          "weight": 0.4
+        },
+        {
+          "name": "Bakken (Williston)",
+          "lat": 48.15,
+          "lon": -103.62,
+          "weight": 0.35
+        },
+        {
+          "name": "US Gulf of Mexico",
+          "lat": 27.5,
+          "lon": -91.5,
+          "weight": 0.15
+        },
+        {
+          "name": "North Sea / Asia-Pacific exploration",
+          "lat": 58.0,
+          "lon": 1.0,
+          "weight": 0.1
+        }
+      ]
+    },
+    "MPC": {
+      "sector": "energy",
+      "segment": "refining",
+      "areas": [
+        {
+          "name": "US Midwest refining",
+          "lat": 41.04,
+          "lon": -83.65,
+          "weight": 0.4
+        },
+        {
+          "name": "US Gulf Coast refining",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.35
+        },
+        {
+          "name": "US West Coast (Martinez)",
+          "lat": 38.0,
+          "lon": -122.13,
+          "weight": 0.25
+        }
+      ]
+    },
+    "VLO": {
+      "sector": "energy",
+      "segment": "refining",
+      "areas": [
+        {
+          "name": "US Gulf Coast refining",
+          "lat": 29.42,
+          "lon": -98.49,
+          "weight": 0.45
+        },
+        {
+          "name": "US Midwest (Port Arthur/Louisiana)",
+          "lat": 30.0,
+          "lon": -93.7,
+          "weight": 0.2
+        },
+        {
+          "name": "UK (Pembroke refinery)",
+          "lat": 51.7,
+          "lon": -5.0,
+          "weight": 0.15
+        },
+        {
+          "name": "US West Coast (Benicia)",
+          "lat": 38.05,
+          "lon": -122.15,
+          "weight": 0.2
+        }
+      ]
+    },
+    "PSX": {
+      "sector": "energy",
+      "segment": "refining",
+      "areas": [
+        {
+          "name": "US Gulf Coast refining",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.45
+        },
+        {
+          "name": "US Central (Ponca City/Wood River)",
+          "lat": 36.7,
+          "lon": -97.1,
+          "weight": 0.25
+        },
+        {
+          "name": "US West Coast (Rodeo)",
+          "lat": 38.03,
+          "lon": -122.28,
+          "weight": 0.2
+        },
+        {
+          "name": "US Atlantic (Linden NJ)",
+          "lat": 40.62,
+          "lon": -74.24,
+          "weight": 0.1
+        }
+      ]
+    },
+    "USO": {
+      "sector": "energy",
+      "segment": "crude_benchmark",
+      "areas": [
+        {
+          "name": "WTI / Cushing hub",
+          "lat": 35.98,
+          "lon": -97.48,
+          "weight": 0.6
+        },
+        {
+          "name": "US Gulf Coast export terminals",
+          "lat": 29.3,
+          "lon": -94.8,
+          "weight": 0.4
+        }
+      ]
+    },
+    "UNG": {
+      "sector": "energy",
+      "segment": "gas_benchmark",
+      "areas": [
+        {
+          "name": "Henry Hub (Louisiana)",
+          "lat": 29.98,
+          "lon": -93.34,
+          "weight": 0.6
+        },
+        {
+          "name": "US Northeast demand (HDD proxy)",
+          "lat": 40.71,
+          "lon": -74.0,
+          "weight": 0.4
+        }
+      ]
+    },
+    "XLE": {
+      "sector": "energy",
+      "segment": "etf",
+      "areas": [
+        {
+          "name": "US energy composite (Permian+Gulf)",
+          "lat": 31.0,
+          "lon": -97.5,
+          "weight": 0.6
+        },
+        {
+          "name": "Global benchmark proxy (Brent/North Sea)",
+          "lat": 58.0,
+          "lon": 1.0,
+          "weight": 0.4
+        }
+      ]
+    },
+    "ADM": {
+      "sector": "agriculture",
+      "segment": "processing",
+      "areas": [
+        {
+          "name": "US Midwest grain belt (Decatur)",
+          "lat": 39.84,
+          "lon": -88.95,
+          "weight": 0.4
+        },
+        {
+          "name": "Brazil (Mato Grosso soy/corn)",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.2
+        },
+        {
+          "name": "Argentina (Rosario crush/export)",
+          "lat": -32.9,
+          "lon": -60.6,
+          "weight": 0.15
+        },
+        {
+          "name": "Black Sea corridor (Odesa exports)",
+          "lat": 46.5,
+          "lon": 30.7,
+          "weight": 0.15
+        },
+        {
+          "name": "Europe (Hamburg/UK origination)",
+          "lat": 53.55,
+          "lon": 9.99,
+          "weight": 0.1
+        }
+      ]
+    },
+    "BG": {
+      "sector": "agriculture",
+      "segment": "processing",
+      "areas": [
+        {
+          "name": "US Midwest (St. Louis river corridor)",
+          "lat": 38.63,
+          "lon": -90.19,
+          "weight": 0.45
+        },
+        {
+          "name": "Brazil (Mato Grosso/cerrado)",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.25
+        },
+        {
+          "name": "Black Sea (Danube export)",
+          "lat": 45.45,
+          "lon": 28.05,
+          "weight": 0.15
+        },
+        {
+          "name": "Argentina (Up River)",
+          "lat": -32.9,
+          "lon": -60.6,
+          "weight": 0.15
+        }
+      ]
+    },
+    "MOS": {
+      "sector": "agriculture",
+      "segment": "fertilizer",
+      "areas": [
+        {
+          "name": "Canada (Saskatchewan potash)",
+          "lat": 52.15,
+          "lon": -106.65,
+          "weight": 0.4
+        },
+        {
+          "name": "US Gulf Coast (phosphate)",
+          "lat": 27.95,
+          "lon": -82.46,
+          "weight": 0.25
+        },
+        {
+          "name": "Brazil (application demand)",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.35
+        }
+      ]
+    },
+    "CTVA": {
+      "sector": "agriculture",
+      "segment": "seed",
+      "areas": [
+        {
+          "name": "US corn/soy belt",
+          "lat": 40.12,
+          "lon": -88.24,
+          "weight": 0.45
+        },
+        {
+          "name": "Brazil safrinha season",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.25
+        },
+        {
+          "name": "Europe (France/Germany)",
+          "lat": 49.44,
+          "lon": 1.09,
+          "weight": 0.15
+        },
+        {
+          "name": "Argentina",
+          "lat": -34.6,
+          "lon": -58.4,
+          "weight": 0.15
+        }
+      ]
+    },
+    "FMC": {
+      "sector": "agriculture",
+      "segment": "crop_protection",
+      "areas": [
+        {
+          "name": "US Midwest",
+          "lat": 40.12,
+          "lon": -88.24,
+          "weight": 0.35
+        },
+        {
+          "name": "Brazil (soy/cotton)",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.3
+        },
+        {
+          "name": "India (rice/cotton belt)",
+          "lat": 21.15,
+          "lon": 79.08,
+          "weight": 0.2
+        },
+        {
+          "name": "Europe",
+          "lat": 49.44,
+          "lon": 1.09,
+          "weight": 0.15
+        }
+      ]
+    },
+    "DE": {
+      "sector": "agriculture",
+      "segment": "machinery",
+      "areas": [
+        {
+          "name": "US Midwest farm belt (Moline)",
+          "lat": 41.51,
+          "lon": -90.57,
+          "weight": 0.45
+        },
+        {
+          "name": "Brazil (Mato Grosso large-farm machinery)",
+          "lat": -15.6,
+          "lon": -56.1,
+          "weight": 0.2
+        },
+        {
+          "name": "Europe (Mannheim/Kaiserslautern)",
+          "lat": 49.49,
+          "lon": 8.47,
+          "weight": 0.2
+        },
+        {
+          "name": "India (tractors)",
+          "lat": 28.6,
+          "lon": 77.2,
+          "weight": 0.15
+        }
+      ]
+    },
+    "DAL": {
+      "sector": "airline",
+      "segment": "carrier",
+      "areas": [
+        {
+          "name": "Atlanta hub",
+          "lat": 33.64,
+          "lon": -84.43,
+          "weight": 0.35
+        },
+        {
+          "name": "New York (JFK/LGA)",
+          "lat": 40.71,
+          "lon": -74.0,
+          "weight": 0.2
+        },
+        {
+          "name": "Minneapolis/Detroit hubs",
+          "lat": 44.88,
+          "lon": -93.22,
+          "weight": 0.15
+        },
+        {
+          "name": "Salt Lake City (winter ops)",
+          "lat": 40.79,
+          "lon": -111.98,
+          "weight": 0.1
+        },
+        {
+          "name": "Transatlantic (London/Amsterdam partners)",
+          "lat": 51.47,
+          "lon": -0.45,
+          "weight": 0.2
+        }
+      ]
+    },
+    "UAL": {
+      "sector": "airline",
+      "segment": "carrier",
+      "areas": [
+        {
+          "name": "Chicago O'Hare hub",
+          "lat": 41.98,
+          "lon": -87.9,
+          "weight": 0.25
+        },
+        {
+          "name": "Newark/New York",
+          "lat": 40.69,
+          "lon": -74.17,
+          "weight": 0.2
+        },
+        {
+          "name": "Houston hub (Gulf weather)",
+          "lat": 29.98,
+          "lon": -95.34,
+          "weight": 0.15
+        },
+        {
+          "name": "Denver (winter ops)",
+          "lat": 39.86,
+          "lon": -104.67,
+          "weight": 0.15
+        },
+        {
+          "name": "Transpacific (Guam/Tokyo)",
+          "lat": 35.55,
+          "lon": 139.78,
+          "weight": 0.15
+        },
+        {
+          "name": "San Francisco",
+          "lat": 37.62,
+          "lon": -122.38,
+          "weight": 0.1
+        }
+      ]
+    },
+    "AAL": {
+      "sector": "airline",
+      "segment": "carrier",
+      "areas": [
+        {
+          "name": "Dallas/Fort Worth hub",
+          "lat": 32.9,
+          "lon": -97.04,
+          "weight": 0.3
+        },
+        {
+          "name": "Charlotte hub",
+          "lat": 35.21,
+          "lon": -80.94,
+          "weight": 0.2
+        },
+        {
+          "name": "Philadelphia/Northeast",
+          "lat": 39.87,
+          "lon": -75.24,
+          "weight": 0.15
+        },
+        {
+          "name": "Phoenix/Miami (winter leisure)",
+          "lat": 25.79,
+          "lon": -80.29,
+          "weight": 0.2
+        },
+        {
+          "name": "London (transatlantic JV)",
+          "lat": 51.47,
+          "lon": -0.45,
+          "weight": 0.15
+        }
+      ]
+    },
+    "LUV": {
+      "sector": "airline",
+      "segment": "carrier",
+      "areas": [
+        {
+          "name": "Dallas Love Field hub",
+          "lat": 32.85,
+          "lon": -96.85,
+          "weight": 0.3
+        },
+        {
+          "name": "Chicago Midway",
+          "lat": 41.79,
+          "lon": -87.75,
+          "weight": 0.2
+        },
+        {
+          "name": "Denver",
+          "lat": 39.86,
+          "lon": -104.67,
+          "weight": 0.15
+        },
+        {
+          "name": "Las Vegas/Orlando leisure",
+          "lat": 36.08,
+          "lon": -115.15,
+          "weight": 0.2
+        },
+        {
+          "name": "Hawaii (leisure routes)",
+          "lat": 21.32,
+          "lon": -157.92,
+          "weight": 0.15
+        }
+      ]
+    },
+    "BKNG": {
+      "sector": "travel",
+      "segment": "booking",
+      "areas": [
+        {
+          "name": "US leisure demand",
+          "lat": 25.76,
+          "lon": -80.19,
+          "weight": 0.35
+        },
+        {
+          "name": "Europe (Amsterdam HQ, EU summer)",
+          "lat": 52.31,
+          "lon": 4.76,
+          "weight": 0.35
+        },
+        {
+          "name": "Asia-Pacific",
+          "lat": 1.35,
+          "lon": 103.82,
+          "weight": 0.15
+        },
+        {
+          "name": "Caribbean/cruise ports",
+          "lat": 18.47,
+          "lon": -66.11,
+          "weight": 0.15
+        }
+      ]
+    },
+    "WMT": {
+      "sector": "retail",
+      "segment": "mass_merchant",
+      "areas": [
+        {
+          "name": "US national (Bentonville HQ)",
+          "lat": 36.37,
+          "lon": -94.21,
+          "weight": 0.55
+        },
+        {
+          "name": "US Gulf Coast (hurricane prep demand)",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.15
+        },
+        {
+          "name": "Mexico (Walmex)",
+          "lat": 19.43,
+          "lon": -99.13,
+          "weight": 0.2
+        },
+        {
+          "name": "Canada",
+          "lat": 43.65,
+          "lon": -79.38,
+          "weight": 0.1
+        }
+      ]
+    },
+    "TGT": {
+      "sector": "retail",
+      "segment": "mass_merchant",
+      "areas": [
+        {
+          "name": "US national (Minneapolis HQ)",
+          "lat": 44.98,
+          "lon": -93.27,
+          "weight": 0.75
+        },
+        {
+          "name": "US Northeast (winter seasonal)",
+          "lat": 40.71,
+          "lon": -74.0,
+          "weight": 0.25
+        }
+      ]
+    },
+    "COST": {
+      "sector": "retail",
+      "segment": "warehouse",
+      "areas": [
+        {
+          "name": "US national (Issaquah HQ)",
+          "lat": 47.53,
+          "lon": -122.03,
+          "weight": 0.6
+        },
+        {
+          "name": "Canada",
+          "lat": 43.65,
+          "lon": -79.38,
+          "weight": 0.2
+        },
+        {
+          "name": "UK/Europe/Asia (Kirkland global supply)",
+          "lat": 51.51,
+          "lon": -0.13,
+          "weight": 0.2
+        }
+      ]
+    },
+    "HD": {
+      "sector": "retail",
+      "segment": "home_improvement",
+      "areas": [
+        {
+          "name": "US Southeast (Atlanta HQ; storm repair)",
+          "lat": 33.75,
+          "lon": -84.39,
+          "weight": 0.4
+        },
+        {
+          "name": "US Gulf Coast (hurricane rebuild)",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.2
+        },
+        {
+          "name": "US Northeast (winterization)",
+          "lat": 40.71,
+          "lon": -74.0,
+          "weight": 0.2
+        },
+        {
+          "name": "US West (wildfire/drought response)",
+          "lat": 34.05,
+          "lon": -118.24,
+          "weight": 0.2
+        }
+      ]
+    },
+    "LOW": {
+      "sector": "retail",
+      "segment": "home_improvement",
+      "areas": [
+        {
+          "name": "US Southeast (Mooresville HQ)",
+          "lat": 35.58,
+          "lon": -80.81,
+          "weight": 0.45
+        },
+        {
+          "name": "US Gulf Coast",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.2
+        },
+        {
+          "name": "US Midwest/Northeast",
+          "lat": 41.88,
+          "lon": -87.63,
+          "weight": 0.2
+        },
+        {
+          "name": "Canada",
+          "lat": 45.5,
+          "lon": -73.57,
+          "weight": 0.15
+        }
+      ]
+    },
+    "NEE": {
+      "sector": "utility",
+      "segment": "electric",
+      "areas": [
+        {
+          "name": "Florida (FPL; hurricane + cooling)",
+          "lat": 26.88,
+          "lon": -80.06,
+          "weight": 0.55
+        },
+        {
+          "name": "Texas ERCOT (grid stress)",
+          "lat": 30.27,
+          "lon": -97.74,
+          "weight": 0.15
+        },
+        {
+          "name": "US renewables fleet (Midwest wind)",
+          "lat": 41.26,
+          "lon": -95.93,
+          "weight": 0.3
+        }
+      ]
+    },
+    "DUK": {
+      "sector": "utility",
+      "segment": "electric",
+      "areas": [
+        {
+          "name": "Carolinas (storm + HDD/CDD)",
+          "lat": 35.23,
+          "lon": -80.84,
+          "weight": 0.45
+        },
+        {
+          "name": "Indiana/Ohio/Kentucky Midwest",
+          "lat": 39.1,
+          "lon": -84.51,
+          "weight": 0.35
+        },
+        {
+          "name": "Florida (DUKE FL)",
+          "lat": 27.95,
+          "lon": -82.46,
+          "weight": 0.2
+        }
+      ]
+    },
+    "SO": {
+      "sector": "utility",
+      "segment": "electric",
+      "areas": [
+        {
+          "name": "Georgia (Atlanta metro load)",
+          "lat": 33.75,
+          "lon": -84.39,
+          "weight": 0.45
+        },
+        {
+          "name": "Alabama",
+          "lat": 33.52,
+          "lon": -86.8,
+          "weight": 0.35
+        },
+        {
+          "name": "Mississippi",
+          "lat": 32.3,
+          "lon": -90.18,
+          "weight": 0.2
+        }
+      ]
+    },
+    "DHI": {
+      "sector": "homebuilder",
+      "segment": "builder",
+      "areas": [
+        {
+          "name": "Texas metros (Austin/Dallas/Houston)",
+          "lat": 30.27,
+          "lon": -97.74,
+          "weight": 0.35
+        },
+        {
+          "name": "Southeast (Carolinas/Florida)",
+          "lat": 33.75,
+          "lon": -84.39,
+          "weight": 0.25
+        },
+        {
+          "name": "West (Phoenix/Vegas)",
+          "lat": 33.45,
+          "lon": -112.07,
+          "weight": 0.2
+        },
+        {
+          "name": "Mid-Atlantic/Northeast",
+          "lat": 38.9,
+          "lon": -77.03,
+          "weight": 0.2
+        }
+      ]
+    },
+    "LEN": {
+      "sector": "homebuilder",
+      "segment": "builder",
+      "areas": [
+        {
+          "name": "Florida (hurricane season)",
+          "lat": 25.76,
+          "lon": -80.19,
+          "weight": 0.35
+        },
+        {
+          "name": "Texas",
+          "lat": 29.76,
+          "lon": -95.37,
+          "weight": 0.25
+        },
+        {
+          "name": "Carolinas/Southeast",
+          "lat": 35.23,
+          "lon": -80.84,
+          "weight": 0.2
+        },
+        {
+          "name": "California/West",
+          "lat": 33.45,
+          "lon": -112.07,
+          "weight": 0.2
+        }
+      ]
+    },
+    "PHM": {
+      "sector": "homebuilder",
+      "segment": "builder",
+      "areas": [
+        {
+          "name": "Southeast (Atlanta)",
+          "lat": 33.75,
+          "lon": -84.39,
+          "weight": 0.3
+        },
+        {
+          "name": "Texas",
+          "lat": 32.78,
+          "lon": -96.8,
+          "weight": 0.25
+        },
+        {
+          "name": "Florida",
+          "lat": 28.54,
+          "lon": -81.38,
+          "weight": 0.2
+        },
+        {
+          "name": "Northeast/Mid-Atlantic",
+          "lat": 39.95,
+          "lon": -75.16,
+          "weight": 0.25
+        }
+      ]
+    }
+  }
+}

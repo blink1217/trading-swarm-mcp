@@ -7,14 +7,22 @@ swarm's live champion on identical episode-seed paths over the hosted bars_1day
 panel (200 paired episodes — above MIN_EPISODES), reports the paired outcome,
 and updates the challenger's ELO against the champion.
 
-What is sent: the genome PARAMETER VECTOR (public schema fields), its hash, and
-the ``contribute`` flag. Never symbols, bars, features, orders, or code.
+What is sent: the genome PARAMETER VECTOR (public schema fields), its hash, the
+``contribute`` flag, and — for the strategy tier only — an author-written
+disclosure and/or ``strategy_code``. Never symbols, bars, features, orders, or
+credentials. Submitted strategy code is NEVER executed anywhere: the hosted
+reviewer reads it statically with an LLM and stores only the structured
+explanation (raw code is discarded after review).
 
 ``contribute=False`` (default): the vector is deleted from the job once scored;
 only hash + outcome remain (zero-knowledge to the swarm). Full price.
-``contribute=True``: the vector + outcome are licensed to the swarm's evolution
-loop as an external challenger (that is the data-contribution discount: half
-price). Read the Terms section "Shadow Tournament contributions" first.
+``contribute=True`` without disclosure/code: the vector + outcome are licensed
+to the swarm's evolution loop as an external challenger (that is the
+data-contribution discount: half price).
+``contribute=True`` WITH a disclosure and/or ``strategy_code``: the
+strategy-contributor tier — the licence above plus the decision-logic
+disclosure that unlocks leaderboard attribution and league-seat eligibility
+after review. Read the Terms section "Shadow Tournament contributions" first.
 """
 from __future__ import annotations
 
@@ -25,6 +33,13 @@ from swarm_mcp import vendor_path  # noqa: F401
 from genome_schema import genome_hash, validate_genome  # vendored guardrails
 
 from swarm_mcp import access, plans, redaction, relay, request_context, server_meta
+from swarm_mcp.strategy_disclosure import (
+    ANALYSIS_CONTRACT,
+    RETENTION_BY_KIND,
+    contribution_kind,
+    validate_disclosure,
+    validate_strategy_code,
+)
 from swarm_mcp.tool_runner import run_tool
 
 TIMEOUT_S = 30.0
@@ -59,8 +74,10 @@ def _raise_for_refusal(r: httpx.Response) -> dict:
     raise relay.RelayError(f"tournament endpoint returned HTTP {r.status_code}")
 
 
-async def submit(genome: dict, contribute: bool = False) -> dict:
-    redaction.reject_keylike_args({"genome": genome, "contribute": contribute})
+async def submit(genome: dict, contribute: bool = False,
+                 disclosure: dict | None = None, strategy_code: str | None = None) -> dict:
+    redaction.reject_keylike_args({"genome": genome, "contribute": contribute,
+                                   "disclosure": disclosure, "strategy_code": strategy_code})
 
     async def _do():
         errors = validate_genome(genome)
@@ -69,30 +86,65 @@ async def submit(genome: dict, contribute: bool = False) -> dict:
             return {"tool": "tournament.submit", "valid_genome": False, "errors": errors,
                     "genome_hash": gh, "note": "fix the genome locally (warden.validate_genome) — "
                     "nothing was sent and nothing was charged"}
+        kind = contribution_kind(contribute, disclosure, bool(strategy_code))
+        if kind == "private" and (disclosure is not None or strategy_code):
+            return {"tool": "tournament.submit", "valid_genome": True, "genome_hash": gh,
+                    "error": "strategy material (disclosure and/or strategy_code) requires "
+                             "contribute=true — the licence and discount are the exchange",
+                    "note": "nothing was sent and nothing was charged"}
+        if disclosure is not None:
+            derrors = validate_disclosure(disclosure)
+            if derrors:
+                return {"tool": "tournament.submit", "valid_genome": True, "genome_hash": gh,
+                        "valid_disclosure": False, "disclosure_errors": derrors,
+                        "note": "fix the disclosure locally — nothing was sent and nothing was charged"}
+        if strategy_code:
+            cerrors = validate_strategy_code(strategy_code)
+            if cerrors:
+                return {"tool": "tournament.submit", "valid_genome": True, "genome_hash": gh,
+                        "valid_strategy_code": False, "strategy_code_errors": cerrors,
+                        "note": "fix the submission locally — nothing was sent and nothing was charged"}
+        payload = {"genome": genome, "genome_hash": gh, "contribute": bool(contribute),
+                   "client_version": server_meta.PACKAGE_VERSION}
+        if disclosure is not None:
+            payload["disclosure"] = disclosure
+        if strategy_code:
+            payload["strategy_code"] = strategy_code
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             try:
                 r = await client.post(
                     f"{_base()}/tournament/submit",
-                    json={"genome": genome, "genome_hash": gh, "contribute": bool(contribute),
-                          "client_version": server_meta.PACKAGE_VERSION},
+                    json=payload,
                     headers={"Authorization": f"Bearer {_token()}"})
             except httpx.HTTPError as e:
                 raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
         body = _raise_for_refusal(r)
-        return {
+        out = {
             "tool": "tournament.submit",
             "status": body.get("status", "queued"),
             "job_id": body.get("job_id"),
             "genome_hash": gh,
             "contribute": bool(contribute),
+            "contribution": kind,
             "credits_charged": body.get("credits_charged"),
             "quota": body.get("quota"),
             "geometry": body.get("geometry"),
-            "what_was_sent": "genome parameter vector + hash + contribute flag — no symbols, bars, orders or code",
-            "retention": ("vector licensed to the swarm's evolution loop as an external challenger"
-                          if contribute else "vector deleted after scoring; hash + outcome retained"),
-            "next": "poll tournament.verdict(job_id) — hosted runs take roughly two minutes",
         }
+        if kind == "strategy":
+            out["disclosure_status"] = body.get("disclosure_status", "accepted_for_review")
+            out["strategy_code_sent"] = bool(strategy_code)
+            out["analysis_contract"] = (
+                "submitted code is NEVER executed: the hosted reviewer reads it statically with "
+                "an LLM and stores only the structured explanation + a code hash; raw code is "
+                "discarded after review. Author-written disclosures need no code and are never "
+                "executed either." if strategy_code else ANALYSIS_CONTRACT)
+            out["what_was_sent"] = ("genome vector + hash + author disclosure" if not strategy_code
+                                    else "genome vector + hash + strategy_code (static LLM review only)")
+        else:
+            out["what_was_sent"] = "genome parameter vector + hash + contribute flag — no symbols, bars, orders or code"
+        out["retention"] = RETENTION_BY_KIND[kind]
+        out["next"] = "poll tournament.verdict(job_id) — hosted runs take roughly two minutes"
+        return out
 
     return await run_tool("tournament.submit", _do)
 

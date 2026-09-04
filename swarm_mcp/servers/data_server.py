@@ -18,12 +18,13 @@ from swarm_mcp.server_meta import (
     SITE_URL,
     annotations,
 )
-from swarm_mcp.tools import data_tools
+from swarm_mcp.tools import climate_tools, data_tools
 
 SERVER_TITLE = "Swarm Data MCP"
 SERVER_DESCRIPTION = (
     "Point-in-time market data assembly from the 1.21 Initiative trading swarm: "
-    "derived-only technical signals (market.pulse, market.sentiment), "
+    "derived-only technical signals (market.pulse, market.sentiment), operating-area "
+    "weather research (market.climate), "
     "provenance-guarded feature vectors, and an immutable local cache. No provider "
     "credentials needed."
 )
@@ -39,7 +40,10 @@ INSTRUCTIONS = (
     "market.pulse and market.sentiment are the recommended general-purpose tools: they return only "
     "derived ratios, percentiles, and labels and never echo raw provider values back to the caller. "
     "Both accept an optional `bars` argument so you can supply your own OHLCV rows for symbols we "
-    "don't carry. Raw bar/enrichment access (get_bars/enrich_symbol) is internal only and not "
+    "don't carry. market.climate returns weather research per OPERATING AREA (made/sold footprint) "
+    "of weather-exposed underlyings from keyless Open-Meteo — never the listing exchange or HQ city; "
+    "pass `areas` for underlyings outside the shipped registry. Raw bar/enrichment access "
+    "(get_bars/enrich_symbol) is internal only and not "
     "exposed as tools, because those paths echo raw provider values; use features.build for the "
     "provenance-guarded feature vector. This server never places, cancels, or routes orders."
 )
@@ -194,6 +198,49 @@ async def sentiment_pulse(
     only. Not investment advice.
     """
     return await data_tools.sentiment_pulse(symbol=symbol)
+
+
+class ClimateSnapshotOut(TypedDict, total=False):
+    tool: str
+    source: str
+    climate: dict
+    covered: list[str]
+    uncovered: list[str]
+    registry_coverage: int
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="market.climate",
+    title="Operating-Area Climate Research",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def climate_snapshot(
+    symbols: Annotated[list[str], Field(
+        description="Tickers whose operating-area climate to research (registry-covered "
+                    "weather-exposed underlyings, or any ticker you supply `areas` for).")],
+    areas: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied operating areas for underlyings outside the shipped "
+                    "registry: [{symbol, name?, lat, lon, weight?}]. Weather is fetched ONLY for these "
+                    "made/sold geographies — never the listing exchange or HQ city.")] = None,
+) -> ClimateSnapshotOut:
+    """Area-specific weather research for each symbol's operating footprint.
+
+    Fetches the keyless Open-Meteo 14-day forecast AND the same 14 calendar days one
+    year prior per operating area (where the product is made and/or sold), then
+    exposure-weights into symbol aggregates. Returns derived sums/means/ratios/
+    counts/buckets per area and per symbol — never raw per-day series. A London
+    forecast is never substituted for a product made and sold in New York. Free tool;
+    no provider credentials needed. Not investment advice.
+    """
+    return await climate_tools.climate_snapshot(symbols=symbols, areas=areas)
 
 
 @mcp.tool(

@@ -87,8 +87,8 @@ class ValidateGenomeOut(TypedDict, total=False):
     valid: bool
     errors: list[str]
     genome_hash: str
-    schema_version: str
-    schema_version_current: str
+    schema_version: int
+    schema_version_current: int
     note: str
     access: str
     error: str

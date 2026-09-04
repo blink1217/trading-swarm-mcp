@@ -353,3 +353,76 @@ def test_gym_server_registers_tournament_tools():
 
     names = {t.name for t in run_async(gym_server.mcp.list_tools())}
     assert {"tournament.submit", "tournament.verdict", "tournament.leaderboard"} <= names
+
+
+def _disclosure() -> dict:
+    return {
+        "version": 1,
+        "hypothesis": "breakouts on high relative volume in liquid names persist for a few days",
+        "universe": "S&P 500 members with a 20-day average dollar volume above a floor; no gaps from news",
+        "selection": "momentum screen plus a close above the 20-day high with rising relative volume",
+        "entry_timing": "at the close of the confirmation bar, or next open if the bar is rejected",
+        "risk_sizing": "1% risk per trade sized on ATR; stop below the breakout bar low",
+        "weekend_hold": "hold only when the breakout is within the top quintile of its 20-day range",
+        "expected_edge": "beats the champion in high_vol and melt_up regimes; honest failure is a flat "
+                         "first week in chop — a false breakout regime",
+    }
+
+
+def test_tournament_submit_strategy_code_is_sent_and_never_executed(monkeypatch):
+    fake = _FakeAsync(202, {"ok": True, "job_id": "st_" + "c" * 24, "status": "queued",
+                            "credits_charged": 100, "disclosure_status": "accepted_for_review"})
+    monkeypatch.setattr("httpx.AsyncClient", fake)
+    code = "def score(panel):\n    return momentum(panel).rank(pct=True)"
+    r = run_async(tournament_tools.submit(baseline(), contribute=True, strategy_code=code))
+    assert "error" not in r, r
+    assert r["contribution"] == "strategy"
+    assert r["strategy_code_sent"] is True
+    assert "NEVER executed" in r["analysis_contract"]
+    sent = fake.calls[0]["json"]
+    assert sent["strategy_code"] == code
+    assert sent["contribute"] is True
+    assert "disclosure" not in sent
+
+
+def test_tournament_submit_author_disclosure_sends_no_code(monkeypatch):
+    fake = _FakeAsync(202, {"ok": True, "job_id": "st_" + "d" * 24, "status": "queued",
+                            "credits_charged": 100, "disclosure_status": "accepted_for_review"})
+    monkeypatch.setattr("httpx.AsyncClient", fake)
+    r = run_async(tournament_tools.submit(baseline(), contribute=True, disclosure=_disclosure()))
+    assert r["contribution"] == "strategy"
+    assert r["strategy_code_sent"] is False
+    sent = fake.calls[0]["json"]
+    assert sent["disclosure"]["hypothesis"]
+    assert "strategy_code" not in sent
+
+
+def test_tournament_submit_rejects_invalid_disclosure_before_sending(monkeypatch):
+    fake = _FakeAsync(202, {"ok": True})
+    monkeypatch.setattr("httpx.AsyncClient", fake)
+    bad = dict(_disclosure())
+    del bad["universe"]
+    bad["hypothesis"] = "def exploit(panel):  return 1"
+    r = run_async(tournament_tools.submit(baseline(), contribute=True, disclosure=bad))
+    assert r["valid_disclosure"] is False
+    assert fake.calls == []
+    blob = " ".join(r["disclosure_errors"])
+    assert "universe is required" in blob and "looks like code" in blob
+
+
+def test_tournament_submit_rejects_secret_material_in_code_before_sending(monkeypatch):
+    fake = _FakeAsync(202, {"ok": True})
+    monkeypatch.setattr("httpx.AsyncClient", fake)
+    code = "import os\nos.environ['OPENAI_API_KEY'] = 'sk-live-abcdef123456'"
+    r = run_async(tournament_tools.submit(baseline(), contribute=True, strategy_code=code))
+    assert r["valid_strategy_code"] is False
+    assert "secret material" in r["strategy_code_errors"][0]
+    assert fake.calls == []
+
+
+def test_tournament_submit_refuses_strategy_material_without_contribution(monkeypatch):
+    fake = _FakeAsync(202, {"ok": True})
+    monkeypatch.setattr("httpx.AsyncClient", fake)
+    r = run_async(tournament_tools.submit(baseline(), contribute=False, disclosure=_disclosure()))
+    assert "requires contribute=true" in r["error"]
+    assert fake.calls == []
