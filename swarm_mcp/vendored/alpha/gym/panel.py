@@ -40,7 +40,17 @@ def load_bars_bigquery(bq, project: str, dataset: str, min_ts: str | None = None
     {where}
     ORDER BY symbol, ts
     """
-    return bq.query(q).to_dataframe()
+    # Row iteration instead of to_dataframe(): no db-dtypes/pyarrow dependency
+    # in the service image, and the frame gets plain float/int/datetime dtypes.
+    rows = [dict(r) for r in bq.query(q).result()]
+    df = pd.DataFrame(rows, columns=["symbol", "ts", "open", "high", "low", "close", "volume"])
+    if df.empty:
+        return df
+    df["ts"] = pd.to_datetime(df["ts"], utc=True)
+    for c in ("open", "high", "low", "close"):
+        df[c] = df[c].astype(float)
+    df["volume"] = df["volume"].astype("int64")
+    return df
 
 
 def prepare_panel(bars: pd.DataFrame) -> pd.DataFrame:

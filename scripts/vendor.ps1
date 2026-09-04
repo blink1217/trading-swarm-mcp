@@ -17,6 +17,7 @@
 param(
     [string]$GuardrailsSha = "",
     [string]$AlphaSha = "",
+    [string]$VolpredSha = "",
     [switch]$FromWorktree
 )
 
@@ -25,24 +26,28 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $pinsPath = Join-Path $repoRoot ".github\pins.json"
 $guardrailsRepo = Join-Path (Split-Path -Parent $repoRoot) "trading-swarm-guardrails"
 $alphaRepo = Join-Path (Split-Path -Parent $repoRoot) "trading-swarm-alpha"
+$volpredRepo = Join-Path (Split-Path -Parent $repoRoot) "trade_bot_volume_predictor"
 
-if ((-not $GuardrailsSha -or -not $AlphaSha) -and (Test-Path $pinsPath) -and -not $FromWorktree) {
+if ((-not $GuardrailsSha -or -not $AlphaSha -or -not $VolpredSha) -and (Test-Path $pinsPath) -and -not $FromWorktree) {
     $pins = Get-Content $pinsPath -Raw | ConvertFrom-Json
     if (-not $GuardrailsSha) { $GuardrailsSha = $pins.guardrails.sha }
     if (-not $AlphaSha) { $AlphaSha = $pins.alpha.sha }
+    if (-not $VolpredSha) { $VolpredSha = $pins.volpred.sha }
 }
 
 function Assert-Sha([string]$sha, [string]$what) {
     if ($FromWorktree) { return }
     if (-not ($sha -match '^[0-9a-f]{40}$')) {
-        throw "no valid 40-char SHA for $what (pass -GuardrailsSha/-AlphaSha or populate .github/pins.json)"
+        throw "no valid 40-char SHA for $what (pass -GuardrailsSha/-AlphaSha/-VolpredSha or populate .github/pins.json)"
     }
 }
 Assert-Sha $GuardrailsSha "guardrails"
 Assert-Sha $AlphaSha "alpha"
+Assert-Sha $VolpredSha "volpred"
 
 if (-not (Test-Path $guardrailsRepo)) { throw "sibling guardrails checkout not found at $guardrailsRepo" }
 if (-not (Test-Path $alphaRepo)) { throw "sibling alpha checkout not found at $alphaRepo" }
+if (-not (Test-Path $volpredRepo)) { throw "sibling volume predictor checkout not found at $volpredRepo" }
 
 if (-not $FromWorktree) {
     Push-Location $guardrailsRepo
@@ -58,6 +63,13 @@ if (-not $FromWorktree) {
         git checkout --quiet $AlphaSha
         if ($LASTEXITCODE -ne 0) { throw "alpha checkout at $AlphaSha failed" }
     } finally { Pop-Location }
+
+    Push-Location $volpredRepo
+    try {
+        git fetch --quiet
+        git checkout --quiet $VolpredSha
+        if ($LASTEXITCODE -ne 0) { throw "volume predictor checkout at $VolpredSha failed" }
+    } finally { Pop-Location }
 }
 
 if ($FromWorktree) {
@@ -67,15 +79,20 @@ if ($FromWorktree) {
     Push-Location $alphaRepo
     $AlphaSha = (git rev-parse HEAD)
     Pop-Location
-    Write-Warning "-FromWorktree: pinning the sibling WORKING TREES at $GuardrailsSha / $AlphaSha (uncommitted state included)."
+    Push-Location $volpredRepo
+    $VolpredSha = (git rev-parse HEAD)
+    Pop-Location
+    Write-Warning "-FromWorktree: pinning the sibling WORKING TREES at $GuardrailsSha / $AlphaSha / $VolpredSha (uncommitted state included)."
 }
 
 $vendorArgs = @(
     (Join-Path $PSScriptRoot "perform_vendor.py"),
     "--guardrails-src", $guardrailsRepo,
     "--alpha-src", $alphaRepo,
+    "--volpred-src", $volpredRepo,
     "--guardrails-sha", $GuardrailsSha,
-    "--alpha-sha", $AlphaSha
+    "--alpha-sha", $AlphaSha,
+    "--volpred-sha", $VolpredSha
 )
 if ($FromWorktree) { $vendorArgs += "--worktree" }
 py -3.11 @vendorArgs

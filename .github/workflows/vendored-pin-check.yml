@@ -3,9 +3,10 @@
 # trading-swarm-alpha/.github/workflows/guardrails-invariants.yml.
 #
 # The source repos are private: checkout uses read-only SSH deploy keys stored as
-# DEPLOY_KEY (guardrails) and DEPLOY_KEY_ALPHA (alpha), so this job does not run on
-# fork PRs (no secrets). The vendored subset is committed, so contributors without the
-# keys can rely on `ci.yml`'s local pin check (hashes) instead.
+# DEPLOY_KEY (guardrails), DEPLOY_KEY_ALPHA (alpha), and DEPLOY_KEY_VOLPRED
+# (volume predictor), so this job does not run on fork PRs (no secrets). The
+# vendored subset is committed, so contributors without the keys can rely on
+# `ci.yml`'s local pin check (hashes) instead.
 name: vendored-pin-check
 
 on:
@@ -30,6 +31,7 @@ jobs:
           pins = json.load(open(".github/pins.json"))
           print(f"guardrails_sha={pins['guardrails']['sha']}")
           print(f"alpha_sha={pins['alpha']['sha']}")
+          print(f"volpred_sha={pins['volpred']['sha']}")
           print(f"worktree_pin={'true' if pins.get('worktree_pin') else 'false'}")
           EOF
 
@@ -57,12 +59,21 @@ jobs:
           ssh-key: ${{ secrets.DEPLOY_KEY_ALPHA }}
           ssh-known-hosts: ${{ env.GITHUB_KNOWN_HOSTS }}
 
+      - name: Checkout volume predictor at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: blink1217/trade_bot_volume_predictor
+          ref: ${{ steps.pins.outputs.volpred_sha }}
+          path: volpred-src
+          ssh-key: ${{ secrets.DEPLOY_KEY_VOLPRED }}
+          ssh-known-hosts: ${{ env.GITHUB_KNOWN_HOSTS }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Verify vendored tree against pinned sources
-        run: python scripts/check_pin.py --guardrails-src guardrails-src --alpha-src alpha-src
+        run: python scripts/check_pin.py --guardrails-src guardrails-src --alpha-src alpha-src --volpred-src volpred-src
 
       - name: Run guardrails invariant suite at pinned SHA
         working-directory: guardrails-src

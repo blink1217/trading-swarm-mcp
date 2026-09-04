@@ -32,6 +32,11 @@ from shared.swing_screens import union_mask  # noqa: E402
 EQUITY = 100_000.0
 FIDELITY_LABEL = "tier-A price subset (bars_1day only; no sentiment/earnings/finviz/weather/LLM inputs)"
 
+# Decision-time state recorded on every simulated position (the replay-buffer
+# observation). All are trailing-window features from gym.panel — no lookahead.
+STATE_FEATURES = ["atr_pct", "rsi_14", "mom_5d", "mom_20d", "vol_ratio_20",
+                  "breakout_dist_20d", "gap_open", "vwap_stretch_20", "ret_1d"]
+
 
 class TierScoringRefusal(RuntimeError):
     """The gym refuses to score a genome whose mutated genes exceed tier A.
@@ -171,10 +176,10 @@ def replay_episode(panel: pd.DataFrame, episode: dict, genome: dict,
         size_pct = min(size_pct, MAX_GROSS_EXPOSURE_PCT - gross)
         earnings_days = (earnings_map or {}).get((s, pd.Timestamp(episode["date"])))
         energy_bias = (energy_map or {}).get(s)
-        _, target_frac = weekend_action(genome["weekend_gate"], earnings_days=earnings_days,
-                                        atr_pct=float(f["atr_pct"]) if not np.isnan(f["atr_pct"]) else None,
-                                        gap_risk_pct=float(f["gap_open"]) if not np.isnan(f["gap_open"]) else None,
-                                        energy_bias=energy_bias)
+        action, target_frac = weekend_action(genome["weekend_gate"], earnings_days=earnings_days,
+                                             atr_pct=float(f["atr_pct"]) if not np.isnan(f["atr_pct"]) else None,
+                                             gap_risk_pct=float(f["gap_open"]) if not np.isnan(f["gap_open"]) else None,
+                                             energy_bias=energy_bias)
         final_pct = size_pct * target_frac
         gross += final_pct
         fwd = float(f["fwd_ret_5d"]) if "fwd_ret_5d" in f and not np.isnan(f["fwd_ret_5d"]) else 0.0
@@ -182,6 +187,10 @@ def replay_episode(panel: pd.DataFrame, episode: dict, genome: dict,
         positions.append({
             "symbol": s, "size_pct": size_pct, "target_frac": target_frac, "final_pct": final_pct,
             "gross_ret_bps": fwd * 1e4, "net_ret_bps": net_ret, "proba": proba,
+            # decision-time state + the action taken: the (s, a, r) transition
+            # the learned world model trains on. Causal features only.
+            "action": action,
+            "state": {k: (None if np.isnan(float(f[k])) else float(f[k])) for k in STATE_FEATURES if k in f},
         })
 
     gross = sum(p["final_pct"] for p in positions)
@@ -224,6 +233,8 @@ def evaluate_genome(panel: pd.DataFrame, episodes_by_seed: dict[int, list[dict]]
     per_seed = {}
     for s in seeds:
         eps = [replay_episode(panel, e, genome) for e in episodes_by_seed[s]]
+        for e in eps:
+            e["seed"] = int(s)
         per_seed[s] = eps
         all_eps.extend(eps)
     weekly = [e["weekly_net_bps"] for e in all_eps if e["lookahead_violations"] == []]

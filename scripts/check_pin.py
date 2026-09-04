@@ -19,7 +19,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-from perform_vendor import ALPHA_FILES, GUARDRAILS_STRIPPED, GUARDRAILS_WHOLE  # noqa: E402
+from perform_vendor import ALPHA_FILES, GUARDRAILS_STRIPPED, GUARDRAILS_WHOLE, VOLPRED_FILES  # noqa: E402
 from strip_guardrails import header_for, strip_functions  # noqa: E402
 
 
@@ -36,6 +36,7 @@ def main() -> int:
     ap.add_argument("--pins", default=None)
     ap.add_argument("--guardrails-src", default=None)
     ap.add_argument("--alpha-src", default=None)
+    ap.add_argument("--volpred-src", default=None)
     args = ap.parse_args()
 
     root = os.path.dirname(_HERE)
@@ -63,6 +64,14 @@ def main() -> int:
         if _sha256(path) != meta["sha256"]:
             failures.append(f"alpha/{name}: hash drift vs pins.json")
 
+    for name, meta in pins.get("volpred", {}).get("files", {}).items():
+        path = os.path.join(a_dst, name)
+        if not os.path.isfile(path):
+            failures.append(f"volpred/{name}: missing vendored file")
+            continue
+        if _sha256(path) != meta["sha256"]:
+            failures.append(f"volpred/{name}: hash drift vs pins.json")
+
     if args.guardrails_src:
         sha = pins["guardrails"]["sha"]
         for name in GUARDRAILS_WHOLE:
@@ -85,8 +94,21 @@ def main() -> int:
         for dst_rel, src_rel in ALPHA_FILES.items():
             src = os.path.join(args.alpha_src, src_rel)
             dst = os.path.join(a_dst, dst_rel)
+            if not os.path.isfile(src):
+                failures.append(f"alpha/{dst_rel}: source {src_rel} missing at pinned SHA {pins['alpha']['sha'][:12]}")
+                continue
             if os.path.isfile(dst) and open(src, "rb").read() != open(dst, "rb").read():
                 failures.append(f"alpha/{dst_rel}: differs from source {src_rel} at pinned SHA {pins['alpha']['sha'][:12]}")
+
+    if args.volpred_src:
+        for dst_rel, src_rel in VOLPRED_FILES.items():
+            src = os.path.join(args.volpred_src, src_rel)
+            dst = os.path.join(a_dst, dst_rel)
+            if not os.path.isfile(src):
+                failures.append(f"volpred/{dst_rel}: source {src_rel} missing at pinned SHA {pins['volpred']['sha'][:12]}")
+                continue
+            if os.path.isfile(dst) and open(src, "rb").read() != open(dst, "rb").read():
+                failures.append(f"volpred/{dst_rel}: differs from source {src_rel} at pinned SHA {pins['volpred']['sha'][:12]}")
 
     if failures:
         print("VENDORED PIN CHECK FAILED:")
@@ -94,7 +116,7 @@ def main() -> int:
             print("  -", f_)
         return 1
     print("vendored tree matches pins.json"
-          + (" and pinned sources" if (args.guardrails_src or args.alpha_src) else ""))
+          + (" and pinned sources" if (args.guardrails_src or args.alpha_src or args.volpred_src) else ""))
     return 0
 
 

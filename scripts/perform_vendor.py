@@ -43,7 +43,6 @@ GUARDRAILS_STRIPPED = {
 ALPHA_FILES = {
     "bars_fetch.py": "services/data-bridge/bars_fetch.py",
     "order_checks.py": "services/warden/order_checks.py",
-    "microstructure.py": "trade_bot_volume_predictor/microstructure_engine.py",
     "gym/__init__.py": "gym/__init__.py",
     "gym/panel.py": "gym/panel.py",
     "gym/regime.py": "gym/regime.py",
@@ -51,6 +50,10 @@ ALPHA_FILES = {
     "gym/policy_head.py": "gym/policy_head.py",
     "shared/__init__.py": "shared/__init__.py",
     "shared/swing_screens.py": "shared/swing_screens.py",
+}
+
+VOLPRED_FILES = {
+    "microstructure.py": "microstructure_engine.py",
 }
 
 GUARDRAILS_LICENSE = """# trading-swarm-guardrails — vendored CHECKER subset (source-available)
@@ -128,8 +131,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--guardrails-src", required=True)
     ap.add_argument("--alpha-src", required=True)
+    ap.add_argument("--volpred-src", required=True)
     ap.add_argument("--guardrails-sha", required=True)
     ap.add_argument("--alpha-sha", required=True)
+    ap.add_argument("--volpred-sha", required=True)
     ap.add_argument("--worktree", action="store_true",
                     help="pins record the sibling working tree state (pre-commit bootstrap)")
     args = ap.parse_args()
@@ -167,6 +172,14 @@ def main() -> int:
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copyfile(src, dst)
         pins_alpha_files[dst_rel] = {"source": src_rel, "origin": "verbatim", "sha256": sha256_file(dst)}
+
+    pins_volpred_files = {}
+    for dst_rel, src_rel in VOLPRED_FILES.items():
+        src = os.path.join(args.volpred_src, src_rel)
+        dst = os.path.join(a_dst, dst_rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        pins_volpred_files[dst_rel] = {"source": src_rel, "origin": "verbatim", "sha256": sha256_file(dst)}
     with open(os.path.join(a_dst, "guardrails_path.py"), "w", encoding="utf-8", newline="\n") as f:
         f.write(GUARDRAILS_PATH_SHIM)
 
@@ -189,6 +202,11 @@ def main() -> int:
             "sha": args.alpha_sha,
             "files": pins_alpha_files,
         },
+        "volpred": {
+            "repo": "blink1217/trade_bot_volume_predictor",
+            "sha": args.volpred_sha,
+            "files": pins_volpred_files,
+        },
         "local": {
             "guardrails/guardrails_path_shim": sha256_file(os.path.join(a_dst, "guardrails_path.py")),
             "guardrails/LICENSE.md": sha256_file(os.path.join(g_dst, "LICENSE.md")),
@@ -200,7 +218,7 @@ def main() -> int:
         json.dump(pins, f, indent=2, sort_keys=True)
         f.write("\n")
 
-    n = len(pins_guardrails_files) + len(pins_alpha_files)
+    n = len(pins_guardrails_files) + len(pins_alpha_files) + len(pins_volpred_files)
     print(f"vendored {n} pinned files (guardrails {args.guardrails_sha[:12]}, alpha {args.alpha_sha[:12]})"
           + (" [WORKTREE PIN — commit the alpha change and re-run before first public push]" if args.worktree else ""))
     return 0
