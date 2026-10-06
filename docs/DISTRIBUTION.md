@@ -25,9 +25,13 @@ Naming discipline: the package is `**quant-swarm`** everywhere
 - Credential: PyPI API token for the `quant-swarm` project scope.
 - [ ] `twine upload dist/*`
 - [ ] Verify: `https://pypi.org/project/quant-swarm/` shows the new
-      version. **NOTE (2026-09-02): PyPI currently carries 0.1.0 while the
-      repo is at 0.3.0 — the first publish from this checklist must upload
-      0.3.0 (or later).**
+      version. **NOTE (2026-10-06): PyPI currently carries 0.4.0 while the
+      repo is at 0.5.0 — upload 0.5.0 (`py -3.11 -m build`,
+      `py -3.11 -m twine check dist/*`,
+      `py -3.11 -m twine upload dist/quant_swarm-0.5.0*`) before the
+      registry publish, then confirm
+      `pypi.org/pypi/quant-swarm/0.5.0/json` carries the `mcp-name` marker
+      and smoke `uvx --from quant-swarm==0.5.0 swarm-warden-mcp`.
 - [ ] Smoke: `uvx --from quant-swarm swarm-warden-mcp --help` (or an
       initialize handshake) on a clean machine.
 
@@ -45,10 +49,30 @@ Naming discipline: the package is `**quant-swarm`** everywhere
 
 - Credential: GitHub account `blink1217` (OAuth) for the
   `io.github.blink1217` namespace, via `mcp-publisher`.
-- [ ] `npx @modelcontextprotocol/publisher` (or the current
-      `mcp-publisher` flow) against `server.json` at the repo root.
-- [ ] Verify: the entry is searchable in the MCP Registry UI and the three
-      stdio packages + one streamable-http remote resolve.
+- Prerequisites: PyPI 0.5.0 live (Step 1 above); `README.md:11` carries the
+  `<!-- mcp-name: io.github.blink1217/quant-swarm -->` marker (already in
+  PyPI 0.4.0+ long description); `server.json` description ≤ 100 chars.
+- [ ] Windows install: download the `mcp-publisher` release asset from the
+      registry quickstart, put `mcp-publisher.exe` on PATH.
+- [ ] `mcp-publisher validate` against `server.json` at the repo root.
+      **Risk:** the three duplicate PyPI package entries (same
+      identifier/version, different `packageArguments`) may be rejected —
+      fallback is a single `swarm-data-mcp` package + 3 remotes, adjusting
+      `tests/test_registry_metadata.py::test_server_json_identity` and the
+      "3 stdio packages" wording below.
+- [ ] `mcp-publisher login github` (as `blink1217`).
+- [ ] `mcp-publisher publish`.
+- [ ] Verify: `https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blink1217/quant-swarm`
+      shows the entry with 3 stdio packages + 3 streamable-http remotes.
+- Versioning: registry versions are immutable — bump `pyproject.toml`,
+  `server.json` (top-level + 3 package versions), `server_meta.PACKAGE_VERSION`,
+  `swarm_mcp/__init__.py`, `npm/package.json`, `.mcp.json`,
+  `monitoring/prober.py`, the Grafana alert expr, and
+  `tests/test_tournament.py::runner_version` together.
+- The registry is in preview: re-publish after any announced reset. It
+  verifies namespace ownership, not remote URL ownership.
+- Follow-ups: GitHub Actions OIDC publish; DNS namespace
+  (`1.21initiative.com`) if the registry supports it.
 
 ## 4. Cursor
 
@@ -124,6 +148,18 @@ These run against project `initiative-121-prod`, service `swarm-mcp`
          one `market.pulse` call → success.
    - [ ] Smithery-installed path: connect with `apiToken` set (works) and
          empty (tools list, access-required envelope on call).
+   - [ ] OAuth gate (2026-10-06: FAIL both hosts — re-check after redeploy
+         from current repo before documenting connector OAuth): POST
+         initialize (no token) to `<cloudrun>/mcp/data` → expect 401 +
+         `WWW-Authenticate: Bearer
+         resource_metadata=<cloudrun>/.well-known/oauth-protected-resource`;
+         GET `<cloudrun>/.well-known/oauth-protected-resource` → 200 with
+         `authorization_servers:["https://1.21initiative.com"]`; then add
+         the Cloud Run URL as a Claude.ai custom connector and complete
+         consent. Same POST check for `https://1.21initiative.com/mcp/data`.
+         Until PASS, docs must present header auth
+         (`--header "Authorization: Bearer <token>"`) as the verified
+         remote path and must not claim OAuth connectors work.
 
 ## Site-side prerequisites (1.21.Initiative repo)
 

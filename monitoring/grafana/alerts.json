@@ -1,0 +1,155 @@
+{
+  "contactPoint": {
+    "name": "quant-swarm-ops-email",
+    "type": "email",
+    "settings": { "addresses": "${GRAFANA_OPS_EMAIL}" },
+    "disableResolveMessage": false
+  },
+  "notificationPolicy": {
+    "receiver": "quant-swarm-ops-email",
+    "group_by": ["endpoint"],
+    "group_wait": "1m",
+    "group_interval": "5m",
+    "repeat_interval": "4h",
+    "object_matchers": [["service", "=", "quant-swarm-mcp"]]
+  },
+  "rules": [
+    {
+      "title": "MCP endpoint down (quant-swarm-mcp)",
+      "condition": "B",
+      "for": "0m",
+      "annotations": {
+        "summary": "MCP endpoint {{ $labels.endpoint }} is failing probes",
+        "runbook": "check monitoring/prober.py --print output and the hosted/site logs"
+      },
+      "labels": { "severity": "critical", "service": "quant-swarm-mcp" },
+      "data": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+          "model": {
+            "expr": "{service=\"quant-swarm-mcp\"} | json | ok=\"false\" | event=\"mcp_probe\"",
+            "queryType": "instant"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "model": {
+            "type": "threshold", "expression": "A", "conditions": [
+              { "evaluator": { "type": "gt", "params": [2] } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "MCP dead-man switch (no probe run in 15m)",
+      "condition": "B",
+      "for": "0m",
+      "noDataState": "Alerting",
+      "execErrState": "Alerting",
+      "annotations": {
+        "summary": "No mcp_probe_run events for 15m - the prober or the lake of endpoints is down"
+      },
+      "labels": { "severity": "critical", "service": "quant-swarm-mcp" },
+      "data": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+          "model": {
+            "expr": "sum(count_over_time({service=\"quant-swarm-mcp\"} | json | event=\"mcp_probe_run\" [15m]))",
+            "queryType": "instant"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "model": {
+            "type": "threshold", "expression": "A", "conditions": [
+              { "evaluator": { "type": "lt", "params": [1] } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "MCP endpoint latency p95 > 5s (30m)",
+      "condition": "B",
+      "for": "10m",
+      "annotations": { "summary": "Slow endpoint: {{ $labels.endpoint }}" },
+      "labels": { "severity": "warning", "service": "quant-swarm-mcp" },
+      "data": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+          "model": {
+            "expr": "quantile_over_time(0.95, {service=\"quant-swarm-mcp\"} | json | unwrap latency_ms [30m]) by (endpoint)",
+            "queryType": "instant"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "model": {
+            "type": "threshold", "expression": "A", "conditions": [
+              { "evaluator": { "type": "gt", "params": [5000] } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "MCP probe version drift",
+      "condition": "B",
+      "for": "30m",
+      "annotations": { "summary": "prober events report an unexpected release version" },
+      "labels": { "severity": "warning", "service": "quant-swarm-mcp" },
+      "data": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+          "model": {
+            "expr": "count_over_time({service=\"quant-swarm-mcp\"} | json | version!=\"0.5.0\" [1h])",
+            "queryType": "instant"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "model": {
+            "type": "threshold", "expression": "A", "conditions": [
+              { "evaluator": { "type": "gt", "params": [0] } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Metric suggestion spam (>50/h)",
+      "condition": "B",
+      "for": "0m",
+      "annotations": { "summary": "suggestion flood from the public form" },
+      "labels": { "severity": "warning", "service": "quant-swarm-mcp" },
+      "data": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+          "model": {
+            "expr": "sum(count_over_time({service=\"quant-swarm-site\"} | json | event=\"metric_suggestion\" [1h]))",
+            "queryType": "instant"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "model": {
+            "type": "threshold", "expression": "A", "conditions": [
+              { "evaluator": { "type": "gt", "params": [50] } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

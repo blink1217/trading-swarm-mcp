@@ -65,6 +65,7 @@ RELAY_METERED_TOOLS = frozenset({
     "volume.forecast",
     "market.screen",
     "market.rank",
+    "pit.analysis",
     "tournament.submit",
     "tournament.verdict",
 })

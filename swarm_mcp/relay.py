@@ -1,7 +1,7 @@
 """Hosted data relay client: bars + enrichment served through the 1.21
 Initiative site instead of direct provider calls.
 
-Users of the MCP do NOT need Alpaca/Finnhub credentials — the site holds the
+Users of the MCP do NOT need Alpaca/AltData credentials — the site holds the
 provider keys behind the access token and returns the same bar rows / enrichment
 payload shapes the direct paths produce, so the SQLite cache, provenance, and
 point-in-time semantics are unchanged. The relay is fail-closed: any non-200
@@ -170,7 +170,7 @@ def _day_change_bucket(c, pc) -> str | None:
 
 
 async def fetch_enrichment(symbol: str) -> dict:
-    """Fetch the Finnhub enrichment composite via the relay — DERIVED ONLY (M-04).
+    """Fetch the AltData enrichment composite via the relay — DERIVED ONLY (M-04).
 
     The relay contract still returns raw quote/news from the site, but raw
     provider content (headline text, quote values) is no longer persisted to
@@ -210,3 +210,34 @@ async def fetch_enrichment(symbol: str) -> dict:
         "day_change_bucket": _day_change_bucket(quote.get("c"), quote.get("pc")),
         "earnings_within_3d": bool(body.get("earnings_within_3d")),
     }
+
+
+async def fetch_pit(symbols: list[str]) -> dict:
+    """Fetch the pit_analysis/v2 inputs (per-symbol release points, per-family stats, gate and
+    methodology) for the requested symbols via the relay. The relay strips raw metric values and
+    restricted (licensed) families server-side; the pure judging code in
+    swarm_mcp.pit.analysis turns the body into explained verdicts. Fail-closed like the other
+    relay calls."""
+    symbols = sorted({s.strip().upper() for s in symbols if s and s.strip()})
+    if not symbols:
+        raise ValueError("no symbols given")
+
+    async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
+        try:
+            r = await client.post(
+                f"{relay_base()}/data/pit",
+                json={"symbols": symbols},
+                headers={"Authorization": f"Bearer {_access_token()}"},
+            )
+        except httpx.HTTPError as e:
+            raise RelayError(
+                f"data relay unreachable ({type(e).__name__}) - request access at "
+                f"{access.SITE_URL}") from e
+    if r.status_code != 200:
+        raise _refusal(r.status_code, r)
+    try:
+        body = r.json()
+    except ValueError as e:
+        raise RelayError("data relay returned a non-JSON body for /data/pit") from e
+    _check(body)
+    return body

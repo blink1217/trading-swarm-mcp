@@ -58,6 +58,8 @@ HOSTED_LOCAL_ONLY_TOOLS = frozenset({"cache.offline", "cache.stats"})
 
 PUBLIC_PATHS = {"/", "/health"}
 INTERNAL_PREFIX = "/internal/"
+
+PROTECTED_RESOURCE = ".well-known/oauth-protected-resource"
 TOURNAMENT_RUN_PATH = "/internal/tournament/run"
 
 
@@ -205,7 +207,9 @@ class BearerAuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if path in PUBLIC_PATHS or path.startswith(INTERNAL_PREFIX):
+        if (path in PUBLIC_PATHS or path.endswith(PROTECTED_RESOURCE)
+                or path == "/.well-known/oauth-authorization-server"
+                or path.startswith(INTERNAL_PREFIX)):
             # Internal routes authenticate with the shared secret inside _app.
             return await self.app(scope, receive, send)
 
@@ -220,7 +224,7 @@ class BearerAuthMiddleware:
         # sync httpx.post here stalled the whole event loop per request.
         ent = await access.verify_entitlement_async(token) if token else None
         if ent is None:
-            return await self._deny(send)
+            return await self._deny(send, scope)
 
         if scope.get("method") == "POST" and path in SERVERS:
             body = await _read_body(receive)
@@ -257,21 +261,28 @@ class BearerAuthMiddleware:
             request_context.current_token.reset(tok_ctx)
 
     @staticmethod
-    async def _deny(send):
+    async def _deny(send, scope=None):
+        # RFC 6750 challenge carrying the resource metadata so OAuth-capable
+        # clients (Claude/ChatGPT connectors, MCP Inspector) discover the AS.
+        metadata_url = f"{remote_base_url()}/.well-known/oauth-protected-resource"
         body = json.dumps({
             "jsonrpc": "2.0",
             "error": {
                 "code": -32001,
-                "message": f"unauthorized — request an access token at {access.SITE_URL}",
+                "message": f"unauthorized - request an access token at {access.SITE_URL}",
             },
         }).encode()
+        headers = [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode()),
+        ]
+        if scope is not None and scope.get("method", "POST") == "POST" and scope.get("path") in SERVERS:
+            headers.append((b"www-authenticate",
+                            f'Bearer resource_metadata="{metadata_url}"'.encode()))
         await send({
             "type": "http.response.start",
             "status": 401,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"content-length", str(len(body)).encode()),
-            ],
+            "headers": headers,
         })
         await send({"type": "http.response.body", "body": body})
 
@@ -517,6 +528,17 @@ def build_app() -> BearerAuthMiddleware:
             return await JSONResponse({"error": "not found"}, status_code=404)(scope, receive, send)
         if path == "/health":
             return await JSONResponse({"status": "ok"})(scope, receive, send)
+        if path in (f"/{PROTECTED_RESOURCE}", "/.well-known/oauth-authorization-server"):
+            # both AS-metadata flavors: the site is the authorization server, this
+            # endpoint is the protected resource (RFC 9728, so clients discover it)
+            site = access.SITE_URL.rstrip("/")
+            return await JSONResponse({
+                "resource": remote_base_url(),
+                "resource_documentation": f"{site}/mcp/",
+                "authorization_servers": [site],
+                "scopes_supported": ["mcp:tools"],
+                "bearer_methods_supported": ["header"],
+            })(scope, receive, send)
         if path == "/":
             return await JSONResponse({
                 "service": "quant-swarm (remote)",

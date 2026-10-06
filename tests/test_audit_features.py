@@ -13,7 +13,7 @@ def test_flags_banned_actuals_source_and_pre_tape_feature():
         {"name": "mom_5d", "source": "bars_1day", "value_ts": "2026-01-15", "as_of": "2026-01-15"},
         {"name": "open_meteo_forecast_anomaly", "source": "open-meteo.archive",
          "value_ts": "2024-06-01", "as_of": "2024-06-01"},
-        {"name": "finnhub_sentiment", "source": "finnhub",
+        {"name": "altdata_sentiment", "source": "altdata",
          "value_ts": "2024-06-01", "as_of": "2024-06-01"},
     ]
     r = run_async(warden_tools.audit_features(manifest, tape_started="2025-01-01"))
@@ -22,8 +22,8 @@ def test_flags_banned_actuals_source_and_pre_tape_feature():
     assert by_name["mom_5d"]["status"] == "OK"
     assert by_name["open_meteo_forecast_anomaly"]["status"] == "VIOLATION"
     assert "actuals" in by_name["open_meteo_forecast_anomaly"]["detail"]
-    assert by_name["finnhub_sentiment"]["status"] == "VIOLATION"
-    assert "predates tape start" in by_name["finnhub_sentiment"]["detail"]
+    assert by_name["altdata_sentiment"]["status"] == "VIOLATION"
+    assert "predates tape start" in by_name["altdata_sentiment"]["detail"]
 
 
 def test_backdated_decision_row_flagged():
@@ -47,7 +47,7 @@ def test_clean_manifest_passes():
 
 def test_tier_bc_without_tape_baseline_fails_closed():
     manifest = [
-        {"name": "earnings_flag", "source": "finnhub", "value_ts": "2026-01-15", "as_of": "2026-01-15"},
+        {"name": "earnings_flag", "source": "altdata", "value_ts": "2026-01-15", "as_of": "2026-01-15"},
     ]
     r = run_async(warden_tools.audit_features(manifest))
     assert r["verdict"] == "VIOLATIONS_FOUND"

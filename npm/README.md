@@ -4,8 +4,9 @@ Node launcher for the
 [quant-swarm](https://github.com/blink1217/trading-swarm-mcp) MCP
 servers — the pre-trade checkers that gate live capital — so Node-only users
 can install from npm. The package is `quant-swarm` on
-PyPI (`quant-swarm`); `quant-swarm-mcp` is this npm launcher (Smithery slug `quant-swarm`,
-slug `quant-swarm`).
+PyPI (`quant-swarm`); `quant-swarm-mcp` is this npm launcher (Smithery slug
+`quant-swarm`). Registry entry: `io.github.blink1217/quant-swarm`
+(`https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blink1217/quant-swarm`).
 
 ```bash
 # stdio via uvx (requires uv: https://docs.astral.sh/uv/)

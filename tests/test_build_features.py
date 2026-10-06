@@ -23,7 +23,7 @@ def test_build_features_happy_path(tmp_cache):
     db = get_db()
     db.upsert_bars("alpaca", "1Day", "split", rows)
     as_of = _last_bday()
-    db.append_enrichment("finnhub", ticker, "full", {
+    db.append_enrichment("altdata", ticker, "full", {
         "symbol": ticker, "quote": {"c": 1, "pc": 1, "h": 1, "l": 1},
         "news_headlines": [], "earnings_within_3d": False,
     }, fetched_at=f"{as_of}T10:00:00+00:00")
@@ -38,7 +38,7 @@ def test_build_features_happy_path(tmp_cache):
     entries = {e["name"]: e for e in out["provenance"]}
     assert entries["rsi_14"]["status"] == "OK"
     assert entries["mom_20d"]["status"] == "OK"
-    assert entries["finnhub_sentiment"]["status"] == "UNSCORABLE"
+    assert entries["altdata_sentiment"]["status"] == "UNSCORABLE"
     assert entries["finviz_score"]["status"] == "UNSCORABLE"
 
 

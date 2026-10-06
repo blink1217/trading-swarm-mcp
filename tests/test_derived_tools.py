@@ -52,7 +52,7 @@ def test_sentiment_pulse_never_returns_raw_quote_or_headlines(tmp_cache):
     ticker = "AAA"
     db = get_db()
     now = dt.datetime.now(dt.timezone.utc)
-    db.append_enrichment("finnhub", ticker, "full", {
+    db.append_enrichment("altdata", ticker, "full", {
         "symbol": ticker,
         "quote": {"c": 123.45, "pc": 120.0, "h": 125.0, "l": 119.0},
         "news_headlines": [{"headline": "Secret raw headline text", "datetime": 1, "source": "x"}],

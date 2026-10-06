@@ -25,7 +25,7 @@ from swarm_mcp.tool_runner import run_tool
 
 FEATURE_ORDER = [
     "atr_pct", "rsi_14", "mom_20d", "vol_ratio_20d", "breakout_dist_20d",
-    "finnhub_sentiment", "earnings_flag", "finviz_score",
+    "altdata_sentiment", "earnings_flag", "finviz_score",
 ]
 _PANEL_COL = {"vol_ratio_20d": "vol_ratio_20"}
 TIER_A_ORDER = [n for n in FEATURE_ORDER if feature_tier(n) == "A"]
@@ -132,7 +132,7 @@ async def enrich_symbol(symbol: str) -> dict:
             "tool": "enrich_symbol",
             "enrichment": payload,
             "provenance": {
-                "source": "finnhub (quote, company-news 7d, earnings calendar -7d/+3d)",
+                "source": "altdata (quote, company-news 7d, earnings calendar -7d/+3d)",
                 "as_of": payload["fetched_at"],
                 "tier": "B",
                 "note": ("tier-B enrichment is append-only on fetched_at; for decision dates before this "
@@ -202,7 +202,7 @@ async def build_features(symbol: str, as_of: str) -> dict:
             if enrich is not None and str(enrich["fetched_at"])[:10] <= str(as_of_ts.date()):
                 vector["earnings_flag"] = 1.0 if enrich.get("earnings_within_3d") else 0.0
                 status = "OK"
-                source = f"finnhub_enrichment_cache (fetched_at {enrich['fetched_at']})"
+                source = f"altdata_enrichment_cache (fetched_at {enrich['fetched_at']})"
             else:
                 vector["earnings_flag"] = None
                 status = "UNSCORABLE"
@@ -213,7 +213,7 @@ async def build_features(symbol: str, as_of: str) -> dict:
                                        "value": vector["earnings_flag"], "source": source,
                                        "as_of": str(as_of_ts.date()), "status": status})
 
-        for name in ("finnhub_sentiment", "finviz_score"):
+        for name in ("altdata_sentiment", "finviz_score"):
             vector[name] = None
             provenance_entries.append({
                 "name": name, "tier": feature_tier(name), "value": None,

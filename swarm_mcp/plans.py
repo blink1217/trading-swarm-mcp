@@ -80,6 +80,7 @@ FREE_TOOLS = frozenset({
     "market.regime",
     "market.sentiment",
     "market.climate",
+    "pit.analysis",
     "cache.stats",
     "cache.offline",
     "tournament.leaderboard",
@@ -99,6 +100,13 @@ PRO_TOOLS = frozenset({
     "market.rank",
     "tournament.verdict",
     "tournament.submit",
+})
+
+# Features that need a funded paid plan even when the tool itself is listed free
+# (pit.analysis answers on the free tier; full per-horizon detail across 10
+# symbols with historical as_of is the Pro feature).
+PRO_FEATURES = frozenset({
+    "pit.analysis:full",
 })
 
 

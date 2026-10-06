@@ -67,6 +67,25 @@ def test_http_denies_without_token():
         assert r.status_code == 401
 
 
+def test_http_denial_carries_resource_metadata_and_serves_it():
+    """RFC 9728 discovery: the 401 challenge points at the metadata, and the
+    metadata (both flavors) names the site as the authorization server."""
+    with TestClient(http_server.build_app()) as c:
+        r = c.post("/mcp/data", json=INIT_PAYLOAD)
+        assert r.status_code == 401
+        challenge = r.headers.get("www-authenticate", "")
+        assert challenge.startswith("Bearer resource_metadata=")
+        assert "oauth-protected-resource" in challenge
+        for flavor in ("/.well-known/oauth-protected-resource",
+                       "/.well-known/oauth-authorization-server"):
+            m = c.get(flavor)
+            assert m.status_code == 200
+            doc = m.json()
+            assert doc["resource"].startswith("http")
+            assert doc["authorization_servers"] == [access.SITE_URL.rstrip("/")]
+            assert doc["scopes_supported"] == ["mcp:tools"]
+
+
 def test_http_denies_bad_token(monkeypatch):
     monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "good-token")
     access.reset_access_cache()

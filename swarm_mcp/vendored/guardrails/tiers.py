@@ -3,7 +3,7 @@
 Every gene declares the provenance tier of the data it consumes:
 
   A  bars_1day technicals — ~10 years of history, fully reconstructable.
-  B  Finnhub enrichment (deterministic keyword sentiment, earnings calendar)
+  B  AltData enrichment (deterministic keyword sentiment, earnings calendar)
      — ~1 year, degraded (free-tier lookback, news survivorship).
   C  Tape-only / zero-history: Finviz vendor numbers, Open-Meteo FORECAST
      anomalies (the archive API returns actuals, NOT what the forecast said

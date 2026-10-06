@@ -1,5 +1,5 @@
 {
-  "_note": "Default champion for the hosted Shadow Tournament runner. Operators point SWARM_MCP_CHAMPION_GENOME at the registry's current champion; this packaged baseline (schema v2, tier-A genes) is the fallback so the runner never scores against nothing.",
+  "_note": "Stale local copy — NOT packaged and NOT a fallback. Operators point SWARM_MCP_CHAMPION_GENOME at the registry's current champion; the hosted runner refuses to start without it.",
   "schema_version": 2,
   "screen": {
     "data_tier": "A",

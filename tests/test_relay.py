@@ -194,7 +194,7 @@ def test_fetch_bars_requires_token(monkeypatch):
 
 def test_fetch_enrichment_relay_roundtrip(monkeypatch):
     payload = {
-        "ok": True, "provider": "finnhub-relay", "symbol": "AAA", "served_at": "2026-08-31T20:00:00Z",
+        "ok": True, "provider": "altdata-relay", "symbol": "AAA", "served_at": "2026-08-31T20:00:00Z",
         "from_cache": False,
         "quote": {"c": 101.7, "pc": 100.9, "h": 102.0, "l": 100.4},
         "news_headlines": [{"headline": "h", "datetime": 1725000000, "source": "s"}],
@@ -261,7 +261,7 @@ def test_bars_dispatch_relay_by_default(monkeypatch):
 
 def test_enrich_dispatch(monkeypatch):
     monkeypatch.setenv("SWARM_MCP_BYOK", "1")
-    monkeypatch.setenv("FINNHUB_API_KEY", "fake-finnhub-token")
+    monkeypatch.setenv("ALTDATA_API_KEY", "fake-altdata-token")
     calls = []
 
     async def fake_direct(symbol):

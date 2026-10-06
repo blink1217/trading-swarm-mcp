@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2025-06-18/mcp.json",
+  "version": "0.5.0",
+  "remote": {
+    "data": "https://1.21initiative.com/mcp/data",
+    "warden": "https://1.21initiative.com/mcp/warden",
+    "gym": "https://1.21initiative.com/mcp/gym"
+  },
+  "auth": {
+    "kind": "http",
+    "oauth": {
+      "issuer": "https://1.21initiative.com",
+      "metadata": "https://1.21initiative.com/.well-known/oauth-authorization-server",
+      "scopes": ["mcp:tools"]
+    }
+  }
+}

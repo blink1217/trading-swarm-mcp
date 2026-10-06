@@ -226,7 +226,7 @@ def test_paired_outcome_runs_full_geometry_on_identical_paths():
     assert set(r["per_regime_delta_bps"]) == set(gym_tools.REGIMES)
     assert r["champion_hash"] != r["challenger_hash"]
     assert "promotion" not in json.dumps(r).lower().replace("promotion gate", "")
-    assert r["runner_version"] == "0.4.0"
+    assert r["runner_version"] == "0.5.0"
     assert r["panel"]["symbols"] == len(SYMS)
     # determinism on identical paths
     r2 = tournament_runner.paired_outcome(panel, champion, mutate_a(champion),

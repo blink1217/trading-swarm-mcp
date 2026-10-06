@@ -18,7 +18,7 @@ from swarm_mcp.server_meta import (
     SITE_URL,
     annotations,
 )
-from swarm_mcp.tools import climate_tools, data_tools
+from swarm_mcp.tools import climate_tools, data_tools, pit_tools
 
 SERVER_TITLE = "Swarm Data MCP"
 SERVER_DESCRIPTION = (
@@ -35,14 +35,18 @@ INSTRUCTIONS = (
     "the in-progress session refreshes at most every 60s, enrichment every 300s. "
     "Every response carries coverage, limits (vs the tape-depth gates), and an escalation block "
     "when local depth is insufficient. Data is served through the 1.21 Initiative hosted relay "
-    "(https://1.21initiative.com/) — no Alpaca or Finnhub credentials are required; only "
+    "(https://1.21initiative.com/) — no Alpaca or AltData credentials are required; only "
     "SWARM_MCP_ACCESS_TOKEN. Provider credentials are never accepted as tool arguments. "
     "market.pulse and market.sentiment are the recommended general-purpose tools: they return only "
     "derived ratios, percentiles, and labels and never echo raw provider values back to the caller. "
     "Both accept an optional `bars` argument so you can supply your own OHLCV rows for symbols we "
     "don't carry. market.climate returns weather research per OPERATING AREA (made/sold footprint) "
     "of weather-exposed underlyings from keyless Open-Meteo — never the listing exchange or HQ city; "
-    "pass `areas` for underlyings outside the shipped registry. Raw bar/enrichment access "
+    "pass `areas` for underlyings outside the shipped registry. pit.analysis explains the PIT-correlation "
+    "significance results per underlying: for every (dataset|metric|horizon) family it states the rolling IR, "
+    "two-sided p, observation count and research-only flag, and says explicitly whether the result is "
+    "SIGNIFICANT (survives the funnel's IR > 0 and BH q <= 0.05 gate), NOT_SIGNIFICANT, below the "
+    "observation floor, or UNVERIFIED. Raw bar/enrichment access "
     "(get_bars/enrich_symbol) is internal only and not "
     "exposed as tools, because those paths echo raw provider values; use features.build for the "
     "provenance-guarded feature vector. This server never places, cancels, or routes orders."
@@ -241,6 +245,57 @@ async def climate_snapshot(
     no provider credentials needed. Not investment advice.
     """
     return await climate_tools.climate_snapshot(symbols=symbols, areas=areas)
+
+
+class PitAnalysisOut(TypedDict, total=False):
+    tool: str
+    source: str
+    underlyings: dict
+    unavailable: dict
+    run_id: str
+    how_to_read: str
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="pit.analysis",
+    title="PIT Significance Explained",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def pit_analysis(
+    symbols: Annotated[list[str], Field(
+        description="Underlying tickers to query (max 10). Results are per underlying.")],
+    as_of: Annotated[str | None, Field(
+        description="Point-in-time cutoff (YYYY-MM-DD, default today): release points after this "
+                    "date are ignored.")] = None,
+    horizons: Annotated[list[str] | None, Field(
+        description="Subset of the run's horizons, e.g. ['1d','1w','1m','6m'] (default: all).")] = None,
+    only_significant: Annotated[bool, Field(
+        description="Only return families with at least one SIGNIFICANT horizon (counts still "
+                    "cover everything).")] = False,
+    max_families: Annotated[int, Field(
+        description="Max families returned per underlying, most significant first (1-100).",
+        ge=1, le=100)] = 20,
+) -> PitAnalysisOut:
+    """Is this alternative-data signal real for these tickers - or noise?
+
+    Explained PIT significance per underlying, from the release-gated
+    pit_analysis/v2 run: every (dataset|metric|horizon) family reports rolling
+    52-week IR, Newey-West two-sided p, observation count, research-only and
+    staleness flags, and an explicit verdict - SIGNIFICANT (survives the funnel's
+    IR > 0 and Benjamini-Hochberg q <= 0.05 gate of the same run), NOT_SIGNIFICANT,
+    below the observation floor, or UNVERIFIED. Point-in-time, derived-only, no raw
+    values; free lite answers, Pro gives every family. Not investment advice.
+    """
+    return await pit_tools.pit_analysis(symbols=symbols, as_of=as_of, horizons=horizons,
+                                        only_significant=only_significant, max_families=max_families)
 
 
 @mcp.tool(
@@ -469,3 +524,25 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# ---- prompt templates (7.2): copy-paste agent workflows ---------------
+from swarm_mcp import server_prompts  # noqa: E402
+
+mcp.prompt(name='explain_pit_significance', title='Explain PIT Significance', description='Explained PIT-correlation significance for one underlying: quotes every (dataset|metric|horizon) verdict verbatim - significant vs not, observation floor, research-only and staleness caveats - never upgrading a raw p-value.')(server_prompts.explain_pit_significance)
+
+mcp.prompt(name='regime_check', title='Regime Check', description='The current market-regime label and derived snapshot for one underlying, with the warden checks to run before any order.')(server_prompts.regime_check)
+
+
+import functools  # noqa: E402
+
+# ---- read-only docs resources (7.3; generated by scripts/build_docs_resources.py) ----
+from swarm_mcp import server_prompts  # noqa: E402
+
+mcp.resource("swarm://docs/methodology", name='Methodology', description='How the PIT significance verdicts are computed (neutralization, Newey-West inference, scale-free variants, staleness, placebo).', mime_type="text/markdown")(functools.partial(server_prompts._read_doc, 'methodology.md'))
+
+mcp.resource("swarm://docs/pit-datasets", name='PIT datasets', description='Which point-in-time dataset families are searched, and the known-at rule that makes each one point-in-time.', mime_type="text/markdown")(functools.partial(server_prompts._read_doc, 'pit-datasets.md'))
+
+mcp.resource("swarm://docs/verdicts", name='Verdict semantics', description='SIGNIFICANT / NOT_SIGNIFICANT / NOT_JUDGED / UNVERIFIED - exactly what each verdict means and never means.', mime_type="text/markdown")(functools.partial(server_prompts._read_doc, 'verdicts.md'))
+
+mcp.resource("swarm://docs/plans", name='Plans', description='Free/Pro plan limits and the credit rate card.', mime_type="text/markdown")(functools.partial(server_prompts._read_doc, 'plans.md'))

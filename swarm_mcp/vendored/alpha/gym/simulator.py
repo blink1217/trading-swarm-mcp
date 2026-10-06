@@ -2,7 +2,7 @@
 
 FIDELITY LABEL — TIER-A PRICE SUBSET ONLY. This simulator replays bars_1day
 prices through the screen/sizing/weekend-gate logic with a pessimistic fill
-model. It does NOT model Finnhub sentiment, the earnings calendar, Finviz
+model. It does NOT model AltData sentiment, the earnings calendar, Finviz
 membership, weather/energy context, or LLM verdicts. Any genome whose MUTATED
 genes exceed tier A cannot be scored here — the gym refuses (it never silently
 defaults tier-B/C features to 0.0, which would fabricate evidence). Scoring
@@ -42,7 +42,7 @@ class TierScoringRefusal(RuntimeError):
     """The gym refuses to score a genome whose mutated genes exceed tier A.
 
     This is the anti-fabrication invariant: a neutral fill (defaulting
-    finnhub_sentiment / earnings_flag / finviz_score to 0.0) would silently
+    altdata_sentiment / earnings_flag / finviz_score to 0.0) would silently
     manufacture evidence the price panel cannot provide. The correct verdict
     is UNSCORABLE (plan decision 5, R8/R9).
     """
@@ -91,7 +91,7 @@ def _screen_mask(panel: pd.DataFrame, episode, genome) -> pd.Series:
 def _heuristic_filter_score(feats: dict) -> float:
     """Bar-feature-only heuristic fallback scoring (mirrors analyst's LGBM gate).
 
-    STRICTLY tier-A inputs. This function must never read finnhub_sentiment,
+    STRICTLY tier-A inputs. This function must never read altdata_sentiment,
     earnings_flag, or finviz_score — defaulting those to 0.0 would be a silent
     provenance substitution. Callers holding a genome with tier-B/C mutations
     are refused upstream by assert_tier_a_scortable.

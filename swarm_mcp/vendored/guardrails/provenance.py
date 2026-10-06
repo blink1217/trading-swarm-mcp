@@ -20,7 +20,7 @@ FEATURE_TIERS = {
     "atr": "A", "mom_5d": "A", "mom_20d": "A", "vwap_stretch_20": "A",
     "vol_ratio_20": "A", "gap_open": "A", "breakout_dist_20d": "A", "rsi_14": "A",
     # tier B — ~1y, degraded
-    "finnhub_sentiment": "B", "earnings_flag": "B",
+    "altdata_sentiment": "B", "earnings_flag": "B",
     # tier C — tape-only going forward
     "finviz_score": "C", "open_meteo_forecast_anomaly": "C",
     "energy_bias": "C", "llm_verdict": "C",

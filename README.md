@@ -1,5 +1,11 @@
 # quant-swarm
 
+[![PyPI](https://img.shields.io/pypi/v/quant-swarm)](https://pypi.org/project/quant-swarm/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/quant-swarm)](https://pypistats.org/packages/quant-swarm)
+[![Licence](https://img.shields.io/badge/licence-MIT%20%2B%20source--available-blue)](../../README.md)
+[![Smithery](https://smithery.ai/badge/quant-swarm)](https://smithery.ai/servers/blink-kt/quant-swarm)
+[![Official MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.blink1217%2Fquant--swarm-1d4ed8)](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blink1217/quant-swarm)
+
 Risk-first pre-trade checks that gate live capital — point-in-time data, invariant and leakage audits, regime probes — plus the **Shadow Tournament**: score your strategy genome against a live, self-evolving trading swarm's champion on identical market paths.
 
 <!-- mcp-name: io.github.blink1217/quant-swarm -->
@@ -27,7 +33,7 @@ Risk gates are not post-hoc reports — they are the pre-condition for every act
 - **No order-placement code path.** No tool can place, cancel, or route an order — this repository cannot trade, only refuse unsafe trades.
 - **Statistically honest refusals.** Promotion verdicts are **never** issued locally. Statistically undecidable outputs return `INDETERMINATE_LOCAL`/`UNDERPOWERED`/`UNSCORABLE`, name the exact missing inputs (`MIN_EPISODES=20`, PBO, DSR, worst-regime margins), and hand off to the hosted Shadow Tournament (`tournament.submit`).
 
-- Local-first, BYO-key: your Alpaca/Finnhub keys are read from env only when operating in BYOK mode; otherwise data flows through the hosted relay.
+- Local-first, BYO-key: your Alpaca/AltData keys are read from env only when operating in BYOK mode; otherwise data flows through the hosted relay.
 - Your symbols, bars, features and orders never leave your machine. What can leave is only what you explicitly pass to `tournament.submit`: the genome parameter vector (public schema fields), and — for the **strategy-contributor** tier — an author-written disclosure and/or your strategy code. Submitted code is **never executed**: it is treated as inert text, read statically by the hosted LLM reviewer, reduced to a structured explanation plus a code hash, and the raw code is discarded after review. By default even the vector is deleted from the hosted side once scored.
 
 **One-click install on [Smithery](https://smithery.ai/servers/blink-kt/quant-swarm):**
@@ -39,7 +45,7 @@ the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/qua
 
 | Server | Hook | Tools |
 | --- | --- | --- |
-| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
+| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `pit.analysis`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
 | `swarm-warden-mcp` | Pre-trade invariant + leakage gate — the live-capital floors and the point-in-time guards | `warden.validate_order`, `warden.audit_features`, `warden.cost_check`, `warden.validate_genome`, `warden.explain_sizing`, `warden.promotion_verdict` |
 | `swarm-gym-mcp` | Regime fragility locally, then the **Shadow Tournament** against the swarm's live champion | `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, `gym.estimate_cloud_run`, `tournament.submit`, `tournament.verdict`, `tournament.leaderboard` |
 
@@ -47,7 +53,33 @@ Raw bar/enrichment access (`get_bars` / `enrich_symbol`) is internal only and no
 registered as tools — those paths echo raw provider values, and the data policy is
 derived-only: ratios, percentile ranks, labels, buckets and counts. `market.pulse` and
 `market.sentiment` are the general-purpose replacements; both accept an optional `bars`
-argument so you can supply your own OHLCV rows for symbols we don'"'"'t carry.
+argument so you can supply your own OHLCV rows for symbols we don't carry.
+
+### PIT significance, explained (`pit.analysis`)
+
+`pit.analysis` answers the question every alternative-data buyer should ask first: **is this
+signal real, and how do you know?** It reads the release-gated `pit_analysis/v2` store — the
+same artifact whose rows carry the significance output for the funnel — and, per underlying,
+explains every `(dataset|metric|horizon)` family with no guessing:
+
+- **rolling_ir** (52-week Spearman cross-sectional rank IC on a size/sector-neutralized metric
+  vs neutralized forward returns), **Newey-West two-sided p** (`t_hac`, lag `ceil(horizon/5)` —
+  1m/6m horizons overlap, so the naive `IR·√n` t is anti-conservative), **n_obs**, the
+  **research_only** coverage flag and any staleness caveat.
+- An explicit verdict per horizon: **SIGNIFICANT** (an L1 survivor of the *same* run: rolling
+  IR > 0 and Benjamini-Hochberg q ≤ 0.05), **NOT_SIGNIFICANT** (with the reason — negative IR,
+  or a nominal p that does not survive multiple-testing correction), **NOT_JUDGED** (below the
+  26-observation floor, stale release, or diagnostic-only raw level) or **UNVERIFIED** (no gate
+  artifact, gate from another run, or a failed placebo — a raw p-value is never upgraded on its
+  own).
+- Point-in-time: release points after `as_of` are ignored, and raw metric values are never
+  returned — derived statistics only.
+
+Free plans get a lite answer (one symbol per call, headline counts and the top families); Pro
+unlocks 10 symbols per call, every family, full per-horizon detail and historical `as_of`.
+The v2 methodology (neutralization + overlap-corrected inference + scale-free accounting
+variants + staleness caps + a shuffled-date placebo) is recorded in every run manifest, and
+v1 stores are refused rather than silently reused. Not investment advice.
 
 ### Operating-area weather (`market.climate`)
 
@@ -120,16 +152,18 @@ we never run hosted compute at a loss.
 
 | What | Credits | Notes |
 | --- | --- | --- |
-| Relay data call (`/data/bars`, `/data/enrich`) | 1 | any symbol count within your plan cap counts as one call |
+| Relay data call (`/data/bars`, `/data/enrich`, `/data/pit`) | 1 | any symbol count within your plan cap counts as one call |
 | Hosted single-shot Pro tool (`features.build`, `warden.promotion_verdict`, `gym.label_regimes`, `gym.estimate_cloud_run`) | 1 | charged only on the hosted endpoint |
 | Hosted gym episode (`gym.probe_fragility`, `gym.paired_preview`) | 1 per episode | 5 regimes × per_regime × seeds (× 2 genomes for the paired preview); `gym.estimate_cloud_run` prices any geometry before you run it |
 | Shadow Tournament (`tournament.submit`) | **200** — **100** with `contribute=true` | fixed price for the full 100-paired-episode geometry vs the champion |
 | `tournament.verdict`, `tournament.leaderboard`, all warden checkers, `cache.*`, local stdio runs of any tool | 0 | local execution is never metered — your CPU, your electricity |
 
 - **Free** (instant token at signup): all warden checkers, the derived snapshots
-  `market.pulse` / `market.sentiment` / `market.climate` / `market.regime`
-  (10 symbols/call, 250 relay calls/month,
-  365-day backfill), `cache.stats`, `cache.offline`, and `tournament.leaderboard`. No hosted compute,
+  `market.pulse` / `market.sentiment` / `market.climate` / `market.regime`,
+  `pit.analysis` **lite** (one symbol per call, headline counts + top families; Pro unlocks
+   10 symbols, every family, full per-horizon detail and historical `as_of`),
+   `cache.stats`, `cache.offline`, and `tournament.leaderboard` (10 symbols/call,
+   250 relay calls/month, 365-day backfill). No hosted compute,
   no GCP spend on your behalf beyond the relay allowance.
 - **Pro** — one-time credit packs, self-serve: **10,000 credits for £19** or **100,000 for £149**,
   valid 90 days, no subscription, no unlimited plan. Unlocks `features.build`, `cache.warm`, the Pro
@@ -143,13 +177,13 @@ A Pro token whose pool is empty or past its 90-day window verifies with `status:
 `expired` and the **free** feature set — Pro tools refuse until you buy again. Plan limits are
 enforced server-side (the relay, `/api/mcp/meter`, `/api/mcp/verify`, and the hosted
 streamable-HTTP endpoint return structured `402` refusals with an `upgrade_url`). This open-source
-client'"'"'s plan check is **advisory**: a free token calling a Pro tool gets an `UPGRADE_REQUIRED`
+client's plan check is **advisory**: a free token calling a Pro tool gets an `UPGRADE_REQUIRED`
 envelope — the tool still lists, and the attempt points at the upgrade page. No DRM; the free plan
 is deliberately the zero-cost surface.
 
 ### Point-in-time data, for real
 
-LLM-driven research re-runs cells constantly; each re-run burns Finnhub (60 req/min) and
+LLM-driven research re-runs cells constantly; each re-run burns AltData (60 req/min) and
 Alpaca (200 req/min) budgets re-pulling identical history — and then silently builds
 features from data that did not exist at decision time. `swarm-data-mcp` fixes both:
 
@@ -159,7 +193,7 @@ features from data that did not exist at decision time. `swarm-data-mcp` fixes b
   in-progress session refreshes at most every 60 s; enrichment every 300 s.
 - Earnings/news are append-only on `fetched_at`: a later fetch can never rewrite an
   earlier `as_of`.
-- Per-provider token buckets + `429` exponential backoff (`1s\u00b72\u207f`).
+- Per-provider token buckets + `429` exponential backoff (`1s·2ⁿ`).
 - `features.build` runs the no-lookahead guard on every row (each feature must equal a
   fresh causal recomputation at `as_of`) and the provenance guards on every field.
   Tier-B/C fields without recorded point-in-time evidence come back `UNSCORABLE` —
@@ -188,7 +222,7 @@ pins the floors against terraform and guardrails so the three copies cannot drif
 `gym.probe_fragility` replays your genome over the deterministic tier-A simulator and reports
 per-regime net bps, the worst regime, turnover, and hard-constraint violations — never a
 promotion. Seeds are capped at 8 and `per_regime` at 2: **statistical honesty, not
-artificial scarcity**. Tier-B/C mutations against a champion raise the gym'"'"'s
+artificial scarcity**. Tier-B/C mutations against a champion raise the gym's
 `TierScoringRefusal` (UNSCORABLE) instead of silently neutral-filling features the price
 panel cannot provide. `gym.paired_preview` compares champion vs challenger on identical
 market paths with the promotion gate bypassed and every statistic labelled
@@ -200,23 +234,62 @@ that resolves it.
 
 ## Install
 
-Requires Python \u2265 3.11. One kind of credential:
+Requires Python ≥ 3.11. Two ways to connect:
 
-- **Access token (all three servers, required).** Every tool call is gated on a token
-  issued by [https://1.21initiative.com/](https://1.21initiative.com/) — request access
-  there (that'"'"'s also the Strategy Validation Audit booking flow), then set
-  `SWARM_MCP_ACCESS_TOKEN` in the server'"'"'s `env`. Clients still list the tools without a
+- **Remote** — the hosted streamable-HTTP endpoints (same URLs as the registry entry):
+  `https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data`
+  (and `/mcp/warden`, `/mcp/gym`). Pass the token as
+  `Authorization: Bearer <token>` (or `?apiToken=<token>`). Claude Code:
+
+  ```bash
+  claude mcp add --transport http swarm-data https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data --header "Authorization: Bearer <token>"
+  ```
+
+  OAuth browser-consent for web connectors is not verified yet (see
+  `docs/DISTRIBUTION.md` OAuth gate) — use header auth until that check passes.
+- **stdio** — `uvx --from quant-swarm swarm-data-mcp` (and `swarm-warden-mcp`,
+  `swarm-gym-mcp`); set `SWARM_MCP_ACCESS_TOKEN` in the env. See the Cursor /
+  Claude Code blocks below.
+- **One kind of credential:** an access token (all three servers, optional at
+  connect time) issued at [https://1.21initiative.com/mcp/](https://1.21initiative.com/mcp/)
+  — request access there (that's also the Strategy Validation Audit booking flow),
+  then set `SWARM_MCP_ACCESS_TOKEN` in the server's `env`. Clients still list the tools without a
   token; every call returns an `ACCESS_REQUIRED` envelope pointing back to the site.
   The token is verified against the site, and that verification is the usage meter —
   only the token itself is ever sent, never symbols, genomes, prices, or provider keys.
 
+### Agent snippet
+
+Agent snippet (paste into a system prompt when wiring an agent to these tools):
+
+```
+Use quant-swarm MCP tools for market data, pre-trade risk checks and strategy
+evidence. For alternative-data significance, call pit.analysis and quote its
+verdict sentences verbatim (SIGNIFICANT / NOT_SIGNIFICANT / NOT_JUDGED /
+UNVERIFIED); never upgrade a raw p-value to "significant"; its verdicts are
+cross-sectional, not a forecast for one symbol. Risk refusals are final.
+```
+
+- **Access token (all three servers, optional at connect time).** Covered above:
+  `SWARM_MCP_ACCESS_TOKEN` unlocks the relay-backed and hosted tools; without it
+  tools still list and calls return the `ACCESS_REQUIRED` envelope.
+
 The same token also feeds the **hosted data relay**: `swarm-data-mcp` serves bars and
-enrichment through `https://1.21initiative.com/api/mcp/...`, so **no Alpaca or Finnhub
+enrichment through `https://1.21initiative.com/api/mcp/...`, so **no Alpaca or AltData
 credentials are required** — the site holds the provider keys behind the relay and caches
 historical bars in GCS. The relay is fail-closed: a rejected or unverifiable token means a
 refused data fetch, never partial rows. The point-in-time cache semantics on the client
 side are unchanged — finalized sessions are immutable in local SQLite regardless of which
 data path filled them.
+
+### Official MCP Registry
+
+Registry name `io.github.blink1217/quant-swarm` (this `README.md` carries the
+`mcp-name` marker). Registry-aware clients get 3 stdio packages
+(`uvx --from quant-swarm swarm-{data,warden,gym}-mcp`) plus the 3 hosted
+streamable-HTTP remotes above. `SWARM_MCP_ACCESS_TOKEN` is optional at connect
+time — without one, tools still list and calls return the access-required
+envelope.
 
 ### Smithery
 
@@ -227,7 +300,7 @@ token is optional at connect time.
 
 ### Cursor
 
-`Settings \u2192 MCP \u2192 Add server` (or `.cursor/mcp.json` — a checked-in example lives at
+`Settings → MCP → Add server` (or `.cursor/mcp.json` — a checked-in example lives at
 [.cursor/mcp.json](.cursor/mcp.json)):
 
 ```json
@@ -254,15 +327,17 @@ token is optional at connect time.
 }
 ```
 
-Prefer a deeplink? `scripts/make_deeplinks.py` prints `cursor://\u2026/mcp/install` links for
+Prefer a deeplink? `scripts/make_deeplinks.py` prints `cursor://…/mcp/install` links for
 all three servers (base64 of the stdio config, so they cannot drift from the JSON above);
 the generated list is checked in at [.cursor/DEEPLINKS.md](.cursor/DEEPLINKS.md).
 
 ### Claude Desktop
 
-`claude_desktop_config.json` \u2014 identical `mcpServers` block as above.
+`claude_desktop_config.json` — identical `mcpServers` block as above.
 
 ### Claude Code
+
+stdio:
 
 ```bash
 claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from quant-swarm swarm-data-mcp
@@ -270,9 +345,15 @@ claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from q
 claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from quant-swarm swarm-gym-mcp
 ```
 
+remote (header auth):
+
+```bash
+claude mcp add --transport http swarm-data https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data --header "Authorization: Bearer <token>"
+```
+
 ### Windsurf
 
-`~/.codeium/windsurf/mcp_config.json` \u2014 the same stdio JSON shape as the Cursor block
+`~/.codeium/windsurf/mcp_config.json` — the same stdio JSON shape as the Cursor block
 above. For the hosted endpoints use the `serverUrl` form instead:
 
 ```json
@@ -289,19 +370,19 @@ above. For the hosted endpoints use the `serverUrl` form instead:
 `?apiToken=<token>`.)
 
 The warden and gym are pure checkers and the data server fetches through the hosted
-relay, so **no server needs provider keys** \u2014 only the access token.
+relay, so **no server needs provider keys** — only the access token.
 
 **Local development:** operators of this repo can bootstrap offline by setting
 `SWARM_MCP_LOCAL_TOKEN` to the same value as `SWARM_MCP_ACCESS_TOKEN` (documented
 bypass; token verification against the site is skipped and the token gets the full
-Pro entitlement \u2014 it is a local override on your own machine).
+Pro entitlement — it is a local override on your own machine).
 
 **Swarm operators (internal):** to fetch directly from the providers instead of the
-relay, set `SWARM_MCP_BYOK=1` plus `ALPACA_API_KEY`/`ALPACA_SECRET`/`FINNHUB_API_KEY`
+relay, set `SWARM_MCP_BYOK=1` plus `ALPACA_API_KEY`/`ALPACA_SECRET`/`ALTDATA_API_KEY`
 on `swarm-data-mcp`. Public users should leave `SWARM_MCP_BYOK` unset.
 
 **Hosting the remote endpoint yourself:** `swarm-mcp-http` validates the `Host` header
-(DNS-rebinding protection). The defaults allow `1.21initiative.com`, the project'"'"'s Cloud
+(DNS-rebinding protection). The defaults allow `1.21initiative.com`, the project's Cloud
 Run hostname, the Smithery gateway, and localhost; `SWARM_MCP_ALLOWED_HOSTS`
 (comma-separated) **extends** the defaults — it never replaces them, so a custom domain
 cannot accidentally lock out the Cloud Run URL. `SWARM_MCP_REMOTE_URL` overrides the
@@ -309,14 +390,14 @@ advertised endpoint base, and `SWARM_MCP_TOKEN_VERIFY_URL` overrides the verify 
 See the Dockerfile for the container form.
 
 The hosted endpoint meters compute (`swarm_mcp/metering.py`): before a Pro compute tool runs it
-charges `POST {SWARM_MCP_RELAY_URL}/meter` with the caller'"'"'s token, and refuses (JSON-RPC `-32003`,
+charges `POST {SWARM_MCP_RELAY_URL}/meter` with the caller's token, and refuses (JSON-RPC `-32003`,
 HTTP 402/429/503) when the meter refuses or is unreachable — hosted compute is never served
 unmetered. The Shadow Tournament runner lives in the same service: the site dispatches jobs to
 `POST /internal/tournament/run` guarded by the shared secret `SWARM_MCP_INTERNAL_KEY`, the runner
 fills its panel through the relay with `SWARM_MCP_SERVICE_TOKEN` (an institutional token, so
 users are never billed for the runner'"'"'s own data), scores against `SWARM_MCP_CHAMPION_GENOME`
-(path to the registry'"'"'s current champion; the packaged `swarm_mcp/data/champion_genome.json` is the
-fallback), and calls back `POST {relay}/tournament/complete`. `SWARM_MCP_TOURNAMENT_UNIVERSE` and
+(path to the registry's current champion — required via `SWARM_MCP_CHAMPION_GENOME`;
+no packaged fallback is shipped), and calls back `POST {relay}/tournament/complete`. `SWARM_MCP_TOURNAMENT_UNIVERSE` and
 `SWARM_MCP_TOURNAMENT_LOOKBACK_DAYS` shape the hosted panel. The runner scores in a background task
 after answering `202`, so the Cloud Run service must run with **CPU always allocated**
 (`--no-cpu-throttling`) and a request timeout of at least 300 s; with request-based CPU the task
@@ -324,11 +405,11 @@ starves after the response and the job is refunded as failed.
 
 ---
 
-## The IP boundary (what ships, what doesn'"'"'t)
+## The IP boundary (what ships, what doesn't)
 
 This repository ships **checkers only**: order checks, provenance guards, the
 pessimistic fill model, the genome schema, provenance tiers, hard-constraint checking,
-gate thresholds, the tier-A gym simulator, and the regime labeller \u2014 vendored at pinned
+gate thresholds, the tier-A gym simulator, and the regime labeller — vendored at pinned
 commit SHAs (`.github/pins.json`, verified by CI).
 
 The **selection machinery stays server-side** and is not in this repo: objective scoring,
@@ -343,7 +424,7 @@ monotonic trials ledger, worst-regime margin across all 5 regimes × seeds), plu
 The Shadow Tournament runner in this repo computes **paired statistics and an outcome** on
 identical paths; it does not contain, and a CI test (`tests/test_ip_boundary.py`) forbids, the
 objective, the DSR estimator, or the promotion decision. Contributed genomes that beat the
-champion are handed to the swarm'"'"'s private registry, where those gates run. The **Strategy
+champion are handed to the swarm's private registry, where those gates run. The **Strategy
 Validation Audit** at [https://1.21initiative.com/](https://1.21initiative.com/) remains the
 route for multi-genome league runs, custom universes, and NDA'"'"'d live metrics.
 
@@ -352,6 +433,8 @@ route for multi-genome league runs, custom universes, and NDA'"'"'d live metrics
 Off by default, opt-in only (`SWARM_MCP_TELEMETRY_OPT_IN=opt-in`), counters only
 (tool name, success flag, coarse duration). Never symbols, genomes, prices, or
 credentials. Institutional buyers read the source; silent phone-home destroys the wedge.
+Contributors additionally disclose telemetry scope in their submission (see the
+strategy-contributor tier above).
 
 The exceptions are by contract and explicit:
 
@@ -368,16 +451,16 @@ The exceptions are by contract and explicit:
 
 ```powershell
 pip install -e ".[test]"
-py -3.11 -m pytest                          # 160 tests
+py -3.11 -m pytest                          # full suite (see Step 2 count in docs/DISTRIBUTION.md)
 scripts\vendor.ps1                          # re-vendor the pinned checker subset
 py -3.11 scripts\check_pin.py               # vendored tree == pins.json
 ```
 
 Vendoring uses the sibling checkouts of the private repos at the pinned SHAs
-(`-FromWorktree` bootstraps before the pin commit exists). CI mirrors the swarm'"'"'s own
+(`-FromWorktree` bootstraps before the pin commit exists). CI mirrors the swarm's own
 `guardrails-invariants` gate: it checks out the pinned SHAs and verifies the committed
 vendored tree byte-for-byte (and the stripped subsets transform-for-transform), then runs
-the guardrails'"'"' own invariant suite at the pinned SHA.
+the guardrails' own invariant suite at the pinned SHA.
 
 ## License
 

@@ -74,5 +74,5 @@ def test_identical_challenger_not_refused():
 
 def test_heuristic_score_uses_no_tier_b_c_features():
     feats_a = {"vol_ratio_20": 1.8, "mom_20d": 0.08, "breakout_dist_20d": 0.0, "rsi_14": 55.0}
-    feats_b = dict(feats_a, finnhub_sentiment=0.9, earnings_flag=1.0, finviz_score=88.0)
+    feats_b = dict(feats_a, altdata_sentiment=0.9, earnings_flag=1.0, finviz_score=88.0)
     assert _heuristic_filter_score(feats_a) == _heuristic_filter_score(feats_b)

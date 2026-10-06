@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "reason": "licensed paid source - internal research only",
+  "datasets": ["news_alpaca", "news_forensic_features"],
+  "vendors": ["benzinga"]
+}

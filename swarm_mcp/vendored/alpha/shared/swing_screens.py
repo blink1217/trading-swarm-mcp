@@ -16,7 +16,7 @@ content only:
                   -> +3% day on >1.5x relative volume at/near the channel high.
                      The `earningsdate_thisweek` leg is TIER B and is
                      deliberately NOT reimplemented on bars; the analyst adds it
-                     live from the Finnhub calendar and the tape records the
+                     live from the AltData calendar and the tape records the
                      weekly Jaccard agreement of the bar-based sets vs Finviz.
 
 Genome knobs (`genome["screen"]`):
