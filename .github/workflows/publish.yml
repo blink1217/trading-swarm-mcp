@@ -94,6 +94,9 @@ jobs:
     name: Publish to npm (quant-swarm-mcp)
     needs: prepare
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,19 +105,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
 
-      - name: Publish npm launcher (if version not yet published)
+      - name: Upgrade npm for OIDC Trusted Publishing
+        run: npm install -g npm@latest
+
+      - name: Publish npm launcher via OIDC Trusted Publishing (with token fallback)
         working-directory: npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          FALLBACK_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PKG_VER=$(node -p "require('./package.json').version")
           PUBLISHED=$(npm view "quant-swarm-mcp@${PKG_VER}" version 2>/dev/null || true)
           if [ "$PUBLISHED" = "$PKG_VER" ]; then
             echo "quant-swarm-mcp@${PKG_VER} is already published on npm; skipping."
           else
-            npm publish --access public
+            npm publish --provenance --access public || \
+              npm publish --//registry.npmjs.org/:_authToken="${FALLBACK_NPM_TOKEN}" --access public
           fi
 
   deploy-cloudrun:
