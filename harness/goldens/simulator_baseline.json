@@ -1,0 +1,45 @@
+{
+ "genomes": {
+  "baseline": {
+   "genome_hash": "3e3f71d53530fcec2e0fd4694be0c43a53f7aa68a0cb224733d616ca71240bcb",
+   "max_gross_exposure": 0.6,
+   "max_position_pct": 0.25,
+   "mean_weekly_bps": 188.82536249999998,
+   "n_episodes": 8,
+   "per_regime_bps": {
+    "chop": 134.38905,
+    "drawdown": 0.0,
+    "gap_heavy": 0.0,
+    "high_vol": 243.261675,
+    "melt_up": 0.0
+   },
+   "turnover_pct_avg": 0.5874999999999999,
+   "worst_regime": "drawdown"
+  },
+  "mutate_a": {
+   "genome_hash": "e880e814a81e205c1e3451ac6745d5a8809a886fdb4dc4ebeb9bee5dca1fb95f",
+   "max_gross_exposure": 0.6,
+   "max_position_pct": 0.25,
+   "mean_weekly_bps": 68.10473750000001,
+   "n_episodes": 8,
+   "per_regime_bps": {
+    "chop": 62.244225,
+    "drawdown": 0.0,
+    "gap_heavy": 0.0,
+    "high_vol": 73.96525,
+    "melt_up": 0.0
+   },
+   "turnover_pct_avg": 0.43054375,
+   "worst_regime": "drawdown"
+  }
+ },
+ "geometry": {
+  "min_symbols": 5,
+  "panel": "synthetic_bars(days=500, seed=9, end=2026-05-29)",
+  "per_regime": 2,
+  "seeds": [
+   0,
+   1
+  ]
+ }
+}

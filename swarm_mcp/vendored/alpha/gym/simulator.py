@@ -2,7 +2,7 @@
 
 FIDELITY LABEL — TIER-A PRICE SUBSET ONLY. This simulator replays bars_1day
 prices through the screen/sizing/weekend-gate logic with a pessimistic fill
-model. It does NOT model AltData sentiment, the earnings calendar, Finviz
+model. It does NOT model Finnhub sentiment, the earnings calendar, Finviz
 membership, weather/energy context, or LLM verdicts. Any genome whose MUTATED
 genes exceed tier A cannot be scored here — the gym refuses (it never silently
 defaults tier-B/C features to 0.0, which would fabricate evidence). Scoring
@@ -21,12 +21,11 @@ import pandas as pd
 
 import guardrails_path  # noqa: E402,F401  (ensures guardrails on sys.path)
 
-from fill_model import round_trip_cost_bps  # noqa: E402  (guardrails)
+from fill_model import house_round_trip_cost_bps  # noqa: E402  (guardrails)
 from objective import MAX_GROSS_EXPOSURE_PCT  # noqa: E402  (guardrails)
 from tiers import highest_mutated_tier  # noqa: E402  (guardrails)
 
 from gym.panel import decision_features, assert_no_lookahead  # noqa: E402
-from gym.policy_head import weekend_action  # noqa: E402
 from shared.swing_screens import union_mask  # noqa: E402
 
 EQUITY = 100_000.0
@@ -42,7 +41,7 @@ class TierScoringRefusal(RuntimeError):
     """The gym refuses to score a genome whose mutated genes exceed tier A.
 
     This is the anti-fabrication invariant: a neutral fill (defaulting
-    altdata_sentiment / earnings_flag / finviz_score to 0.0) would silently
+    finnhub_sentiment / earnings_flag / finviz_score to 0.0) would silently
     manufacture evidence the price panel cannot provide. The correct verdict
     is UNSCORABLE (plan decision 5, R8/R9).
     """
@@ -91,7 +90,7 @@ def _screen_mask(panel: pd.DataFrame, episode, genome) -> pd.Series:
 def _heuristic_filter_score(feats: dict) -> float:
     """Bar-feature-only heuristic fallback scoring (mirrors analyst's LGBM gate).
 
-    STRICTLY tier-A inputs. This function must never read altdata_sentiment,
+    STRICTLY tier-A inputs. This function must never read finnhub_sentiment,
     earnings_flag, or finviz_score — defaulting those to 0.0 would be a silent
     provenance substitution. Callers holding a genome with tier-B/C mutations
     are refused upstream by assert_tier_a_scortable.
@@ -137,8 +136,10 @@ def replay_episode(panel: pd.DataFrame, episode: dict, genome: dict,
     be empty). `earnings_map`/`energy_map` are optional TIER-B/C context maps
     the tape_replay service supplies; the gym itself never fabricates them.
     """
-    exec_cfg = genome["execution"]
-    cost_bps = round_trip_cost_bps(exec_cfg["spread_bps"], exec_cfg["slippage_bps"], exec_cfg["adverse_selection_bps"])
+    # A-01: execution costs are house constants (guardrails.fill_model), never
+    # the genome's own execution.* genes — scoring with genome-declared costs
+    # let the loop optimize the cost model instead of alpha.
+    cost_bps = house_round_trip_cost_bps()
 
     mask = _screen_mask(panel, episode, genome)
     candidates = list(mask[mask].index) if len(mask) else []
@@ -174,12 +175,13 @@ def replay_episode(panel: pd.DataFrame, episode: dict, genome: dict,
         if gross >= MAX_GROSS_EXPOSURE_PCT:
             break
         size_pct = min(size_pct, MAX_GROSS_EXPOSURE_PCT - gross)
-        earnings_days = (earnings_map or {}).get((s, pd.Timestamp(episode["date"])))
-        energy_bias = (energy_map or {}).get(s)
-        action, target_frac = weekend_action(genome["weekend_gate"], earnings_days=earnings_days,
-                                             atr_pct=float(f["atr_pct"]) if not np.isnan(f["atr_pct"]) else None,
-                                             gap_risk_pct=float(f["gap_open"]) if not np.isnan(f["gap_open"]) else None,
-                                             energy_bias=energy_bias)
+        # A-02 / Phase 0: the weekend gate was DISABLED here because the live
+        # system had no actuator for TRIM_50_PCT/FLATTEN. The actuator shipped
+        # 2026-09-04 (execution /weekend/apply, coordinator broker positions),
+        # so this block may be restored to the weekend_action() call — do it in
+        # the same edit as the A-01 cost freeze so gym and proposer change
+        # atomically in one commit. Until then, full entry = what live did.
+        action, target_frac = "HOLD", 1.0
         final_pct = size_pct * target_frac
         gross += final_pct
         fwd = float(f["fwd_ret_5d"]) if "fwd_ret_5d" in f and not np.isnan(f["fwd_ret_5d"]) else 0.0
@@ -190,6 +192,14 @@ def replay_episode(panel: pd.DataFrame, episode: dict, genome: dict,
             # decision-time state + the action taken: the (s, a, r) transition
             # the learned world model trains on. Causal features only.
             "action": action,
+            # The decision decomposed into its component MOVES (screen gate,
+            # entry, sizing, weekend policy) so credit can be assigned per move.
+            "moves": {
+                "screen": "PASS",
+                "entry": "ENTER",
+                "size": "CAPPED" if size_pct < _size_position(genome, float(f["atr_14"]), float(f["close"])) else "FULL",
+                "weekend": action,
+            },
             "state": {k: (None if np.isnan(float(f[k])) else float(f[k])) for k in STATE_FEATURES if k in f},
         })
 

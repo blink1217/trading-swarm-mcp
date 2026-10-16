@@ -36,7 +36,11 @@ def label_regime(panel: pd.DataFrame, decision_date, lookback: int = 250) -> str
     hist = mr[mr.index <= pd.Timestamp(decision_date)]
     if len(hist) < 30:
         return "chop"
-    rets = hist.iloc[-1]
+    # A-08: drawdown/momentum are computed on the trailing path (up to
+    # `lookback` sessions), not on the single last return — a scalar cumprod
+    # can never draw down or melt up, so four of the five labels were
+    # unreachable.
+    rets = hist.iloc[-lookback:]
     vol20 = hist.iloc[-20:].std() * np.sqrt(252) if len(hist) >= 20 else 0.0
     vol_all = hist.rolling(20).std().dropna() * np.sqrt(252)
     if len(vol_all) >= 20 and vol20 >= vol_all.quantile(VOL_QUANTILE):
@@ -48,7 +52,13 @@ def label_regime(panel: pd.DataFrame, decision_date, lookback: int = 250) -> str
     mom60 = cum.iloc[-1] / (cum.iloc[-61] + 1e-12) - 1.0 if len(cum) >= 61 else 0.0
     if mom60 >= MELTUP_MOM_60D:
         return "melt_up"
-    avg_gap = panel[panel["ts"] <= pd.Timestamp(decision_date)]["gap_open"].abs().tail(20).mean()
+    # A-08: gap risk is a PER-SESSION statistic — average |gap| across symbols
+    # within each session, then average the last 20 sessions. Tailing the raw
+    # symbol×day rows instead weighted the average by cross-section size and
+    # mixed sessions together.
+    session_gap = (panel[panel["ts"] <= pd.Timestamp(decision_date)]
+                   .groupby("ts")["gap_open"].apply(lambda s: s.abs().mean()))
+    avg_gap = session_gap.tail(20).mean()
     if not np.isnan(avg_gap) and avg_gap >= GAP_HEAVY_MEAN_GAP:
         return "gap_heavy"
     return "chop"
@@ -80,10 +90,14 @@ def episode_pool(panel: pd.DataFrame, regime_labels: dict, min_symbols: int = 8)
 
 
 def sample_episodes(pool: list[dict], seed: int, per_regime: int, rng: random.Random | None = None) -> list[dict]:
-    """Block-bootstrap `per_regime` episodes per regime, deterministically from `seed`.
+    """Sample `per_regime` episodes per regime, deterministically from `seed`.
 
     Identical (seed, pool) -> identical episode list, so paired tournaments compare
     genomes on the exact same market paths.
+
+    A-11: episodes are sampled WITHOUT replacement (unique dates). Sampling with
+    replacement let one historical week be scored several times, inflating the
+    episode count and double-weighting that path in the DSR/drawdown math.
     """
     if rng is None:
         rng = random.Random(seed)
@@ -93,11 +107,10 @@ def sample_episodes(pool: list[dict], seed: int, per_regime: int, rng: random.Ra
     out: list[dict] = []
     for regime in REGIMES:
         eps = by_regime.get(regime, [])
-        for _ in range(per_regime):
-            if not eps:
-                continue
-            ep = dict(rng.choice(eps))
-            out.append(ep)
+        if not eps:
+            continue
+        for ep in rng.sample(eps, k=min(per_regime, len(eps))):
+            out.append(dict(ep))
     out.sort(key=lambda e: e["date"])
     return out
 

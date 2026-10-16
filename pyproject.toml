@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
-remote = ["uvicorn>=0.30", "starlette>=0.37"]
+remote = ["uvicorn>=0.30", "starlette>=0.37", "google-cloud-firestore>=2.16"]
 
 [project.scripts]
 swarm-data-mcp = "swarm_mcp.servers.data_server:main"

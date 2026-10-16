@@ -1,0 +1,4084 @@
+{
+ "servers": {
+  "data": [
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": false,
+     "openWorldHint": false,
+     "readOnlyHint": false
+    },
+    "inputSchema": {
+     "properties": {
+      "enabled": {
+       "description": "True = cache-only mode (no network; reads from cache, fetches refused).",
+       "title": "Enabled",
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "enabled"
+     ],
+     "title": "offline_modeArguments",
+     "type": "object"
+    },
+    "name": "cache.offline",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "enabled": {
+       "title": "Enabled",
+       "type": "boolean"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "semantics": {
+       "title": "Semantics",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "OfflineModeOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {},
+     "title": "cache_statsArguments",
+     "type": "object"
+    },
+    "name": "cache.stats",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "offline_mode": {
+       "title": "Offline Mode",
+       "type": "boolean"
+      },
+      "per_symbol": {
+       "additionalProperties": true,
+       "title": "Per Symbol",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "CacheStatsOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": false
+    },
+    "inputSchema": {
+     "properties": {
+      "universe": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to backfill (default: the swarm's 13-symbol universe).",
+       "title": "Universe"
+      },
+      "years": {
+       "default": 1.0,
+       "description": "Years of daily history to backfill (max limited by the plan's backfill window).",
+       "exclusiveMinimum": 0.1,
+       "maximum": 10.0,
+       "title": "Years",
+       "type": "number"
+      }
+     },
+     "title": "cache_warmArguments",
+     "type": "object"
+    },
+    "name": "cache.warm",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "escalation": {
+       "additionalProperties": true,
+       "title": "Escalation",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "immutability": {
+       "title": "Immutability",
+       "type": "string"
+      },
+      "limits": {
+       "additionalProperties": true,
+       "title": "Limits",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "rows_upserted": {
+       "title": "Rows Upserted",
+       "type": "integer"
+      },
+      "symbols": {
+       "additionalProperties": true,
+       "title": "Symbols",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "CacheWarmOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "description": "Point-in-time session date (YYYY-MM-DD); every feature is a causal recomputation at this date, never a later revision.",
+       "title": "As Of",
+       "type": "string"
+      },
+      "symbol": {
+       "description": "Ticker symbol, e.g. AAPL.",
+       "title": "Symbol",
+       "type": "string"
+      }
+     },
+     "required": [
+      "symbol",
+      "as_of"
+     ],
+     "title": "build_featuresArguments",
+     "type": "object"
+    },
+    "name": "features.build",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "as_of": {
+       "title": "As Of",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "escalation": {
+       "additionalProperties": true,
+       "title": "Escalation",
+       "type": "object"
+      },
+      "feature_order": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Feature Order",
+       "type": "array"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "limits": {
+       "additionalProperties": true,
+       "title": "Limits",
+       "type": "object"
+      },
+      "no_lookahead": {
+       "title": "No Lookahead",
+       "type": "string"
+      },
+      "provenance": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Provenance",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "symbol": {
+       "title": "Symbol",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "vector": {
+       "additionalProperties": true,
+       "title": "Vector",
+       "type": "object"
+      },
+      "violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Violations",
+       "type": "array"
+      }
+     },
+     "title": "BuildFeaturesOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "areas": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied operating areas for underlyings outside the shipped registry: [{symbol, name?, lat, lon, weight?}]. Weather is fetched ONLY for these made/sold geographies \u2014 never the listing exchange or HQ city.",
+       "title": "Areas"
+      },
+      "symbols": {
+       "description": "Tickers whose operating-area climate to research (registry-covered weather-exposed underlyings, or any ticker you supply `areas` for).",
+       "items": {
+        "type": "string"
+       },
+       "title": "Symbols",
+       "type": "array"
+      }
+     },
+     "required": [
+      "symbols"
+     ],
+     "title": "climate_snapshotArguments",
+     "type": "object"
+    },
+    "name": "market.climate",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "climate": {
+       "additionalProperties": true,
+       "title": "Climate",
+       "type": "object"
+      },
+      "covered": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Covered",
+       "type": "array"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "registry_coverage": {
+       "title": "Registry Coverage",
+       "type": "integer"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "uncovered": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Uncovered",
+       "type": "array"
+      }
+     },
+     "title": "ClimateSnapshotOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time cutoff date (YYYY-MM-DD).",
+       "title": "As Of"
+      },
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to analyze via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_flowArguments",
+     "type": "object"
+    },
+    "name": "market.flow",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "flows": {
+       "additionalProperties": true,
+       "title": "Flows",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "MarketFlowOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time cutoff date (YYYY-MM-DD); records after this date are masked.",
+       "title": "As Of"
+      },
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to evaluate via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_fundamentals_pitArguments",
+     "type": "object"
+    },
+    "name": "market.fundamentals_pit",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "fundamentals": {
+       "additionalProperties": true,
+       "title": "Fundamentals",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "MarketFundamentalsPitOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time cutoff date (YYYY-MM-DD).",
+       "title": "As Of"
+      },
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional universe of tickers used to estimate breadth and dispersion.",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_macro_nowcastArguments",
+     "type": "object"
+    },
+    "name": "market.macro_nowcast",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "as_of": {
+       "title": "As Of",
+       "type": "string"
+      },
+      "crisis_regime_probability": {
+       "title": "Crisis Regime Probability",
+       "type": "number"
+      },
+      "cross_sectional_dispersion_pct": {
+       "title": "Cross Sectional Dispersion Pct",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "macro_quadrant": {
+       "title": "Macro Quadrant",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "positive_breadth_ratio": {
+       "title": "Positive Breadth Ratio",
+       "type": "number"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "risk_appetite_index": {
+       "title": "Risk Appetite Index",
+       "type": "number"
+      },
+      "short_to_medium_vol_ratio": {
+       "title": "Short To Medium Vol Ratio",
+       "type": "number"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "vol_term_structure_state": {
+       "title": "Vol Term Structure State",
+       "type": "string"
+      }
+     },
+     "title": "MarketMacroNowcastOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbol": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Ticker to analyze (served from the shared cache/relay); omit when passing your own bars.",
+       "title": "Symbol"
+      }
+     },
+     "title": "microstructure_snapshotArguments",
+     "type": "object"
+    },
+    "name": "market.microstructure",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "signals": {
+       "additionalProperties": true,
+       "title": "Signals",
+       "type": "object"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "MicrostructureOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}] for symbols the shared cache does not carry.",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to analyze via the shared cache/relay (default: none \u2014 supply symbols or your own bars).",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_pulseArguments",
+     "type": "object"
+    },
+    "name": "market.pulse",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "signals": {
+       "additionalProperties": true,
+       "title": "Signals",
+       "type": "object"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "MarketPulseOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "metric": {
+       "default": "momentum_20d",
+       "description": "Metric to rank by: momentum_20d | volume_ratio_20d | atr_pct | rsi_14.",
+       "title": "Metric",
+       "type": "string"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "List of tickers to rank (via the shared cache/relay); omit when passing your own bars.",
+       "title": "Symbols"
+      }
+     },
+     "title": "cross_sectional_rankArguments",
+     "type": "object"
+    },
+    "name": "market.rank",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "metric": {
+       "title": "Metric",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "rank": {
+       "additionalProperties": true,
+       "title": "Rank",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "CrossSectionalRankOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}] for symbols the shared cache does not carry.",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to label via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "title": "regime_snapshotArguments",
+     "type": "object"
+    },
+    "name": "market.regime",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "regimes": {
+       "additionalProperties": true,
+       "title": "Regimes",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "RegimeSnapshotOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "criteria": {
+       "default": "breakout",
+       "description": "Screen criterion: breakout | momentum | volume | anomaly.",
+       "title": "Criteria",
+       "type": "string"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "List of tickers to screen (via the shared cache/relay); omit when passing your own bars.",
+       "title": "Symbols"
+      }
+     },
+     "title": "screen_universeArguments",
+     "type": "object"
+    },
+    "name": "market.screen",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "criteria": {
+       "title": "Criteria",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "screened": {
+       "additionalProperties": true,
+       "title": "Screened",
+       "type": "object"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "ScreenUniverseOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "symbol": {
+       "description": "Ticker symbol, e.g. TSLA.",
+       "title": "Symbol",
+       "type": "string"
+      }
+     },
+     "required": [
+      "symbol"
+     ],
+     "title": "sentiment_pulseArguments",
+     "type": "object"
+    },
+    "name": "market.sentiment",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "as_of": {
+       "title": "As Of",
+       "type": "string"
+      },
+      "day_change_bucket": {
+       "title": "Day Change Bucket",
+       "type": "string"
+      },
+      "earnings_within_3d": {
+       "title": "Earnings Within 3D",
+       "type": "boolean"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "headline_count_7d": {
+       "title": "Headline Count 7D",
+       "type": "integer"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "provenance": {
+       "additionalProperties": true,
+       "title": "Provenance",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "symbol": {
+       "title": "Symbol",
+       "type": "string"
+      },
+      "tone_bucket": {
+       "title": "Tone Bucket",
+       "type": "string"
+      },
+      "tone_polarity_score": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tone Polarity Score"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "SentimentPulseOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Tickers (at least 2) to test for directed lead-lag information flow.",
+       "title": "Symbols"
+      },
+      "window": {
+       "default": 60,
+       "description": "Trailing session window for transfer entropy estimation (25-252).",
+       "maximum": 252,
+       "minimum": 25,
+       "title": "Window",
+       "type": "integer"
+      }
+     },
+     "title": "market_transfer_entropyArguments",
+     "type": "object"
+    },
+    "name": "market.transfer_entropy",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "as_of": {
+       "title": "As Of",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "leader_ranking": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Leader Ranking",
+       "type": "array"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "pairs": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Pairs",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "window_sessions": {
+       "title": "Window Sessions",
+       "type": "integer"
+      }
+     },
+     "title": "MarketTransferEntropyOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Point-in-time cutoff (YYYY-MM-DD, default today): release points after this date are ignored.",
+       "title": "As Of"
+      },
+      "horizons": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Subset of the run's horizons, e.g. ['1d','1w','1m','6m'] (default: all).",
+       "title": "Horizons"
+      },
+      "max_families": {
+       "default": 20,
+       "description": "Max families returned per underlying, most significant first (1-100).",
+       "maximum": 100,
+       "minimum": 1,
+       "title": "Max Families",
+       "type": "integer"
+      },
+      "only_significant": {
+       "default": false,
+       "description": "Only return families with at least one SIGNIFICANT horizon (counts still cover everything).",
+       "title": "Only Significant",
+       "type": "boolean"
+      },
+      "symbols": {
+       "description": "Underlying tickers to query (max 10). Results are per underlying.",
+       "items": {
+        "type": "string"
+       },
+       "title": "Symbols",
+       "type": "array"
+      }
+     },
+     "required": [
+      "symbols"
+     ],
+     "title": "pit_analysisArguments",
+     "type": "object"
+    },
+    "name": "pit.analysis",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "how_to_read": {
+       "title": "How To Read",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "run_id": {
+       "title": "Run Id",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "unavailable": {
+       "additionalProperties": true,
+       "title": "Unavailable",
+       "type": "object"
+      },
+      "underlyings": {
+       "additionalProperties": true,
+       "title": "Underlyings",
+       "type": "object"
+      }
+     },
+     "title": "PitAnalysisOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "horizon_bars": {
+       "default": 1,
+       "description": "Number of sessions ahead to forecast (1-10).",
+       "maximum": 10,
+       "minimum": 1,
+       "title": "Horizon Bars",
+       "type": "integer"
+      },
+      "symbol": {
+       "description": "Ticker to forecast (served from the shared cache/relay).",
+       "title": "Symbol",
+       "type": "string"
+      }
+     },
+     "required": [
+      "symbol"
+     ],
+     "title": "volume_forecastArguments",
+     "type": "object"
+    },
+    "name": "volume.forecast",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "as_of": {
+       "title": "As Of",
+       "type": "string"
+      },
+      "buy_volume_attractor_share": {
+       "title": "Buy Volume Attractor Share",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "forecast_ratio_to_20d_avg": {
+       "title": "Forecast Ratio To 20D Avg",
+       "type": "number"
+      },
+      "horizon_bars": {
+       "title": "Horizon Bars",
+       "type": "integer"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "hurst_exponent": {
+       "title": "Hurst Exponent",
+       "type": "number"
+      },
+      "interval_p10_p90": {
+       "items": {
+        "type": "number"
+       },
+       "title": "Interval P10 P90",
+       "type": "array"
+      },
+      "is_chaotic": {
+       "title": "Is Chaotic",
+       "type": "boolean"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "lyapunov_exponent": {
+       "title": "Lyapunov Exponent",
+       "type": "number"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "symbol": {
+       "title": "Symbol",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "volume_regime": {
+       "title": "Volume Regime",
+       "type": "string"
+      }
+     },
+     "title": "VolumeForecastOut",
+     "type": "object"
+    }
+   }
+  ],
+  "gym": [
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "n_genomes": {
+       "default": 1,
+       "description": "Number of genomes in the run.",
+       "maximum": 100,
+       "minimum": 1,
+       "title": "N Genomes",
+       "type": "integer"
+      },
+      "per_regime": {
+       "default": 4,
+       "description": "Episodes per regime (default 4 on the hosted side).",
+       "maximum": 10,
+       "minimum": 1,
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "seeds": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional episode seeds (default [0..4]).",
+       "title": "Seeds"
+      }
+     },
+     "title": "estimate_cloud_runArguments",
+     "type": "object"
+    },
+    "name": "gym.estimate_cloud_run",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "budget": {
+       "additionalProperties": true,
+       "title": "Budget",
+       "type": "object"
+      },
+      "episodes_required": {
+       "title": "Episodes Required",
+       "type": "integer"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "formula": {
+       "title": "Formula",
+       "type": "string"
+      },
+      "handoff": {
+       "title": "Handoff",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "regimes": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Regimes",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "submit_bodies": {
+       "additionalProperties": true,
+       "title": "Submit Bodies",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "wall_clock_estimate_s": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Wall Clock Estimate S"
+      },
+      "wall_clock_note": {
+       "title": "Wall Clock Note",
+       "type": "string"
+      }
+     },
+     "title": "EstimateCloudRunOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline OHLCV rows.",
+       "title": "Bars"
+      },
+      "graph": {
+       "additionalProperties": true,
+       "description": "ExpressionGraph (strategy-spec-v3) DAG with nodes and output_node.",
+       "title": "Graph",
+       "type": "object"
+      },
+      "min_symbols": {
+       "default": 8,
+       "description": "Minimum symbols for a valid episode pool.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Min Symbols",
+       "type": "integer"
+      },
+      "per_regime": {
+       "default": 2,
+       "description": "Episodes per regime (1 or 2 locally).",
+       "maximum": 2,
+       "minimum": 1,
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "seeds": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional episode seeds (max 8 locally).",
+       "title": "Seeds"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional tickers from the shared cache; omit when passing bars.",
+       "title": "Symbols"
+      }
+     },
+     "required": [
+      "graph"
+     ],
+     "title": "evaluate_graphArguments",
+     "type": "object"
+    },
+    "name": "gym.evaluate_graph",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "cloud_job": {
+       "additionalProperties": true,
+       "title": "Cloud Job",
+       "type": "object"
+      },
+      "depth": {
+       "additionalProperties": true,
+       "title": "Depth",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Errors",
+       "type": "array"
+      },
+      "graph_hash": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Graph Hash"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "mean_weekly_bps": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mean Weekly Bps"
+      },
+      "n_episodes": {
+       "title": "N Episodes",
+       "type": "integer"
+      },
+      "node_count": {
+       "title": "Node Count",
+       "type": "integer"
+      },
+      "operator_abi": {
+       "title": "Operator Abi",
+       "type": "string"
+      },
+      "per_regime": {
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "per_regime_bps": {
+       "additionalProperties": true,
+       "title": "Per Regime Bps",
+       "type": "object"
+      },
+      "power_note": {
+       "title": "Power Note",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "seeds": {
+       "items": {
+        "type": "integer"
+       },
+       "title": "Seeds",
+       "type": "array"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "turnover_pct_avg": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Turnover Pct Avg"
+      },
+      "underpowered": {
+       "title": "Underpowered",
+       "type": "boolean"
+      },
+      "valid_graph": {
+       "title": "Valid Graph",
+       "type": "boolean"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "worst_regime": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Worst Regime"
+      },
+      "worst_regime_bps": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Worst Regime Bps"
+      }
+     },
+     "title": "EvaluateGraphOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "min_symbols": {
+       "default": 8,
+       "description": "Minimum symbols required for a valid episode pool.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Min Symbols",
+       "type": "integer"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional tickers served from the shared cache; omit when passing your own bars.",
+       "title": "Symbols"
+      }
+     },
+     "title": "label_regimesArguments",
+     "type": "object"
+    },
+    "name": "gym.label_regimes",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "depth": {
+       "additionalProperties": true,
+       "title": "Depth",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "escalation": {
+       "additionalProperties": true,
+       "title": "Escalation",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "labels_are_causal": {
+       "title": "Labels Are Causal",
+       "type": "string"
+      },
+      "pool_size": {
+       "title": "Pool Size",
+       "type": "integer"
+      },
+      "regime_counts": {
+       "additionalProperties": true,
+       "title": "Regime Counts",
+       "type": "object"
+      },
+      "regimes": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Regimes",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "thin_pool_warning": {
+       "title": "Thin Pool Warning",
+       "type": "string"
+      },
+      "thin_pools": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Thin Pools",
+       "type": "array"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "LabelRegimesOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline OHLCV rows.",
+       "title": "Bars"
+      },
+      "challenger_genome": {
+       "additionalProperties": true,
+       "description": "Challenger genome to compare against the champion.",
+       "title": "Challenger Genome",
+       "type": "object"
+      },
+      "champion_genome": {
+       "additionalProperties": true,
+       "description": "Current champion genome.",
+       "title": "Champion Genome",
+       "type": "object"
+      },
+      "min_symbols": {
+       "default": 8,
+       "description": "Minimum symbols for a valid episode pool.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Min Symbols",
+       "type": "integer"
+      },
+      "per_regime": {
+       "default": 2,
+       "description": "Episodes per regime (1 or 2 locally).",
+       "maximum": 2,
+       "minimum": 1,
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "seeds": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional episode seeds (max 8 locally).",
+       "title": "Seeds"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional tickers from the shared cache; omit when passing bars.",
+       "title": "Symbols"
+      }
+     },
+     "required": [
+      "champion_genome",
+      "challenger_genome"
+     ],
+     "title": "paired_previewArguments",
+     "type": "object"
+    },
+    "name": "gym.paired_preview",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "challenger_hash": {
+       "title": "Challenger Hash",
+       "type": "string"
+      },
+      "champion_hash": {
+       "title": "Champion Hash",
+       "type": "string"
+      },
+      "cloud_job": {
+       "additionalProperties": true,
+       "title": "Cloud Job",
+       "type": "object"
+      },
+      "depth": {
+       "additionalProperties": true,
+       "title": "Depth",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Errors",
+       "type": "array"
+      },
+      "gate_requirements": {
+       "additionalProperties": true,
+       "title": "Gate Requirements",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "identical_paths": {
+       "title": "Identical Paths",
+       "type": "string"
+      },
+      "n_paired_episodes": {
+       "title": "N Paired Episodes",
+       "type": "integer"
+      },
+      "per_regime": {
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "promotion": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Promotion"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "seeds": {
+       "items": {
+        "type": "integer"
+       },
+       "title": "Seeds",
+       "type": "array"
+      },
+      "statistics": {
+       "additionalProperties": true,
+       "title": "Statistics",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "valid_genomes": {
+       "title": "Valid Genomes",
+       "type": "boolean"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "PairedPreviewOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline OHLCV rows.",
+       "title": "Bars"
+      },
+      "champion_genome": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional champion genome; tier-B/C mutations vs it refuse to score.",
+       "title": "Champion Genome"
+      },
+      "genome": {
+       "additionalProperties": true,
+       "description": "Genome to replay over the capped episode-seed matrix.",
+       "title": "Genome",
+       "type": "object"
+      },
+      "min_symbols": {
+       "default": 8,
+       "description": "Minimum symbols for a valid episode pool.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Min Symbols",
+       "type": "integer"
+      },
+      "per_regime": {
+       "default": 2,
+       "description": "Episodes per regime (1 or 2 locally).",
+       "maximum": 2,
+       "minimum": 1,
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "seeds": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "integer"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional episode seeds (max 8 locally).",
+       "title": "Seeds"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional tickers from the shared cache; omit when passing bars.",
+       "title": "Symbols"
+      }
+     },
+     "required": [
+      "genome"
+     ],
+     "title": "probe_fragilityArguments",
+     "type": "object"
+    },
+    "name": "gym.probe_fragility",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "cloud_job": {
+       "additionalProperties": true,
+       "title": "Cloud Job",
+       "type": "object"
+      },
+      "depth": {
+       "additionalProperties": true,
+       "title": "Depth",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Errors",
+       "type": "array"
+      },
+      "fidelity": {
+       "title": "Fidelity",
+       "type": "string"
+      },
+      "fidelity_note": {
+       "title": "Fidelity Note",
+       "type": "string"
+      },
+      "genome_hash": {
+       "title": "Genome Hash",
+       "type": "string"
+      },
+      "hard_constraint_violations": {
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "additionalProperties": true,
+          "type": "object"
+         }
+        ]
+       },
+       "title": "Hard Constraint Violations",
+       "type": "array"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "lookahead_violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Lookahead Violations",
+       "type": "array"
+      },
+      "max_gross_exposure": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Max Gross Exposure"
+      },
+      "max_position_pct": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Max Position Pct"
+      },
+      "mean_weekly_bps": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mean Weekly Bps"
+      },
+      "n_episodes": {
+       "title": "N Episodes",
+       "type": "integer"
+      },
+      "per_regime": {
+       "title": "Per Regime",
+       "type": "integer"
+      },
+      "per_regime_bps": {
+       "additionalProperties": true,
+       "title": "Per Regime Bps",
+       "type": "object"
+      },
+      "power_note": {
+       "title": "Power Note",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "seeds": {
+       "items": {
+        "type": "integer"
+       },
+       "title": "Seeds",
+       "type": "array"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "turnover_pct_avg": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Turnover Pct Avg"
+      },
+      "underpowered": {
+       "title": "Underpowered",
+       "type": "boolean"
+      },
+      "valid_genome": {
+       "title": "Valid Genome",
+       "type": "boolean"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "worst_regime": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Worst Regime"
+      },
+      "worst_regime_bps": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Worst Regime Bps"
+      }
+     },
+     "title": "ProbeFragilityOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {},
+     "title": "tournament_leaderboardArguments",
+     "type": "object"
+    },
+    "name": "tournament.leaderboard",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "anonymised": {
+       "title": "Anonymised",
+       "type": "string"
+      },
+      "challenger_wins": {
+       "title": "Challenger Wins",
+       "type": "integer"
+      },
+      "champion_rating": {
+       "title": "Champion Rating",
+       "type": "number"
+      },
+      "contributed_runs": {
+       "title": "Contributed Runs",
+       "type": "integer"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "geometry": {
+       "additionalProperties": true,
+       "title": "Geometry",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "pricing": {
+       "additionalProperties": true,
+       "title": "Pricing",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "top": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Top",
+       "type": "array"
+      },
+      "total_runs": {
+       "title": "Total Runs",
+       "type": "integer"
+      },
+      "updated_at": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Updated At"
+      }
+     },
+     "title": "TournamentLeaderboardOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": false,
+     "openWorldHint": true,
+     "readOnlyHint": false
+    },
+    "inputSchema": {
+     "properties": {
+      "contribute": {
+       "default": false,
+       "description": "true: license the genome vector + outcome to the swarm's evolution loop as an external challenger and pay half price. Combine with `disclosure` and/or `strategy_code` for the strategy-contributor tier (leaderboard attribution + league-seat eligibility after review). false (default): the vector is deleted after scoring; only hash + outcome remain.",
+       "title": "Contribute",
+       "type": "boolean"
+      },
+      "disclosure": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Strategy-contributor tier: author-written decision-logic disclosure (version 1; fields hypothesis, universe, selection, entry_timing, risk_sizing, weekend_hold, expected_edge \u2014 describe how the strategy decides, never code, data dumps, or secrets). Requires contribute=true. Validated locally before anything is sent.",
+       "title": "Disclosure"
+      },
+      "genome": {
+       "additionalProperties": true,
+       "description": "Genome parameter vector (public schema) to score against the swarm's live champion. Validate locally with warden.validate_genome first.",
+       "title": "Genome",
+       "type": "object"
+      },
+      "strategy_code": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Strategy-contributor tier: submit strategy CODE for STATIC LLM review. The code is treated as inert text \u2014 it is NEVER executed by us or the swarm; the hosted reviewer reads it with an LLM and stores only the structured explanation + a code hash (raw code is discarded after review). Remove keys/secrets first. Requires contribute=true.",
+       "title": "Strategy Code"
+      }
+     },
+     "required": [
+      "genome"
+     ],
+     "title": "tournament_submitArguments",
+     "type": "object"
+    },
+    "name": "tournament.submit",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "analysis_contract": {
+       "title": "Analysis Contract",
+       "type": "string"
+      },
+      "contribute": {
+       "title": "Contribute",
+       "type": "boolean"
+      },
+      "contribution": {
+       "title": "Contribution",
+       "type": "string"
+      },
+      "credits_charged": {
+       "title": "Credits Charged",
+       "type": "integer"
+      },
+      "disclosure_errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Disclosure Errors",
+       "type": "array"
+      },
+      "disclosure_status": {
+       "title": "Disclosure Status",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Errors",
+       "type": "array"
+      },
+      "genome_hash": {
+       "title": "Genome Hash",
+       "type": "string"
+      },
+      "geometry": {
+       "additionalProperties": true,
+       "title": "Geometry",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "job_id": {
+       "title": "Job Id",
+       "type": "string"
+      },
+      "next": {
+       "title": "Next",
+       "type": "string"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "quota": {
+       "additionalProperties": true,
+       "title": "Quota",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "retention": {
+       "title": "Retention",
+       "type": "string"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "strategy_code_errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Strategy Code Errors",
+       "type": "array"
+      },
+      "strategy_code_sent": {
+       "title": "Strategy Code Sent",
+       "type": "boolean"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "valid_disclosure": {
+       "title": "Valid Disclosure",
+       "type": "boolean"
+      },
+      "valid_genome": {
+       "title": "Valid Genome",
+       "type": "boolean"
+      },
+      "valid_strategy_code": {
+       "title": "Valid Strategy Code",
+       "type": "boolean"
+      },
+      "what_was_sent": {
+       "title": "What Was Sent",
+       "type": "string"
+      }
+     },
+     "title": "TournamentSubmitOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "job_id": {
+       "description": "job_id returned by tournament.submit.",
+       "title": "Job Id",
+       "type": "string"
+      }
+     },
+     "required": [
+      "job_id"
+     ],
+     "title": "tournament_verdictArguments",
+     "type": "object"
+    },
+    "name": "tournament.verdict",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "contribute": {
+       "title": "Contribute",
+       "type": "boolean"
+      },
+      "credits_charged": {
+       "title": "Credits Charged",
+       "type": "integer"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "genome_hash": {
+       "title": "Genome Hash",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "job_id": {
+       "title": "Job Id",
+       "type": "string"
+      },
+      "next": {
+       "title": "Next",
+       "type": "string"
+      },
+      "rating": {
+       "title": "Rating",
+       "type": "number"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "result": {
+       "additionalProperties": true,
+       "title": "Result",
+       "type": "object"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict_semantics": {
+       "title": "Verdict Semantics",
+       "type": "string"
+      }
+     },
+     "title": "TournamentVerdictOut",
+     "type": "object"
+    }
+   }
+  ],
+  "warden": [
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "manifest": {
+       "description": "Feature manifest: [{name, source, value_ts, as_of}] to audit.",
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Manifest",
+       "type": "array"
+      },
+      "selected_symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional challenger-selected symbols for the coverage check.",
+       "title": "Selected Symbols"
+      },
+      "snapshot_universe": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional archived snapshot universe to measure coverage against.",
+       "title": "Snapshot Universe"
+      },
+      "tape_started": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional tape start date (YYYY-MM-DD); features predating it are flagged.",
+       "title": "Tape Started"
+      }
+     },
+     "required": [
+      "manifest"
+     ],
+     "title": "audit_featuresArguments",
+     "type": "object"
+    },
+    "name": "warden.audit_features",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "banned_actuals_sources": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Banned Actuals Sources",
+       "type": "array"
+      },
+      "coverage": {
+       "additionalProperties": true,
+       "title": "Coverage",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "features": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Features",
+       "type": "array"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Violations",
+       "type": "array"
+      }
+     },
+     "title": "AuditFeaturesOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "adverse_selection_bps": {
+       "description": "Adverse-selection drag in bps.",
+       "minimum": 0.0,
+       "title": "Adverse Selection Bps",
+       "type": "number"
+      },
+      "gross_edge_bps": {
+       "description": "Claimed gross edge in basis points before costs.",
+       "title": "Gross Edge Bps",
+       "type": "number"
+      },
+      "slippage_bps": {
+       "description": "Expected slippage in bps.",
+       "minimum": 0.0,
+       "title": "Slippage Bps",
+       "type": "number"
+      },
+      "spread_bps": {
+       "description": "Average bid-ask spread in bps.",
+       "minimum": 0.0,
+       "title": "Spread Bps",
+       "type": "number"
+      }
+     },
+     "required": [
+      "gross_edge_bps",
+      "spread_bps",
+      "slippage_bps",
+      "adverse_selection_bps"
+     ],
+     "title": "cost_checkArguments",
+     "type": "object"
+    },
+    "name": "warden.cost_check",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "gross_edge_bps": {
+       "title": "Gross Edge Bps",
+       "type": "number"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "net_return_bps": {
+       "title": "Net Return Bps",
+       "type": "number"
+      },
+      "one_way_cost_bps": {
+       "title": "One Way Cost Bps",
+       "type": "number"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "round_trip_cost_bps": {
+       "title": "Round Trip Cost Bps",
+       "type": "number"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "CostCheckOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "atr_14": {
+       "description": "14-bar average true range of the instrument.",
+       "exclusiveMinimum": 0.0,
+       "title": "Atr 14",
+       "type": "number"
+      },
+      "close": {
+       "description": "Current close/reference price.",
+       "exclusiveMinimum": 0.0,
+       "title": "Close",
+       "type": "number"
+      },
+      "equity": {
+       "description": "Account equity (base currency).",
+       "exclusiveMinimum": 0.0,
+       "title": "Equity",
+       "type": "number"
+      },
+      "floor_overrides": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional per-fund overrides; deviation from house floors is reported.",
+       "title": "Floor Overrides"
+      },
+      "gross_exposure": {
+       "default": 0.0,
+       "description": "Current portfolio gross exposure in currency.",
+       "minimum": 0.0,
+       "title": "Gross Exposure",
+       "type": "number"
+      },
+      "overnight_gap": {
+       "default": 0.0,
+       "description": "Expected overnight gap (price units); gaps above 1.2x ATR halve size.",
+       "minimum": 0.0,
+       "title": "Overnight Gap",
+       "type": "number"
+      },
+      "weekend_approaching": {
+       "default": false,
+       "description": "True when the position would be held into the weekend (gross headroom applies).",
+       "title": "Weekend Approaching",
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "equity",
+      "atr_14",
+      "close"
+     ],
+     "title": "explain_sizingArguments",
+     "type": "object"
+    },
+    "name": "warden.explain_sizing",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "house_floors": {
+       "additionalProperties": true,
+       "title": "House Floors",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "notional": {
+       "title": "Notional",
+       "type": "number"
+      },
+      "overrides_deviation": {
+       "additionalProperties": true,
+       "title": "Overrides Deviation",
+       "type": "object"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "qty": {
+       "title": "Qty",
+       "type": "integer"
+      },
+      "reasons": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Reasons",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "steps": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Steps",
+       "type": "array"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "trail_stop": {
+       "title": "Trail Stop",
+       "type": "number"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "ExplainSizingOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "candidates": {
+       "description": "Candidate risk assets: [{symbol, momentum_score, realized_vol_annual, above_trend_sma?, chandelier_triggered?, current_weight?}].",
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Candidates",
+       "type": "array"
+      },
+      "cash_momentum_score": {
+       "default": 0.0,
+       "description": "Composite momentum score of the defensive cash proxy.",
+       "title": "Cash Momentum Score",
+       "type": "number"
+      },
+      "cash_proxy_symbol": {
+       "default": "SGOV",
+       "description": "Defensive cash proxy ticker receiving unallocated weight.",
+       "title": "Cash Proxy Symbol",
+       "type": "string"
+      },
+      "floor_overrides": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional per-fund overrides {max_position_pct, max_gross_exposure_pct}.",
+       "title": "Floor Overrides"
+      },
+      "method": {
+       "default": "vol_target_momentum",
+       "description": "Allocation method: vol_target_momentum | hrp | mvo_shrinkage.",
+       "title": "Method",
+       "type": "string"
+      },
+      "target_volatility": {
+       "default": 0.12,
+       "description": "Target annualized portfolio volatility (e.g. 0.12 for 12%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "title": "Target Volatility",
+       "type": "number"
+      },
+      "top_k": {
+       "default": 2,
+       "description": "Maximum number of active risk slots to select.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Top K",
+       "type": "integer"
+      },
+      "turnover_cap": {
+       "default": 0.5,
+       "description": "Maximum one-way portfolio turnover fraction per rebalance.",
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "title": "Turnover Cap",
+       "type": "number"
+      }
+     },
+     "required": [
+      "candidates"
+     ],
+     "title": "optimize_portfolioArguments",
+     "type": "object"
+    },
+    "name": "warden.optimize_portfolio",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "cash_proxy_symbol": {
+       "title": "Cash Proxy Symbol",
+       "type": "string"
+      },
+      "cash_sweep_weight": {
+       "title": "Cash Sweep Weight",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "estimated_portfolio_vol_annual": {
+       "title": "Estimated Portfolio Vol Annual",
+       "type": "number"
+      },
+      "estimated_turnover_one_way": {
+       "title": "Estimated Turnover One Way",
+       "type": "number"
+      },
+      "filtered_out": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Filtered Out",
+       "type": "array"
+      },
+      "gross_risk_exposure_pct": {
+       "title": "Gross Risk Exposure Pct",
+       "type": "number"
+      },
+      "house_floors": {
+       "additionalProperties": true,
+       "title": "House Floors",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "method": {
+       "title": "Method",
+       "type": "string"
+      },
+      "overrides_deviation": {
+       "additionalProperties": true,
+       "title": "Overrides Deviation",
+       "type": "object"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "selected_risk_assets": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Selected Risk Assets",
+       "type": "array"
+      },
+      "target_weights": {
+       "additionalProperties": true,
+       "title": "Target Weights",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "OptimizePortfolioOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "cash_proxy_symbol": {
+       "default": "SGOV",
+       "description": "Defensive cash sweep ticker.",
+       "title": "Cash Proxy Symbol",
+       "type": "string"
+      },
+      "current_positions": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional current position notionals {symbol: notional}.",
+       "title": "Current Positions"
+      },
+      "drift_threshold": {
+       "default": 0.03,
+       "description": "Minimum weight drift fraction required to trigger a rebalance step.",
+       "maximum": 0.25,
+       "minimum": 0.0,
+       "title": "Drift Threshold",
+       "type": "number"
+      },
+      "equity": {
+       "description": "Current account equity in base currency.",
+       "exclusiveMinimum": 0.0,
+       "title": "Equity",
+       "type": "number"
+      },
+      "feature_psi": {
+       "default": 0.0,
+       "description": "Optional Population Stability Index of input features (>0.25 halts risk additions).",
+       "minimum": 0.0,
+       "title": "Feature Psi",
+       "type": "number"
+      },
+      "high_water_mark": {
+       "description": "Portfolio historical high-water mark equity.",
+       "exclusiveMinimum": 0.0,
+       "title": "High Water Mark",
+       "type": "number"
+      },
+      "limit_collar_bps": {
+       "default": 10.0,
+       "description": "Marketable limit price collar around midprice in bps.",
+       "minimum": 0.0,
+       "title": "Limit Collar Bps",
+       "type": "number"
+      },
+      "max_drawdown_limit": {
+       "default": 0.12,
+       "description": "Maximum drawdown from high-water mark before circuit-breaker liquidation.",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Max Drawdown Limit",
+       "type": "number"
+      },
+      "max_spread_bps": {
+       "default": 15.0,
+       "description": "Maximum allowed bid-ask spread in bps before rejecting execution.",
+       "exclusiveMinimum": 0.0,
+       "title": "Max Spread Bps",
+       "type": "number"
+      },
+      "quotes": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional quote snapshot {symbol: {bid, ask} or {mid, spread_bps}}.",
+       "title": "Quotes"
+      },
+      "target_weights": {
+       "additionalProperties": true,
+       "description": "Target portfolio weights {symbol: weight_fraction}.",
+       "title": "Target Weights",
+       "type": "object"
+      }
+     },
+     "required": [
+      "equity",
+      "high_water_mark",
+      "target_weights"
+     ],
+     "title": "plan_rebalanceArguments",
+     "type": "object"
+    },
+    "name": "warden.plan_rebalance",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "circuit_breaker_tripped": {
+       "title": "Circuit Breaker Tripped",
+       "type": "boolean"
+      },
+      "drawdown_pct": {
+       "title": "Drawdown Pct",
+       "type": "number"
+      },
+      "effective_target_weights": {
+       "additionalProperties": true,
+       "title": "Effective Target Weights",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "house_floors": {
+       "additionalProperties": true,
+       "title": "House Floors",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "psi_drift_tripped": {
+       "title": "Psi Drift Tripped",
+       "type": "boolean"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "sequenced_plan": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Sequenced Plan",
+       "type": "array"
+      },
+      "skipped_within_drift_band": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Skipped Within Drift Band",
+       "type": "array"
+      },
+      "spread_violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Spread Violations",
+       "type": "array"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "PlanRebalanceOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "challenger_genome": {
+       "additionalProperties": true,
+       "description": "The challenger genome under evaluation.",
+       "title": "Challenger Genome",
+       "type": "object"
+      },
+      "champion_genome": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional current champion genome; mutation tiers vs it are reported.",
+       "title": "Champion Genome"
+      }
+     },
+     "required": [
+      "challenger_genome"
+     ],
+     "title": "request_promotion_verdictArguments",
+     "type": "object"
+    },
+    "name": "warden.promotion_verdict",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "audit_request": {
+       "additionalProperties": true,
+       "title": "Audit Request",
+       "type": "object"
+      },
+      "cloud_job": {
+       "additionalProperties": true,
+       "title": "Cloud Job",
+       "type": "object"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "missing_inputs": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Missing Inputs",
+       "type": "array"
+      },
+      "regimes_required": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Regimes Required",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "why": {
+       "title": "Why",
+       "type": "string"
+      }
+     },
+     "title": "PromotionVerdictOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "genome": {
+       "additionalProperties": true,
+       "description": "Genome object (bounded schema, versioned).",
+       "title": "Genome",
+       "type": "object"
+      }
+     },
+     "required": [
+      "genome"
+     ],
+     "title": "validate_genomeArguments",
+     "type": "object"
+    },
+    "name": "warden.validate_genome",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Errors",
+       "type": "array"
+      },
+      "evaluated_schema_version": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Evaluated Schema Version"
+      },
+      "genome_hash": {
+       "title": "Genome Hash",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "schema_version": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Schema Version"
+      },
+      "schema_version_current": {
+       "title": "Schema Version Current",
+       "type": "integer"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "valid": {
+       "title": "Valid",
+       "type": "boolean"
+      }
+     },
+     "title": "ValidateGenomeOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "current_positions": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional {symbol: notional} map of current positions.",
+       "title": "Current Positions"
+      },
+      "equity": {
+       "description": "Account equity (base currency) used for the exposure floors.",
+       "exclusiveMinimum": 0.0,
+       "title": "Equity",
+       "type": "number"
+      },
+      "floor_overrides": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional per-fund overrides {max_position_pct, max_gross_exposure_pct}; the response always reports the deviation from the house floors.",
+       "title": "Floor Overrides"
+      },
+      "order": {
+       "additionalProperties": true,
+       "description": "Proposed order: {symbol, notional, side: buy|sell}.",
+       "title": "Order",
+       "type": "object"
+      }
+     },
+     "required": [
+      "order",
+      "equity"
+     ],
+     "title": "validate_orderArguments",
+     "type": "object"
+    },
+    "name": "warden.validate_order",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "fund_overrides": {
+       "additionalProperties": true,
+       "title": "Fund Overrides",
+       "type": "object"
+      },
+      "house_floors": {
+       "additionalProperties": true,
+       "title": "House Floors",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "post_gross_pct": {
+       "title": "Post Gross Pct",
+       "type": "number"
+      },
+      "post_position_pct": {
+       "title": "Post Position Pct",
+       "type": "number"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "rejection_quote": {
+       "title": "Rejection Quote",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Violations",
+       "type": "array"
+      }
+     },
+     "title": "ValidateOrderOut",
+     "type": "object"
+    }
+   }
+  ]
+ }
+}

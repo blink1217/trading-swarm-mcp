@@ -14,6 +14,8 @@ from swarm_mcp import vendor_path  # noqa: F401
 
 from gates import MAX_PBO, MIN_DSR_MARGIN, MIN_EPISODES, REGIMES  # vendored
 from genome_schema import genome_hash, validate_genome  # vendored
+
+from swarm_mcp import genome_compat
 from gym.regime import (  # vendored alpha
     episode_pool,
     episode_seed_matrix,
@@ -184,8 +186,17 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
                                    "symbols": symbols, "bars": bars, "min_symbols": min_symbols})
 
     async def _do():
-        errors = validate_genome(genome)
-        gh = genome_hash(genome)
+        normalized, errors = genome_compat.normalize_for_validation(genome)
+        # Tier diffs must compare EVALUATION copies: a raw-v2 challenger vs a
+        # normalized-v3 champion would diff on schema_version, an undeclared
+        # gene path that the tier resolver fail-closes to tier C.
+        champ_eval = None
+        if champion_genome is not None:
+            champ_norm_genome, champ_norm_errors = genome_compat.normalize_for_validation(champion_genome)
+            champ_eval = champ_norm_genome if not champ_norm_errors else champion_genome
+        gh = genome_compat.genome_hash_canonical(genome)
+        if not errors:
+            errors = validate_genome(normalized)
         if errors:
             return {"tool": "gym.probe_fragility", "valid_genome": False, "errors": errors,
                     "genome_hash": gh}
@@ -198,7 +209,7 @@ async def probe_fragility(genome: dict, champion_genome: dict | None = None,
         matrix = episode_seed_matrix(pool, use_seeds, per_regime)
 
         try:
-            run = evaluate_genome(panel, matrix, genome, use_seeds, champion_genome=champion_genome)
+            run = evaluate_genome(panel, matrix, normalized, use_seeds, champion_genome=champ_eval)
         except TierScoringRefusal as e:
             out = envelope.indeterminate_local(
                 genome_hash=gh,
@@ -261,9 +272,13 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
                                    "symbols": symbols, "bars": bars, "min_symbols": min_symbols})
 
     async def _do():
-        errors = validate_genome(champion_genome) + validate_genome(challenger_genome)
-        champ_h = genome_hash(champion_genome)
-        chal_h = genome_hash(challenger_genome)
+        champ_norm, champ_errors = genome_compat.normalize_for_validation(champion_genome)
+        chal_norm, chal_errors = genome_compat.normalize_for_validation(challenger_genome)
+        errors = champ_errors + chal_errors
+        champ_h = genome_compat.genome_hash_canonical(champion_genome)
+        chal_h = genome_compat.genome_hash_canonical(challenger_genome)
+        if not errors:
+            errors = validate_genome(champ_norm) + validate_genome(chal_norm)
         if errors:
             return {"tool": "gym.paired_preview", "valid_genomes": False, "errors": errors,
                     "champion_hash": champ_h, "challenger_hash": chal_h}
@@ -276,9 +291,9 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
         matrix = episode_seed_matrix(pool, use_seeds, per_regime)
 
         try:
-            champ_run = evaluate_genome(panel, matrix, champion_genome, use_seeds)
-            chal_run = evaluate_genome(panel, matrix, challenger_genome, use_seeds,
-                                       champion_genome=champion_genome)
+            champ_run = evaluate_genome(panel, matrix, champ_norm, use_seeds)
+            chal_run = evaluate_genome(panel, matrix, chal_norm, use_seeds,
+                                       champion_genome=champ_norm)
         except TierScoringRefusal as e:
             out = envelope.indeterminate_local(
                 genome_hash=chal_h,
@@ -384,3 +399,378 @@ async def estimate_cloud_run(seeds: list[int] | None = None, per_regime: int = 4
         }
 
     return await run_tool("gym.estimate_cloud_run", _do)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: ExpressionGraph DAG Strategy Evaluation (strategy-spec-v3)
+# ---------------------------------------------------------------------------
+
+GRAPH_OPERATOR_ABI = "graph-ops-v2"
+GRAPH_MAX_NODES = 12
+GRAPH_ALLOWED_METRICS = {
+    "mom_20d": "mom_20d",
+    "mom_5d": "mom_5d",
+    "rsi_14": "rsi_14",
+    "atr_pct": "atr_pct",
+    "vol_ratio_20d": "vol_ratio_20",
+    "vol_ratio_20": "vol_ratio_20",
+    "breakout_dist_20d": "breakout_dist_20d",
+}
+GRAPH_WINDOW_OPS = ("mean", "std", "min", "max", "sum", "ema", "rank")
+GRAPH_UNARY_OPS = ("neg", "abs", "sigmoid", "tanh", "clip01", "lag")
+GRAPH_BINARY_OPS = ("add", "sub", "mul", "div", "min", "max")
+GRAPH_CS_OPS = ("rank", "zscore")
+GRAPH_CROWD_OPS = ("crowd_fade", "minority_game")
+GRAPH_READOUT_OPS = ("weighted_sum_then_clip01", "weighted_sum_then_rank", "weighted_sum_then_sigmoid")
+
+
+def _canonical_graph_hash(graph: dict) -> str:
+    import hashlib
+    import json
+
+    blob = json.dumps(graph, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _validate_and_toposort_graph(graph: dict) -> tuple[list[dict], list[str]]:
+    errors: list[str] = []
+    if not isinstance(graph, dict):
+        return [], ["graph must be a dict"]
+    nodes = graph.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return [], ["graph.nodes must be a non-empty list"]
+    if len(nodes) > GRAPH_MAX_NODES:
+        errors.append(f"graph has {len(nodes)} nodes; max is {GRAPH_MAX_NODES} (GRAPH_MAX_NODES)")
+
+    by_id: dict[str, dict] = {}
+    readout_count = 0
+    for n in nodes:
+        if not isinstance(n, dict) or not n.get("id") or not n.get("kind"):
+            errors.append("every node must be a dict with 'id' and 'kind'")
+            continue
+        nid = str(n["id"])
+        if nid in by_id:
+            errors.append(f"duplicate node id: {nid}")
+        by_id[nid] = n
+        kind = str(n["kind"])
+        if kind == "input":
+            m = str(n.get("metric_id", ""))
+            if m not in GRAPH_ALLOWED_METRICS:
+                errors.append(f"node {nid}: unknown metric_id {m!r}; allowed: {sorted(GRAPH_ALLOWED_METRICS)}")
+        elif kind == "window":
+            if n.get("op") not in GRAPH_WINDOW_OPS:
+                errors.append(f"node {nid}: unknown window op {n.get('op')!r}")
+            w = int(n.get("window", 0) or 0)
+            if w < 2 or w > 252:
+                errors.append(f"node {nid}: window must be in [2, 252]")
+        elif kind == "unary":
+            if n.get("op") not in GRAPH_UNARY_OPS:
+                errors.append(f"node {nid}: unknown unary op {n.get('op')!r}")
+        elif kind == "binary":
+            if n.get("op") not in GRAPH_BINARY_OPS:
+                errors.append(f"node {nid}: unknown binary op {n.get('op')!r}")
+            ins = n.get("inputs")
+            if not isinstance(ins, list) or len(ins) != 2:
+                errors.append(f"node {nid}: binary node requires exactly 2 inputs")
+        elif kind == "weighted":
+            ins = n.get("inputs") or []
+            wts = n.get("weights") or []
+            if not ins or len(ins) != len(wts):
+                errors.append(f"node {nid}: weighted node requires matching non-empty inputs and weights")
+            elif any(float(w) <= 0 for w in wts):
+                errors.append(f"node {nid}: weighted node weights must be > 0")
+        elif kind == "cross_sectional":
+            if n.get("op") not in GRAPH_CS_OPS:
+                errors.append(f"node {nid}: unknown cross_sectional op {n.get('op')!r}")
+        elif kind == "crowd":
+            if n.get("op") not in GRAPH_CROWD_OPS:
+                errors.append(f"node {nid}: unknown crowd op {n.get('op')!r}")
+        elif kind == "readout":
+            readout_count += 1
+            if n.get("op") not in GRAPH_READOUT_OPS:
+                errors.append(f"node {nid}: unknown readout op {n.get('op')!r}")
+            ins = n.get("inputs") or []
+            wts = n.get("weights") or []
+            if not ins or len(ins) != len(wts):
+                errors.append(f"node {nid}: readout requires matching non-empty inputs and weights")
+        else:
+            errors.append(f"node {nid}: unsupported kind {kind!r}")
+
+    if readout_count != 1:
+        errors.append(f"graph must contain exactly 1 readout node (found {readout_count})")
+    if errors:
+        return [], errors
+
+    def _deps(node: dict) -> list[str]:
+        k = node["kind"]
+        if k == "input":
+            return []
+        if k in ("window", "unary", "cross_sectional", "crowd"):
+            return [str(node.get("input", ""))]
+        return [str(x) for x in (node.get("inputs") or [])]
+
+    for nid, node in by_id.items():
+        for dep in _deps(node):
+            if dep not in by_id:
+                errors.append(f"node {nid} references missing input node {dep!r}")
+    if errors:
+        return [], errors
+
+    visited: dict[str, int] = {}
+    ordered: list[dict] = []
+
+    def _dfs(nid: str) -> bool:
+        state = visited.get(nid, 0)
+        if state == 1:
+            return False  # cycle
+        if state == 2:
+            return True
+        visited[nid] = 1
+        for dep in _deps(by_id[nid]):
+            if not _dfs(dep):
+                return False
+        visited[nid] = 2
+        ordered.append(by_id[nid])
+        return True
+
+    for nid in by_id:
+        if visited.get(nid, 0) == 0:
+            if not _dfs(nid):
+                return [], ["graph contains a dependency cycle (must be a DAG)"]
+
+    return ordered, []
+
+
+def _eval_graph_on_panel(panel: pd.DataFrame, ordered_nodes: list[dict]) -> pd.DataFrame:
+    """Evaluate a validated ExpressionGraph DAG causally across all (ts, symbol) rows."""
+    df = panel.sort_values(["symbol", "ts"]).copy()
+    node_values: dict[str, pd.Series] = {}
+
+    for node in ordered_nodes:
+        nid = str(node["id"])
+        kind = str(node["kind"])
+        if kind == "input":
+            col = GRAPH_ALLOWED_METRICS[str(node["metric_id"])]
+            direction = float(node.get("direction", 1))
+            s = pd.to_numeric(df.get(col, pd.Series(0.0, index=df.index)), errors="coerce").fillna(0.0) * direction
+            if col == "rsi_14":
+                s = (s - 50.0) / 50.0
+            node_values[nid] = s
+        elif kind == "window":
+            src = node_values[str(node["input"])]
+            w = int(node["window"])
+            op = str(node["op"])
+            grp = src.groupby(df["symbol"], group_keys=False)
+            if op == "mean":
+                out = grp.transform(lambda x: x.rolling(w, min_periods=1).mean())
+            elif op == "std":
+                out = grp.transform(lambda x: x.rolling(w, min_periods=2).std().fillna(0.0))
+            elif op == "min":
+                out = grp.transform(lambda x: x.rolling(w, min_periods=1).min())
+            elif op == "max":
+                out = grp.transform(lambda x: x.rolling(w, min_periods=1).max())
+            elif op == "sum":
+                out = grp.transform(lambda x: x.rolling(w, min_periods=1).sum())
+            elif op == "ema":
+                out = grp.transform(lambda x: x.ewm(span=w, adjust=False).mean())
+            else:  # rank
+                out = grp.transform(lambda x: x.rolling(w, min_periods=2).apply(
+                    lambda a: float(np.mean(a <= a[-1])), raw=True).fillna(0.5))
+            node_values[nid] = out.fillna(0.0)
+        elif kind == "unary":
+            src = node_values[str(node["input"])]
+            op = str(node["op"])
+            if op == "neg":
+                node_values[nid] = -src
+            elif op == "abs":
+                node_values[nid] = src.abs()
+            elif op == "sigmoid":
+                node_values[nid] = 1.0 / (1.0 + np.exp(-np.clip(src, -20.0, 20.0)))
+            elif op == "tanh":
+                node_values[nid] = np.tanh(np.clip(src, -20.0, 20.0))
+            elif op == "clip01":
+                node_values[nid] = np.clip(src, 0.0, 1.0)
+            else:  # lag
+                lag_n = max(1, int((node.get("params") or {}).get("periods", 1)))
+                node_values[nid] = src.groupby(df["symbol"], group_keys=False).shift(lag_n).fillna(0.0)
+        elif kind == "binary":
+            a = node_values[str(node["inputs"][0])]
+            b = node_values[str(node["inputs"][1])]
+            op = str(node["op"])
+            if op == "add":
+                node_values[nid] = a + b
+            elif op == "sub":
+                node_values[nid] = a - b
+            elif op == "mul":
+                node_values[nid] = a * b
+            elif op == "div":
+                node_values[nid] = a / np.where(np.abs(b) < 1e-6, 1e-6, b)
+            elif op == "min":
+                node_values[nid] = np.minimum(a, b)
+            else:
+                node_values[nid] = np.maximum(a, b)
+        elif kind == "weighted":
+            ins = [node_values[str(i)] for i in node["inputs"]]
+            wts = [float(w) for w in node["weights"]]
+            tot_w = sum(abs(w) for w in wts) or 1.0
+            acc = pd.Series(0.0, index=df.index)
+            for s_in, w in zip(ins, wts):
+                acc = acc + s_in * (w / tot_w)
+            node_values[nid] = acc
+        elif kind == "cross_sectional":
+            src = node_values[str(node["input"])]
+            op = str(node["op"])
+            grp = src.groupby(df["ts"], group_keys=False)
+            if op == "rank":
+                node_values[nid] = grp.rank(pct=True).fillna(0.5)
+            else:
+                node_values[nid] = grp.transform(
+                    lambda x: (x - x.mean()) / (x.std() if x.std() and x.std() > 1e-8 else 1.0)
+                ).fillna(0.0)
+        elif kind == "crowd":
+            src = node_values[str(node["input"])]
+            op = str(node["op"])
+            # Counter-crowd dampening when signal exceeds 90th percentile saturation
+            if op == "crowd_fade":
+                node_values[nid] = src * np.exp(-0.5 * np.square(src))
+            else:  # minority_game
+                node_values[nid] = np.tanh(src) - 0.5 * np.power(np.tanh(src), 3)
+        elif kind == "readout":
+            ins = [node_values[str(i)] for i in node["inputs"]]
+            wts = [float(w) for w in node["weights"]]
+            tot_w = sum(abs(w) for w in wts) or 1.0
+            raw = pd.Series(0.0, index=df.index)
+            for s_in, w in zip(ins, wts):
+                raw = raw + s_in * (w / tot_w)
+            op = str(node["op"])
+            if op == "weighted_sum_then_clip01":
+                readout = np.clip(0.5 + 0.5 * np.tanh(raw), 0.0, 1.0)
+            elif op == "weighted_sum_then_rank":
+                readout = raw.groupby(df["ts"], group_keys=False).rank(pct=True).fillna(0.5)
+            else:
+                readout = 1.0 / (1.0 + np.exp(-np.clip(raw, -20.0, 20.0)))
+            df["graph_readout"] = readout
+
+    return df
+
+
+async def evaluate_graph(
+    graph: dict,
+    seeds: list[int] | None = None,
+    per_regime: int = 2,
+    symbols: list[str] | None = None,
+    bars: list[dict] | None = None,
+    min_symbols: int = 8,
+) -> dict:
+    """Replay a declarative ExpressionGraph DAG (strategy-spec-v3) over the capped
+    episode-seed matrix across the 5 causal market regimes.
+    """
+    redaction.reject_keylike_args({
+        "graph": graph, "seeds": seeds, "per_regime": per_regime,
+        "symbols": symbols, "bars": bars, "min_symbols": min_symbols,
+    })
+
+    async def _do():
+        ordered_nodes, errors = _validate_and_toposort_graph(graph)
+        gh = _canonical_graph_hash(graph) if isinstance(graph, dict) else ""
+        if errors:
+            return {
+                "tool": "gym.evaluate_graph",
+                "valid_graph": False,
+                "errors": errors,
+                "graph_hash": gh,
+                "operator_abi": GRAPH_OPERATOR_ABI,
+            }
+
+        use_seeds = list(seeds) if seeds else [0, 1]
+        _check_caps(use_seeds, per_regime)
+
+        panel = _load_panel(symbols, bars)
+        labels = label_all_regimes(panel)
+        pool = episode_pool(panel, labels, min_symbols=min_symbols)
+        matrix = episode_seed_matrix(pool, use_seeds, per_regime)
+
+        scored_df = _eval_graph_on_panel(panel, ordered_nodes)
+        top_k = max(1, min(int(graph.get("top_k", 2) or 2), 6))
+        min_conviction = float(graph.get("min_readout", 0.52) or 0.52)
+        round_trip_cost_bps = 24.0  # house_v3 pessimistic fill model
+
+        # Precompute 5-session forward gross return per (symbol, ts) for episode scoring
+        scored_df["fwd_5d_close"] = scored_df.groupby("symbol")["close"].shift(-5)
+        scored_df["fwd_5d_bps"] = ((scored_df["fwd_5d_close"] - scored_df["close"]) / scored_df["close"]) * 10000.0
+
+        episodes_out: list[dict] = []
+        prev_selected: set[str] = set()
+        turnovers: list[float] = []
+
+        for seed_val, ep_list in matrix.items():
+            for ep in ep_list:
+                ep_ts = pd.Timestamp(ep["date"])
+                slice_df = scored_df[scored_df["ts"] == ep_ts].dropna(subset=["graph_readout", "fwd_5d_bps"])
+                if slice_df.empty:
+                    continue
+                # Deterministic seed tie-breaker jitter (1e-6) + sub-universe sampling
+                rng = np.random.default_rng(int(seed_val) + 1000)
+                keep_n = max(top_k, int(math.ceil(0.85 * len(slice_df))))
+                chosen_idx = rng.choice(slice_df.index.to_numpy(), size=min(len(slice_df), keep_n), replace=False)
+                sub = slice_df.loc[chosen_idx].sort_values("graph_readout", ascending=False)
+                active = sub[sub["graph_readout"] >= min_conviction].head(top_k)
+
+                cur_syms = set(active["symbol"].tolist())
+                if not prev_selected and not cur_syms:
+                    turnover = 0.0
+                else:
+                    union_n = max(1, len(prev_selected | cur_syms))
+                    turnover = len(prev_selected ^ cur_syms) / union_n * 100.0
+                turnovers.append(turnover)
+                prev_selected = cur_syms
+
+                if active.empty:
+                    net_bps = 0.0
+                else:
+                    gross_bps = float(active["fwd_5d_bps"].mean())
+                    net_bps = gross_bps - round_trip_cost_bps
+
+                episodes_out.append({
+                    "date": str(ep_ts.date()),
+                    "regime": ep["regime"],
+                    "seed": int(seed_val),
+                    "weekly_net_bps": round(net_bps, 2),
+                    "selected_count": int(len(active)),
+                })
+
+        regime_means = _regime_scores(episodes_out)
+        worst = min(regime_means, key=regime_means.get) if any(regime_means.values()) else None
+        n = len(episodes_out)
+        mean_bps = round(float(np.mean([e["weekly_net_bps"] for e in episodes_out])), 2) if episodes_out else 0.0
+        avg_to = round(float(np.mean(turnovers)), 2) if turnovers else 0.0
+
+        return {
+            "tool": "gym.evaluate_graph",
+            "verdict": "GRAPH_FRAGILITY_REPORT — local tools never issue promotion verdicts",
+            "valid_graph": True,
+            "errors": [],
+            "graph_hash": gh,
+            "operator_abi": GRAPH_OPERATOR_ABI,
+            "node_count": len(ordered_nodes),
+            "n_episodes": n,
+            "seeds": use_seeds,
+            "per_regime": per_regime,
+            "mean_weekly_bps": mean_bps,
+            "per_regime_bps": {k: round(v, 2) for k, v in regime_means.items()},
+            "worst_regime": worst,
+            "worst_regime_bps": round(regime_means[worst], 2) if worst else None,
+            "turnover_pct_avg": avg_to,
+            "underpowered": n < MIN_EPISODES,
+            "power_note": (
+                f"n={n} < MIN_EPISODES={MIN_EPISODES}: no conclusion about promotion is "
+                "possible from this sample — by design"
+                if n < MIN_EPISODES else
+                "episode count meets MIN_EPISODES, but PBO/DSR inputs still require the hosted side"
+            ),
+            "depth": _depth_meta(panel),
+            "cloud_job": envelope.cloud_job_block(gh, use_seeds, per_regime, reason=LOCAL_POWER_NOTE),
+        }
+
+    return await run_tool("gym.evaluate_graph", _do)
+

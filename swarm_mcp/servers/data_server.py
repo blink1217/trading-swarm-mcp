@@ -18,7 +18,7 @@ from swarm_mcp.server_meta import (
     SITE_URL,
     annotations,
 )
-from swarm_mcp.tools import climate_tools, data_tools, pit_tools
+from swarm_mcp.tools import alt_derived_tools, climate_tools, data_tools, pit_tools
 
 SERVER_TITLE = "Swarm Data MCP"
 SERVER_DESCRIPTION = (
@@ -90,6 +90,8 @@ class SentimentPulseOut(TypedDict, total=False):
     headline_count_7d: int
     earnings_within_3d: bool
     day_change_bucket: str
+    tone_bucket: str
+    tone_polarity_score: float | None
     provenance: dict
     not_investment_advice: bool
     learn_more: str
@@ -378,6 +380,11 @@ class VolumeForecastOut(TypedDict, total=False):
     horizon_bars: int
     forecast_ratio_to_20d_avg: float
     interval_p10_p90: list[float]
+    volume_regime: str
+    hurst_exponent: float
+    lyapunov_exponent: float
+    is_chaotic: bool
+    buy_volume_attractor_share: float
     note: str
     not_investment_advice: bool
     learn_more: str
@@ -415,6 +422,68 @@ class CrossSectionalRankOut(TypedDict, total=False):
     how: str
 
 
+class MarketFlowOut(TypedDict, total=False):
+    tool: str
+    source: str
+    flows: dict
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class MarketFundamentalsPitOut(TypedDict, total=False):
+    tool: str
+    source: str
+    fundamentals: dict
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class MarketMacroNowcastOut(TypedDict, total=False):
+    tool: str
+    as_of: str
+    source: str
+    macro_quadrant: str
+    vol_term_structure_state: str
+    short_to_medium_vol_ratio: float
+    positive_breadth_ratio: float
+    cross_sectional_dispersion_pct: float
+    risk_appetite_index: float
+    crisis_regime_probability: float
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class MarketTransferEntropyOut(TypedDict, total=False):
+    tool: str
+    as_of: str
+    source: str
+    window_sessions: int
+    pairs: list[dict]
+    leader_ranking: list[dict]
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
 @mcp.tool(
     name="market.regime",
     title="Regime Snapshot",
@@ -429,7 +498,8 @@ async def regime_snapshot(
                     "close, volume}] for symbols the shared cache does not carry.")] = None,
 ) -> RegimeSnapshotOut:
     """Free tool — causal regime label per symbol (high_vol / drawdown / chop /
-    melt_up / gap_heavy), derived from point-in-time bars with no lookahead.
+    melt_up / gap_heavy) from point-in-time bars with no lookahead. Includes
+    forward-filtered latent state posteriors and regime entropy.
     """
     return await data_tools.regime_snapshot(symbols=symbols, bars=bars)
 
@@ -468,8 +538,8 @@ async def volume_forecast(
         description="Number of sessions ahead to forecast (1-10).", ge=1, le=10)] = 1,
 ) -> VolumeForecastOut:
     """Derived-only volume forecast expressed as a ratio to the trailing 20-session
-    average, with a 10th-90th percentile interval. Never returns raw share counts.
-    Pro tool.
+    average, with a 10th-90th percentile interval. Includes Hurst persistence and
+    nonlinear phase-space Lyapunov diagnostics. Never returns raw share counts. Pro tool.
     """
     return await data_tools.volume_forecast(symbol=symbol, horizon_bars=horizon_bars)
 
@@ -516,6 +586,95 @@ async def cross_sectional_rank(
     list — no raw metric values returned. Pro tool.
     """
     return await data_tools.cross_sectional_rank(symbols=symbols, bars=bars, metric=metric)
+
+
+@mcp.tool(
+    name="market.flow",
+    title="Institutional & Off-Exchange Flow",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_flow(
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional list of tickers to analyze via the shared cache/relay.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, "
+                    "close, volume}].")] = None,
+    as_of: Annotated[str | None, Field(
+        description="Optional point-in-time cutoff date (YYYY-MM-DD).")] = None,
+) -> MarketFlowOut:
+    """Returns derived off-exchange absorption percentiles, short-pressure z-scores,
+    realized tail-skew percentiles, and institutional flow regimes per symbol.
+    Never returns raw share counts or prices. Pro tool.
+    """
+    return await alt_derived_tools.market_flow(symbols=symbols, bars=bars, as_of=as_of)
+
+
+@mcp.tool(
+    name="market.fundamentals_pit",
+    title="Point-in-Time Fundamental Quality",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_fundamentals_pit(
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional list of tickers to evaluate via the shared cache/relay.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, "
+                    "close, volume}].")] = None,
+    as_of: Annotated[str | None, Field(
+        description="Optional point-in-time cutoff date (YYYY-MM-DD); records after this date are masked.")] = None,
+) -> MarketFundamentalsPitOut:
+    """Returns bitemporal scale-free profitability efficiency, balance-sheet resilience,
+    and growth acceleration percentiles strictly dated on or before as_of. Includes
+    filing/insider tone buckets and never echoes raw accounting dollar figures. Pro tool.
+    """
+    return await alt_derived_tools.market_fundamentals_pit(symbols=symbols, bars=bars, as_of=as_of)
+
+
+@mcp.tool(
+    name="market.macro_nowcast",
+    title="Macro & Volatility Regime Nowcast",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_macro_nowcast(
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional universe of tickers used to estimate breadth and dispersion.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, "
+                    "close, volume}].")] = None,
+    as_of: Annotated[str | None, Field(
+        description="Optional point-in-time cutoff date (YYYY-MM-DD).")] = None,
+) -> MarketMacroNowcastOut:
+    """Returns the point-in-time macroeconomic quadrant, volatility term-structure state,
+    cross-sectional dispersion, risk-appetite index, and latent crisis probability.
+    Derived ratios only; never echoes raw prices. Pro tool.
+    """
+    return await alt_derived_tools.market_macro_nowcast(symbols=symbols, bars=bars, as_of=as_of)
+
+
+@mcp.tool(
+    name="market.transfer_entropy",
+    title="Directed Cross-Asset Information Flow",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_transfer_entropy(
+    symbols: Annotated[list[str] | None, Field(
+        description="Tickers (at least 2) to test for directed lead-lag information flow.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, "
+                    "close, volume}].")] = None,
+    window: Annotated[int, Field(
+        description="Trailing session window for transfer entropy estimation (25-252).",
+        ge=25, le=252)] = 60,
+) -> MarketTransferEntropyOut:
+    """Detects directed cross-asset information flow (Shannon Transfer Entropy in bits)
+    across symbol pairs against a 95th-percentile permutation noise floor.
+    Returns leader/follower rankings without raw prices. Pro tool.
+    """
+    return await alt_derived_tools.market_transfer_entropy(symbols=symbols, bars=bars, window=window)
 
 
 def main() -> None:

@@ -111,7 +111,8 @@ def _check(body: dict) -> None:
 
 
 async def fetch_bars(symbols: list[str], days: int, *,
-                     timeframe: str = "1Day", adjustment: str = "split") -> list[dict]:
+                     timeframe: str = "1Day", adjustment: str = "split",
+                     token: str | None = None) -> list[dict]:
     """Fetch the most-recent `days` split-adjusted bars per symbol via the relay.
 
     Returns the same row shape as bars_fetch.fetch_daily_bars so callers and the
@@ -121,13 +122,14 @@ async def fetch_bars(symbols: list[str], days: int, *,
     if not symbols:
         raise ValueError("no symbols given")
 
+    auth_token = token or _access_token()
     async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
         try:
             r = await client.post(
                 f"{relay_base()}/data/bars",
                 json={"symbols": symbols, "days": int(days),
                       "timeframe": timeframe, "adjustment": adjustment},
-                headers={"Authorization": f"Bearer {_access_token()}"},
+                headers={"Authorization": f"Bearer {auth_token}"},
             )
         except httpx.HTTPError as e:
             raise RelayError(
@@ -169,7 +171,7 @@ def _day_change_bucket(c, pc) -> str | None:
     return None
 
 
-async def fetch_enrichment(symbol: str) -> dict:
+async def fetch_enrichment(symbol: str, *, token: str | None = None) -> dict:
     """Fetch the AltData enrichment composite via the relay — DERIVED ONLY (M-04).
 
     The relay contract still returns raw quote/news from the site, but raw
@@ -181,12 +183,13 @@ async def fetch_enrichment(symbol: str) -> dict:
     if not symbol:
         raise ValueError("no symbol given")
 
+    auth_token = token or _access_token()
     async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
         try:
             r = await client.post(
                 f"{relay_base()}/data/enrich",
                 json={"symbol": symbol},
-                headers={"Authorization": f"Bearer {_access_token()}"},
+                headers={"Authorization": f"Bearer {auth_token}"},
             )
         except httpx.HTTPError as e:
             raise RelayError(

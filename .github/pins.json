@@ -13,7 +13,7 @@
       },
       "gym/panel.py": {
         "origin": "verbatim",
-        "sha256": "326eab9bdc64132629b98b072210eb5a3e214adaecaf79273bed14502b750a0a",
+        "sha256": "934bd62339092766615246fe42bcd51f605a7eb7028f5583371530f970b881d6",
         "source": "gym/panel.py"
       },
       "gym/policy_head.py": {
@@ -23,12 +23,12 @@
       },
       "gym/regime.py": {
         "origin": "verbatim",
-        "sha256": "b011685de84bc4a99a8e0ac5c02e8e644098457c335326da43dac8930ca54074",
+        "sha256": "b6b891bdf38e125d599ae94c4a29b3515ad4ac9530bd01c009c931ed5e27c512",
         "source": "gym/regime.py"
       },
       "gym/simulator.py": {
         "origin": "verbatim",
-        "sha256": "920eb0e01665048e600ad278d8f068c2861fdff5f572378e673f5eb04a3cfb63",
+        "sha256": "5ff44829fe4023d525562c17dcf418b52cb55b65a848e22378c5dd1cdbdc12db",
         "source": "gym/simulator.py"
       },
       "order_checks.py": {
@@ -48,7 +48,7 @@
       }
     },
     "repo": "blink1217/trading-swarm-alpha",
-    "sha": "436b2b1781903821da7d43778c42f560dd115468"
+    "sha": "79fffef16fbd693d8ff7714d0d2dedf73971e58d"
   },
   "guardrails": {
     "files": {
@@ -58,22 +58,22 @@
       },
       "fill_model.py": {
         "origin": "verbatim",
-        "sha256": "fda8ee5a16ab3f7ab8de892cf2013267ec30f29ddae4c9415ee21506dcbcc724"
+        "sha256": "095614c1bb16591f18a464b5233ff3de8f3c4d2dcd93fce639e94bf16c1660fb"
       },
       "gates.py": {
         "excluded": [
           "should_promote"
         ],
         "origin": "stripped",
-        "sha256": "877bacb71562246eea023d7b99bdff56cbb28cf6fe408f4eeaef4e0e6b625250"
+        "sha256": "b621284673f59596569692404642fd7b86d7825ed503c25d3f1c5a29d51bc9d5"
       },
       "genome_schema.json": {
         "origin": "verbatim",
-        "sha256": "d9b4dcd5e7bea90146061dbd715f79b9f37d074d5095ea9b4e8f9734fa866a71"
+        "sha256": "2b99528e1e02042768f1eb139716625e085ce84cf283882d96b5235ef07089a2"
       },
       "genome_schema.py": {
         "origin": "verbatim",
-        "sha256": "afbb548d4a86ac6ef4ee9fc7e76f5c41748d96fbf52c288b40761b9494986aed"
+        "sha256": "52fbff4e6ebc150609d17e3200cd6daab6635f1abc97fb310f7f0b116ee1bc7c"
       },
       "objective.py": {
         "excluded": [
@@ -82,7 +82,7 @@
           "score"
         ],
         "origin": "stripped",
-        "sha256": "93c6dc728709748a059fc4b68716f6e9aae825054a7f969c0a19ee2331bb74f7"
+        "sha256": "9532ece1e20c6720c419959945b81665b5940bf8eeaddececb452a82e5206a37"
       },
       "provenance.py": {
         "origin": "verbatim",
@@ -94,14 +94,14 @@
       }
     },
     "repo": "blink1217/trading-swarm-guardrails",
-    "sha": "b3654b98ede3a9c8144a325dda8dcf6ef11fa0f7"
+    "sha": "bb3572b44dddd47c2bef32b1b7f2f664cbc220e7"
   },
   "local": {
     "guardrails/LICENSE.md": "241d6017bd540a69f6754f9d6aad817f737e9a7907ec8a3b1600b3a5648c7bbe",
     "guardrails/guardrails_path_shim": "2ce8fd8fb8cb623ecc0222756e38f053b747a1f446644fbef81a3a2d67f2beed"
   },
   "schema": 1,
-  "vendored_at": "2026-09-01T11:08:41.298216+00:00",
+  "vendored_at": "2026-10-06T18:40:04.148648+00:00",
   "volpred": {
     "files": {
       "microstructure.py": {

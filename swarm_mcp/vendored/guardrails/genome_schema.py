@@ -13,7 +13,7 @@ import os
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(_HERE, "genome_schema.json")
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 def load_schema(path: str | None = None) -> dict:

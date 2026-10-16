@@ -197,7 +197,10 @@ async def build_features(symbol: str, as_of: str) -> dict:
                                        "source": BAR_SOURCE, "as_of": str(as_of_ts.date()),
                                        "status": status})
 
-        enrich = db.latest_enrichment(cache_enrich.PROVIDER, sym, cache_enrich.KIND)
+        enrich = db.latest_enrichment(
+            cache_enrich.PROVIDER, sym, cache_enrich.KIND,
+            before=f"{as_of_ts.date()}T23:59:59Z~",
+        )
         if "earnings_flag" in FEATURE_ORDER:
             if enrich is not None and str(enrich["fetched_at"])[:10] <= str(as_of_ts.date()):
                 vector["earnings_flag"] = 1.0 if enrich.get("earnings_within_3d") else 0.0
@@ -214,6 +217,20 @@ async def build_features(symbol: str, as_of: str) -> dict:
                                        "as_of": str(as_of_ts.date()), "status": status})
 
         for name in ("altdata_sentiment", "finviz_score"):
+            if (
+                name == "altdata_sentiment"
+                and enrich is not None
+                and str(enrich["fetched_at"])[:10] <= str(as_of_ts.date())
+                and isinstance(enrich.get("sentiment_polarity", enrich.get("tone_polarity_score")), (int, float))
+            ):
+                pol_val = float(enrich.get("sentiment_polarity", enrich.get("tone_polarity_score")))
+                vector[name] = round(pol_val, 4)
+                provenance_entries.append({
+                    "name": name, "tier": feature_tier(name), "value": vector[name],
+                    "source": f"altdata_enrichment_cache (fetched_at {enrich['fetched_at']})",
+                    "as_of": str(as_of_ts.date()), "status": "OK",
+                })
+                continue
             vector[name] = None
             provenance_entries.append({
                 "name": name, "tier": feature_tier(name), "value": None,
@@ -389,7 +406,7 @@ async def sentiment_pulse(symbol: str) -> dict:
     """Derived-only sentiment/news snapshot — never returns raw quotes or headline text.
 
     Backed by the same enrichment source as enrich_symbol, but quantized to a
-    change bucket, a headline count, and an earnings flag only.
+    change bucket, a headline count, tone polarity bucket, and an earnings flag only.
     """
     redaction.reject_keylike_args({"symbol": symbol})
 
@@ -412,6 +429,16 @@ async def sentiment_pulse(symbol: str) -> dict:
                 day_change_bucket = (
                     "strong_up" if chg >= 0.03 else "up" if chg > 0.003 else
                     "strong_down" if chg <= -0.03 else "down" if chg < -0.003 else "flat")
+        raw_pol = payload.get("sentiment_polarity", payload.get("tone_polarity_score"))
+        tone_polarity = round(float(raw_pol), 4) if isinstance(raw_pol, (int, float)) else None
+        if tone_polarity is not None:
+            tone_bucket = "bullish" if tone_polarity >= 0.15 else "bearish" if tone_polarity <= -0.15 else "neutral"
+        elif day_change_bucket in ("strong_up", "up") and headline_count > 0:
+            tone_bucket = "constructive_attention"
+        elif day_change_bucket in ("strong_down", "down") and headline_count > 0:
+            tone_bucket = "adverse_attention"
+        else:
+            tone_bucket = "unscored"
         db.log_provenance("market.sentiment", sym, "derived",
                           f"from_cache={payload['from_cache']} — no raw quote/headline text returned")
         return {
@@ -421,6 +448,8 @@ async def sentiment_pulse(symbol: str) -> dict:
             "headline_count_7d": headline_count,
             "earnings_within_3d": bool(payload.get("earnings_within_3d")),
             "day_change_bucket": day_change_bucket,
+            "tone_bucket": tone_bucket,
+            "tone_polarity_score": tone_polarity,
             "provenance": {"tier": "B",
                            "note": "quantized/derived only — no raw quote values or headline text exposed"},
             "not_investment_advice": True,
@@ -486,11 +515,13 @@ def _pct_rank(series: pd.Series, value) -> float | None:
 
 async def regime_snapshot(symbols: list[str] | None = None, bars: list[dict] | None = None) -> dict:
     """Derived-only causal regime labels (high_vol / drawdown / chop / melt_up /
-    gap_heavy) per symbol. Free tool — the public wrapper over the regime labeller.
+    gap_heavy) plus forward-filtered latent regime posteriors per symbol. Free tool.
     """
     redaction.reject_keylike_args({"symbols": symbols, "bars": bars})
 
     async def _do():
+        from swarm_mcp.tools.alt_derived_tools import causal_regime_posteriors
+
         panel, syms, source_note = await _load_panel(symbols, bars)
         try:
             regimes = label_all_regimes(panel)
@@ -503,19 +534,23 @@ async def regime_snapshot(symbols: list[str] | None = None, bars: list[dict] | N
                 out[sym] = {"status": "NO_DATA"}
                 continue
             row = g.iloc[-1]
+            posteriors, entropy = causal_regime_posteriors(g["close"])
             out[sym] = {
                 "as_of": str(pd.Timestamp(row["ts"]).date()),
                 "regime": regimes.get(row["ts"], "unknown") if regimes else "unknown",
+                "state_posteriors": posteriors,
+                "regime_entropy": entropy,
                 "session_count": int(len(g)),
             }
         get_db().log_provenance("market.regime", ",".join(syms), source_note,
-                                "causal regime labels only — no raw OHLCV returned")
+                                "causal regime labels and state posteriors only — no raw OHLCV returned")
         return {
             "tool": "market.regime",
             "source": source_note,
             "regimes": out,
-            "methodology": ("causal regime labels computed from point-in-time bars with no lookahead; "
-                            "raw open/high/low/close/volume are never echoed"),
+            "methodology": ("causal regime labels and forward-filtered latent state posteriors "
+                            "computed from point-in-time bars with no lookahead; raw open/high/low/close/volume "
+                            "are never echoed"),
             "not_investment_advice": True,
             "learn_more": access.SITE_URL,
         }
@@ -581,12 +616,14 @@ async def microstructure_snapshot(symbol: str | None = None, bars: list[dict] | 
 
 async def volume_forecast(symbol: str, horizon_bars: int = 1) -> dict:
     """Derived-only volume forecast for the next `horizon_bars` sessions, expressed
-    as a ratio to the trailing 20-session average volume (never raw share counts).
-    The interval is the recent 10th-90th percentile range of the volume ratio.
+    as a ratio to the trailing 20-session average volume (never raw share counts),
+    with phase-space k-NN projection, Hurst persistence, and Rosenstein Lyapunov chaos check.
     """
     redaction.reject_keylike_args({"symbol": symbol, "horizon_bars": horizon_bars})
 
     async def _do():
+        from swarm_mcp.tools.alt_derived_tools import phase_space_volume_forecast
+
         panel, syms, source_note = await _load_panel([symbol], None)
         g = panel[panel["symbol"] == syms[0]].sort_values("ts")
         if len(g) < 30:
@@ -594,20 +631,24 @@ async def volume_forecast(symbol: str, horizon_bars: int = 1) -> dict:
         vol = g["volume"].astype(float)
         avg20 = vol.rolling(20).mean()
         ratio = (vol / avg20).replace([float("inf"), float("-inf")], float("nan")).dropna()
-        recent = ratio.tail(60)
-        lo, hi = recent.quantile([0.10, 0.90])
-        forecast_ratio = float(ratio.iloc[-1]) if len(ratio) else None
+        ps = phase_space_volume_forecast(ratio, g["close"], horizon_bars=horizon_bars)
         get_db().log_provenance("volume.forecast", syms[0], source_note,
-                                "forecast expressed as a ratio to trailing 20-session average — no raw counts")
+                                f"horizon_bars={horizon_bars} phase-space+HAR forecast ratio — no raw counts")
         return {
             "tool": "volume.forecast",
             "symbol": syms[0],
             "as_of": str(pd.Timestamp(g["ts"].iloc[-1]).date()),
             "horizon_bars": horizon_bars,
-            "forecast_ratio_to_20d_avg": None if forecast_ratio is None else round(forecast_ratio, 3),
-            "interval_p10_p90": [round(float(lo), 3), round(float(hi), 3)],
+            "forecast_ratio_to_20d_avg": ps["forecast_ratio"],
+            "interval_p10_p90": ps["interval_p10_p90"],
+            "volume_regime": ps["volume_regime"],
+            "hurst_exponent": ps["hurst_exponent"],
+            "lyapunov_exponent": ps["lyapunov_exponent"],
+            "is_chaotic": ps["is_chaotic"],
+            "buy_volume_attractor_share": ps["buy_volume_attractor_share"],
             "note": ("a forecast ratio of 1.2 means volume ~20% above the trailing 20-session average; "
-                     "the interval is the recent 10th-90th percentile band. No raw share counts are returned."),
+                     "computed via delay-embedding local neighborhood projection and multi-scale "
+                     "autoregressive decay over horizon_bars. No raw share counts are returned."),
             "not_investment_advice": True,
             "learn_more": access.SITE_URL,
         }

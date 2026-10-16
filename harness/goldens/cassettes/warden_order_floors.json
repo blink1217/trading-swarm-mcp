@@ -1,0 +1,9 @@
+{
+ "id": "warden_order_floors",
+ "prompt": "Check my order: buy $300k of S00 against $1m equity with a $350k S01 position. Then explain sizing at 100k equity, 2.5 ATR, $100 close.",
+ "expected_tools": ["warden.validate_order", "warden.explain_sizing"],
+ "tools_called": ["warden.validate_order", "warden.explain_sizing"],
+ "expected_verbatim": ["REJECTED", "REDUCED"],
+ "expected_refusal": true,
+ "response_text": "warden.validate_order answers REJECTED: position_pct 0.3000 > cap 0.25 and gross_pct 0.6500 > cap 0.6 (house floors max_position_pct=0.25, max_gross_exposure_pct=0.6). warden.explain_sizing answers REDUCED with reason position_cap:320->250. The warden cannot place, cancel, or route an order — it only checks."
+}

@@ -87,7 +87,8 @@ class ValidateGenomeOut(TypedDict, total=False):
     valid: bool
     errors: list[str]
     genome_hash: str
-    schema_version: int
+    schema_version: int | str | None
+    evaluated_schema_version: int | None
     schema_version_current: int
     note: str
     access: str
@@ -122,6 +123,47 @@ class PromotionVerdictOut(TypedDict, total=False):
     audit_request: dict
     cloud_job: dict
     regimes_required: list[str]
+    safety: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class OptimizePortfolioOut(TypedDict, total=False):
+    tool: str
+    verdict: str
+    method: str
+    target_weights: dict
+    cash_proxy_symbol: str
+    cash_sweep_weight: float
+    gross_risk_exposure_pct: float
+    estimated_portfolio_vol_annual: float
+    estimated_turnover_one_way: float
+    selected_risk_assets: list[str]
+    filtered_out: list[dict]
+    house_floors: dict
+    overrides_deviation: dict
+    provenance: str
+    safety: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class PlanRebalanceOut(TypedDict, total=False):
+    tool: str
+    verdict: str
+    drawdown_pct: float
+    circuit_breaker_tripped: bool
+    psi_drift_tripped: bool
+    effective_target_weights: dict
+    skipped_within_drift_band: list[str]
+    spread_violations: list[str]
+    sequenced_plan: list[dict]
+    house_floors: dict
+    provenance: str
     safety: str
     access: str
     error: str
@@ -292,6 +334,92 @@ async def request_promotion_verdict(
     """
     return await warden_tools.request_promotion_verdict(challenger_genome=challenger_genome,
                                                         champion_genome=champion_genome)
+
+
+@mcp.tool(
+    name="warden.optimize_portfolio",
+    title="Optimize Portfolio Weights",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def optimize_portfolio(
+    candidates: Annotated[list[dict], Field(
+        description="Candidate risk assets: [{symbol, momentum_score, realized_vol_annual, "
+                    "above_trend_sma?, chandelier_triggered?, current_weight?}].")],
+    method: Annotated[str, Field(
+        description="Allocation method: vol_target_momentum | hrp | mvo_shrinkage.")] = "vol_target_momentum",
+    cash_proxy_symbol: Annotated[str, Field(
+        description="Defensive cash proxy ticker receiving unallocated weight.")] = "SGOV",
+    cash_momentum_score: Annotated[float, Field(
+        description="Composite momentum score of the defensive cash proxy.")] = 0.0,
+    target_volatility: Annotated[float, Field(
+        description="Target annualized portfolio volatility (e.g. 0.12 for 12%).",
+        gt=0.0, le=1.0)] = 0.12,
+    top_k: Annotated[int, Field(
+        description="Maximum number of active risk slots to select.", ge=1, le=20)] = 2,
+    turnover_cap: Annotated[float, Field(
+        description="Maximum one-way portfolio turnover fraction per rebalance.",
+        gt=0.0, le=1.0)] = 0.50,
+    floor_overrides: Annotated[dict | None, Field(
+        description="Optional per-fund overrides {max_position_pct, max_gross_exposure_pct}.")] = None,
+) -> OptimizePortfolioOut:
+    """Computes volatility-targeted dual-momentum, hierarchical risk parity, or shrinkage
+    mean-variance portfolio weights under the house concentration and turnover caps.
+    Residual capital is swept to the defensive cash proxy; never places or routes trades. Pro tool.
+    """
+    return await warden_tools.optimize_portfolio(
+        candidates=candidates, method=method, cash_proxy_symbol=cash_proxy_symbol,
+        cash_momentum_score=cash_momentum_score, target_volatility=target_volatility,
+        top_k=top_k, turnover_cap=turnover_cap, floor_overrides=floor_overrides,
+    )
+
+
+@mcp.tool(
+    name="warden.plan_rebalance",
+    title="Pre-Trade Rebalance Risk Gate",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def plan_rebalance(
+    equity: Annotated[float, Field(
+        description="Current account equity in base currency.", gt=0.0)],
+    high_water_mark: Annotated[float, Field(
+        description="Portfolio historical high-water mark equity.", gt=0.0)],
+    target_weights: Annotated[dict, Field(
+        description="Target portfolio weights {symbol: weight_fraction}.")],
+    current_positions: Annotated[dict | None, Field(
+        description="Optional current position notionals {symbol: notional}.")] = None,
+    quotes: Annotated[dict | None, Field(
+        description="Optional quote snapshot {symbol: {bid, ask} or {mid, spread_bps}}.")] = None,
+    cash_proxy_symbol: Annotated[str, Field(
+        description="Defensive cash sweep ticker.")] = "SGOV",
+    max_drawdown_limit: Annotated[float, Field(
+        description="Maximum drawdown from high-water mark before circuit-breaker liquidation.",
+        gt=0.0, le=0.50)] = 0.12,
+    drift_threshold: Annotated[float, Field(
+        description="Minimum weight drift fraction required to trigger a rebalance step.",
+        ge=0.0, le=0.25)] = 0.03,
+    max_spread_bps: Annotated[float, Field(
+        description="Maximum allowed bid-ask spread in bps before rejecting execution.",
+        gt=0.0)] = 15.0,
+    limit_collar_bps: Annotated[float, Field(
+        description="Marketable limit price collar around midprice in bps.",
+        ge=0.0)] = 10.0,
+    feature_psi: Annotated[float, Field(
+        description="Optional Population Stability Index of input features (>0.25 halts risk additions).",
+        ge=0.0)] = 0.0,
+) -> PlanRebalanceOut:
+    """Checks the portfolio drawdown circuit breaker, feature drift guard, 3% turnover
+    drift buffer, and bid-ask spread gate. Sequences sell reductions before buy
+    additions with marketable limit collars; never routes trades.
+    """
+    return await warden_tools.plan_rebalance(
+        equity=equity, high_water_mark=high_water_mark, target_weights=target_weights,
+        current_positions=current_positions, quotes=quotes,
+        cash_proxy_symbol=cash_proxy_symbol, max_drawdown_limit=max_drawdown_limit,
+        drift_threshold=drift_threshold, max_spread_bps=max_spread_bps,
+        limit_collar_bps=limit_collar_bps, feature_psi=feature_psi,
+    )
 
 
 def main() -> None:

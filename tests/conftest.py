@@ -37,8 +37,9 @@ def _clean_cache_state(tmp_cache):
 def _access_bootstrap(monkeypatch):
     from swarm_mcp import access
 
-    monkeypatch.setenv("SWARM_MCP_ACCESS_TOKEN", "test-access-token")
-    monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "test-access-token")
+    if os.environ.get("HARNESS_HOSTED", "").strip() != "1":
+        monkeypatch.setenv("SWARM_MCP_ACCESS_TOKEN", "test-access-token")
+        monkeypatch.setenv("SWARM_MCP_LOCAL_TOKEN", "test-access-token")
     monkeypatch.delenv("SWARM_MCP_TOKEN_VERIFY_URL", raising=False)
     access.reset_access_cache()
     yield

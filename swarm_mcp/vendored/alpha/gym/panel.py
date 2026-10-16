@@ -54,14 +54,32 @@ def load_bars_bigquery(bq, project: str, dataset: str, min_ts: str | None = None
 
 
 def prepare_panel(bars: pd.DataFrame) -> pd.DataFrame:
-    """Compute causal technical features + evaluation-only forward return."""
+    """Compute causal technical features + evaluation-only forward returns.
+
+    A-10 (next-open fill): every evaluation-only forward column is measured
+    from the NEXT session's open, never from the decision session's close —
+    a decision made at the close of session t cannot fill before the open of
+    session t+1, so crediting the overnight gap fabricates return the strategy
+    could never capture. Columns (all evaluation-only, never decision inputs):
+
+      entry_open_next  open of session t+1 (the realistic fill price)
+      fwd_ret_5d       close[t+5] / entry_open_next − 1
+      ret_0            close[t+1] / open[t+1] − 1   (next-session intraday,
+                       the return an open fill earns before the first step close)
+      ret_k (k=1..5)   close[t+k] / close[t+k−1] − 1 (close-to-close returns of
+                       the K=5 step sessions after the decision)
+    """
     frames = []
     for symbol, g in bars.groupby("symbol"):
         g = g.sort_values("ts").reset_index(drop=True)
         if len(g) < 30:
             continue
         g["ret_1d"] = g["close"].pct_change()
-        g["fwd_ret_5d"] = g["close"].shift(-5) / g["close"] - 1.0
+        g["entry_open_next"] = g["open"].shift(-1)
+        g["fwd_ret_5d"] = g["close"].shift(-5) / g["entry_open_next"] - 1.0
+        g["ret_0"] = g["close"].shift(-1) / g["entry_open_next"] - 1.0
+        for k in range(1, 6):
+            g[f"ret_{k}"] = g["close"].shift(-k) / g["close"].shift(-(k - 1)) - 1.0
         g["atr_14"] = (g["high"] - g["low"]).rolling(14).mean()
         g["atr_pct"] = g["atr_14"] / g["close"]
         g["vwap_20"] = (g["close"] * g["volume"]).rolling(20).sum() / g["volume"].rolling(20).sum()

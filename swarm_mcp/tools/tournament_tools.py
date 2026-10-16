@@ -32,7 +32,7 @@ from swarm_mcp import vendor_path  # noqa: F401
 
 from genome_schema import genome_hash, validate_genome  # vendored guardrails
 
-from swarm_mcp import access, plans, redaction, relay, request_context, server_meta
+from swarm_mcp import access, genome_compat, plans, redaction, relay, request_context, server_meta
 from swarm_mcp.strategy_disclosure import (
     ANALYSIS_CONTRACT,
     RETENTION_BY_KIND,
@@ -80,8 +80,10 @@ async def submit(genome: dict, contribute: bool = False,
                                    "disclosure": disclosure, "strategy_code": strategy_code})
 
     async def _do():
-        errors = validate_genome(genome)
-        gh = genome_hash(genome)
+        normalized, errors = genome_compat.normalize_for_validation(genome)
+        if not errors:
+            errors = validate_genome(normalized)
+        gh = genome_compat.genome_hash_canonical(genome)
         if errors:
             return {"tool": "tournament.submit", "valid_genome": False, "errors": errors,
                     "genome_hash": gh, "note": "fix the genome locally (warden.validate_genome) — "

@@ -135,14 +135,14 @@ class ProbeFragilityOut(TypedDict, total=False):
     n_episodes: int
     seeds: list[int]
     per_regime: int
-    mean_weekly_bps: float
+    mean_weekly_bps: float | None
     per_regime_bps: dict
-    worst_regime: str
-    worst_regime_bps: float
-    turnover_pct_avg: float
-    max_gross_exposure: float
-    max_position_pct: float
-    hard_constraint_violations: list[dict]
+    worst_regime: str | None
+    worst_regime_bps: float | None
+    turnover_pct_avg: float | None
+    max_gross_exposure: float | None
+    max_position_pct: float | None
+    hard_constraint_violations: list[str | dict]
     lookahead_violations: list[str]
     underpowered: bool
     power_note: str
@@ -182,11 +182,37 @@ class EstimateCloudRunOut(TypedDict, total=False):
     episodes_required: int
     formula: str
     regimes: list[str]
-    wall_clock_estimate_s: float
+    wall_clock_estimate_s: float | None
     wall_clock_note: str
     budget: dict
     submit_bodies: dict
     handoff: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+class EvaluateGraphOut(TypedDict, total=False):
+    tool: str
+    verdict: str
+    valid_graph: bool
+    errors: list[str]
+    graph_hash: str | None
+    operator_abi: str
+    node_count: int
+    n_episodes: int
+    seeds: list[int]
+    per_regime: int
+    mean_weekly_bps: float | None
+    per_regime_bps: dict
+    worst_regime: str | None
+    worst_regime_bps: float | None
+    turnover_pct_avg: float | None
+    underpowered: bool
+    power_note: str
+    depth: dict
+    cloud_job: dict
     access: str
     error: str
     request_access_at: str
@@ -314,6 +340,34 @@ async def estimate_cloud_run(
     """
     return await gym_tools.estimate_cloud_run(seeds=seeds, per_regime=per_regime,
                                               n_genomes=n_genomes)
+
+
+@mcp.tool(
+    name="gym.evaluate_graph",
+    title="Evaluate ExpressionGraph",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def evaluate_graph(
+    graph: Annotated[dict, Field(
+        description="ExpressionGraph (strategy-spec-v3) DAG with nodes and output_node.")],
+    seeds: Annotated[list[int] | None, Field(
+        description="Optional episode seeds (max 8 locally).")] = None,
+    per_regime: Annotated[int, Field(
+        description="Episodes per regime (1 or 2 locally).", ge=1, le=2)] = 2,
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional tickers from the shared cache; omit when passing bars.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional inline OHLCV rows.")] = None,
+    min_symbols: Annotated[int, Field(
+        description="Minimum symbols for a valid episode pool.", ge=1, le=20)] = 8,
+) -> EvaluateGraphOut:
+    """Validate and replay an ExpressionGraph (strategy-spec-v3) DAG over the capped episode-seed matrix across the 5 causal market regimes.
+
+    Topologically sorts the node graph, rejects cycles or unsupported operators, evaluates cross-sectional rank/zscore/combine expressions on each regime episode, and returns per-regime net bps, turnover, and worst-regime fragility without issuing a promotion verdict.
+    """
+    return await gym_tools.evaluate_graph(graph=graph, seeds=seeds, per_regime=per_regime,
+                                          symbols=symbols, bars=bars, min_symbols=min_symbols)
 
 
 @mcp.tool(

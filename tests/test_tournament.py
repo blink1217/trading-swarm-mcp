@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import os
 
+import sys
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -256,10 +258,12 @@ def test_run_job_reports_errors_back_so_credits_refund(monkeypatch):
 
 
 def test_champion_requires_registry_path(monkeypatch):
-    # Step 29: the packaged champion fallback is gone — a public wheel must not
-    # ship a baseline that paying users are scored against.
+    # Step 29: the packaged champion fallback is gone — with no file override
+    # and no Firestore client doc, the runner fails closed. (The stub makes the
+    # lazy Firestore import raise even though it exists on this machine.)
     monkeypatch.delenv("SWARM_MCP_CHAMPION_GENOME", raising=False)
-    with pytest.raises(RuntimeError, match="SWARM_MCP_CHAMPION_GENOME"):
+    monkeypatch.setitem(sys.modules, "google.cloud.firestore", None)
+    with pytest.raises(RuntimeError, match="champion unavailable"):
         tournament_runner.load_champion()
 
 
@@ -269,6 +273,8 @@ def test_champion_loads_from_registry_path(monkeypatch):
     monkeypatch.setenv("SWARM_MCP_CHAMPION_GENOME", path)
     champ = tournament_runner.load_champion()
     assert champ["schema_version"] == 2 and "_note" not in champ
+    meta = tournament_runner.load_champion.last_loaded
+    assert meta["champion_source"] == f"file:{path}"
 
 
 # --- client tools ---------------------------------------------------------------
@@ -309,7 +315,7 @@ class _FakeAsync:
 
 
 def test_tournament_submit_sends_vector_hash_and_flag_only(monkeypatch):
-    from genome_schema import genome_hash
+    from swarm_mcp import genome_compat
 
     fake = _FakeAsync(202, {"ok": True, "job_id": "st_" + "a" * 24, "status": "queued",
                             "credits_charged": 100, "quota": {"used": 100, "limit": 10000}})
@@ -321,7 +327,7 @@ def test_tournament_submit_sends_vector_hash_and_flag_only(monkeypatch):
     assert r["credits_charged"] == 100
     sent = fake.calls[0]["json"]
     assert set(sent) == {"genome", "genome_hash", "contribute", "client_version"}
-    assert sent["genome_hash"] == genome_hash(g) and sent["contribute"] is True
+    assert sent["genome_hash"] == genome_compat.genome_hash_canonical(g) and sent["contribute"] is True
     assert fake.calls[0]["headers"]["Authorization"].startswith("Bearer ")
     assert fake.calls[0]["url"].endswith("/tournament/submit")
 

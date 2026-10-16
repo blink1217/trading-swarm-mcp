@@ -8,6 +8,26 @@ entry and MOC exit, always against the position.
 """
 from __future__ import annotations
 
+# ---- House cost constants (A-01, reward-definition P0). ----
+# Execution costs are PROPERTIES OF THE HOUSE, not evolvable genes. Letting the
+# genome choose its own spread/slippage/adverse-selection assumptions lets the
+# loop pick optimistic costs instead of alpha (data collected under
+# genome-declared costs is contaminated). The pessimistic one-way house cost is
+# spread + slippage + adverse selection, charged on every leg, against us.
+HOUSE_SPREAD_BPS = 3.0
+HOUSE_SLIPPAGE_BPS = 3.0
+HOUSE_ADVERSE_SELECTION_BPS = 6.0
+
+
+def one_way_house_cost_bps() -> float:
+    """Pessimistic one-way house execution cost in bps (A-01 constant)."""
+    return HOUSE_SPREAD_BPS + HOUSE_SLIPPAGE_BPS + HOUSE_ADVERSE_SELECTION_BPS
+
+
+def house_round_trip_cost_bps() -> float:
+    """Pessimistic round-trip house execution cost in bps (entry + exit)."""
+    return 2.0 * one_way_house_cost_bps()
+
 
 def one_way_cost_bps(spread_bps: float, slippage_bps: float, adverse_selection_bps: float) -> float:
     """Pessimistic one-way execution cost in bps (always paid against the position)."""

@@ -1,0 +1,76 @@
+{
+  "seeded": 8,
+  "mode": "contribute",
+  "results": {
+    "momentum_only": {
+      "genome_hash": "13168b164060927a34468e92632297154d78165b8ee660632936f96a770eb743",
+      "skipped": true,
+      "prior": [
+        "st_d2f64136eb85b91a55b256a9",
+        "scored"
+      ]
+    },
+    "reversion_only": {
+      "genome_hash": "ab2b914482ca1e12e3bf86d285323ff9c8d003bbfe64c516e98ddacddf3beff0",
+      "skipped": true,
+      "prior": [
+        "st_370c296f78da1987c16a1437",
+        "scored"
+      ]
+    },
+    "pivot_only": {
+      "genome_hash": "06f96cba483b8afe078e281848e172efbb31ff745aad93b6b00f815218d1865f",
+      "skipped": true,
+      "prior": [
+        "st_4d500c7983a1e07ca18c3ace",
+        "scored"
+      ]
+    },
+    "mom_rev_tight": {
+      "genome_hash": "10a131a0fcc35ecae6cefa9818070077fc2bee47aacf9c30bc87d6ac327761b5",
+      "skipped": true,
+      "prior": [
+        "st_b1764629fc3e38706551ce75",
+        "scored"
+      ]
+    },
+    "loose_screen_strict_analyst": {
+      "genome_hash": "989c4f63eec7c1fdacb4e5205b8ccdeee3de39a29e13f4a382ce0daef1fbfa13",
+      "skipped": true,
+      "prior": [
+        "st_5be70dc635c174a732cfe2e8",
+        "scored"
+      ]
+    },
+    "hold_2d": {
+      "job_id": "st_0abf19ac993c54fcf81d92db",
+      "genome_hash": "3f4e428a23d739168bf4362df9117d99312f08083222e7714f96e2e9c7e7dc02",
+      "credits": 100,
+      "status": "scored",
+      "outcome": "INCONCLUSIVE",
+      "rating": 1500,
+      "error": null,
+      "waited_s": 30
+    },
+    "hold_10d": {
+      "job_id": "st_b9372adf0985c9c68db80b28",
+      "genome_hash": "38ea86fc5f1bc2f456d9ea6024a02c74d2c64c3b346441d5d33d0c8b804fbe92",
+      "credits": 100,
+      "status": "scored",
+      "outcome": "INCONCLUSIVE",
+      "rating": 1500,
+      "error": null,
+      "waited_s": 30
+    },
+    "conservative_risk": {
+      "job_id": "st_763df4ed0183d35c01c3e8e5",
+      "genome_hash": "5047e9b4b38319636f68f31f3fc15b3b09f901c898f851296649ce8e330846d0",
+      "credits": 100,
+      "status": "scored",
+      "outcome": "INCONCLUSIVE",
+      "rating": 1500,
+      "error": null,
+      "waited_s": 30
+    }
+  }
+}

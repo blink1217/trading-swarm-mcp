@@ -6,6 +6,7 @@ from gates import REGIMES
 from genome_schema import genome_hash
 from helpers import run_async, synthetic_bars
 from swarm_mcp import plans
+from swarm_mcp import genome_compat
 from swarm_mcp.tools import gym_tools
 
 from genomes import baseline, mutate_a, mutate_b
@@ -36,7 +37,7 @@ def test_probe_fragility_baseline_measurement_never_promotes():
     assert r["worst_regime"] in REGIMES
     assert r["underpowered"] is True
     assert "MIN_EPISODES" in r["power_note"]
-    assert r["cloud_job"]["body"]["challenger_id"] == genome_hash(baseline())
+    assert r["cloud_job"]["body"]["challenger_id"] == genome_compat.genome_hash_canonical(baseline())
 
 
 def test_probe_fragility_seed_cap_enforced():
@@ -82,7 +83,7 @@ def test_paired_preview_never_promotes_and_is_deterministic():
     assert "MIN_EPISODES" in r1["gate_requirements"]["min_episodes"]
     assert "CSCV" in r1["gate_requirements"]["pbo"]
     assert "server-side" in r1["gate_requirements"]["dsr_margin"]
-    assert r1["cloud_job"]["body"]["challenger_id"] == genome_hash(chal)
+    assert r1["cloud_job"]["body"]["challenger_id"] == genome_compat.genome_hash_canonical(chal)
 
     r2 = run_async(gym_tools.paired_preview(champ, chal, seeds=list(range(8)), per_regime=2,
                                             bars=rows, min_symbols=5))

@@ -6,7 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "type": "integer", "const": 2 },
+    "schema_version": { "type": "integer", "const": 3 },
     "screen": {
       "type": "object",
       "additionalProperties": false,
@@ -47,6 +47,7 @@
     },
     "execution": {
       "type": "object",
+      "description": "A-01 (schema v3): the *_bps cost genes are IGNORED by the gym and the league — execution costs are house constants (fill_model.house_round_trip_cost_bps) and can never be tuned by evolution. The fields remain for registry compatibility; the proposer lists this group in IMMUTABLE_GROUPS so they are never mutated.",
       "additionalProperties": false,
       "properties": {
         "data_tier": { "type": "string", "const": "A" },

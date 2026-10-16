@@ -170,8 +170,8 @@ class CacheDB:
     def latest_enrichment(self, provider: str, symbol: str, kind: str,
                           before: str | None = None) -> dict | None:
         q = ("SELECT fetched_at, payload FROM enrichment "
-             "WHERE provider=? AND symbol=? AND kind=?")
-        params: list = [provider, symbol, kind]
+             "WHERE (provider=? OR (?='finnhub' AND provider='altdata')) AND symbol=? AND kind=?")
+        params: list = [provider, provider, symbol, kind]
         if before:
             q += " AND fetched_at <= ?"
             params.append(before)

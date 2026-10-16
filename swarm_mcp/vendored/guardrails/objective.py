@@ -1,4 +1,4 @@
-# VENDORED SUBSET of trading-swarm-guardrails/objective.py.py at b3654b98ede3a9c8144a325dda8dcf6ef11fa0f7.
+# VENDORED SUBSET of trading-swarm-guardrails/objective.py.py at bb3572b44dddd47c2bef32b1b7f2f664cbc220e7.
 # Excluded — server-side selection machinery, deliberately never shipped: deflated_sharpe, _norm_ppf, score.
 # Everything below is byte-identical to the pinned source. License: LICENSE.md.
 """The single objective definition for the evolution loop.
