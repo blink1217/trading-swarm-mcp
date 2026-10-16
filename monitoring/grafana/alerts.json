@@ -110,7 +110,7 @@
           "refId": "A",
           "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
           "model": {
-            "expr": "count_over_time({service=\"quant-swarm-mcp\"} | json | version!=\"0.6.1\" [1h])",
+            "expr": "count_over_time({service=\"quant-swarm-mcp\"} | json | version!=\"0.6.2\" [1h])",
             "queryType": "instant"
           }
         },

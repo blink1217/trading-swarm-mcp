@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2025-06-18/mcp.json",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "remote": {
     "data": "https://1.21initiative.com/mcp/data",
     "warden": "https://1.21initiative.com/mcp/warden",

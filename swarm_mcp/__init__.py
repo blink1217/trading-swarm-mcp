@@ -16,4 +16,4 @@ try:
 
     __version__ = _pkg_version("quant-swarm")
 except Exception:  # running from source without installation
-    __version__ = "0.6.1"
+    __version__ = "0.6.2"

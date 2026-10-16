@@ -38,7 +38,7 @@ except ImportError as e:  # pragma: no cover - httpx is a runtime dependency
 DEFAULT_HOSTED = "https://swarm-mcp-503318750546.europe-west1.run.app"
 DEFAULT_SITE = "https://1.21initiative.com"
 TIMEOUT_S = 20.0
-PROBE_VERSION = "0.6.1"
+PROBE_VERSION = "0.6.2"
 
 ALLOWED_PIT_STATUSES = {
     "SIGNIFICANT",
