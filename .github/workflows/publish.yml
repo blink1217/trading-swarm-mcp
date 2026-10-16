@@ -4,17 +4,77 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Auto-bump version before publishing (none = publish current version)"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GCP_REGION: europe-west1
+  SERVICE_NAME: swarm-mcp
+  AR_REPO: initiative-repo
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  prepare:
+    name: Prepare & Version Bump
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.bump.outputs.ref }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bump version and tag release (if requested)
+        id: bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP_MODE: ${{ inputs.bump || 'none' }}
+        run: |
+          if [ "$BUMP_MODE" != "none" ] && [ -n "$BUMP_MODE" ]; then
+            python scripts/bump_version.py "--$BUMP_MODE"
+            VER=$(python scripts/bump_version.py --help >/dev/null && python -c "import scripts.bump_version as b; print(b.current_version())")
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore(release): v${VER}"
+            git tag "v${VER}"
+            git push origin HEAD:main --tags
+            gh release create "v${VER}" --title "v${VER}" --generate-notes || true
+            echo "ref=refs/tags/v${VER}" >> "$GITHUB_OUTPUT"
+            echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          else
+            VER=$(python -c "import scripts.bump_version as b; print(b.current_version())")
+            echo "ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+            echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-pypi:
+    name: Publish to PyPI (quant-swarm)
+    needs: prepare
+    runs-on: ubuntu-24.04
     environment: pypi
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -29,3 +89,69 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+  publish-npm:
+    name: Publish to npm (quant-swarm-mcp)
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm launcher (if version not yet published)
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PKG_VER=$(node -p "require('./package.json').version")
+          PUBLISHED=$(npm view "quant-swarm-mcp@${PKG_VER}" version 2>/dev/null || true)
+          if [ "$PUBLISHED" = "$PKG_VER" ]; then
+            echo "quant-swarm-mcp@${PKG_VER} is already published on npm; skipping."
+          else
+            npm publish --access public
+          fi
+
+  deploy-cloudrun:
+    name: Deploy Hosted MCP to Cloud Run (swarm-mcp)
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push container image
+        env:
+          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE_NAME }}:${{ needs.prepare.outputs.version }}-${{ github.sha }}
+        run: |
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        env:
+          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE_NAME }}:${{ needs.prepare.outputs.version }}-${{ github.sha }}
+        run: |
+          gcloud run deploy "$SERVICE_NAME" \
+            --image="$IMAGE" \
+            --region="$GCP_REGION" \
+            --project="${{ secrets.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated \
+            --port=8080 \
+            --quiet
