@@ -37,7 +37,8 @@ def handler(request: httpx.Request) -> httpx.Response:
                  (["pit.analysis", "market.regime", "market.pulse", "market.sentiment",
                    "market.regime2", "market.screen", "market.rank", "cache.stats",
                    "cache.offline", "cache.warm", "features.build", "volume.forecast",
-                   "market.climate"] if "data" in str(request.url) else
+                   "market.climate", "market.flow", "market.fundamentals_pit",
+                   "market.macro_nowcast", "market.transfer_entropy"] if "data" in str(request.url) else
                   ["warden.validate_order"] if "warden" in str(request.url) else
                   ["tournament.leaderboard"])]
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": body.get("id"),
