@@ -288,13 +288,13 @@ async def pit_analysis(
 ) -> PitAnalysisOut:
     """Is this alternative-data signal real for these tickers - or noise?
 
-    Explained PIT significance per underlying, from the release-gated
-    pit_analysis/v2 run: every (dataset|metric|horizon) family reports rolling
+    Explained PIT significance per underlying from the release-gated
+    pit_analysis/v2 run: each (dataset|metric|horizon) family reports rolling
     52-week IR, Newey-West two-sided p, observation count, research-only and
-    staleness flags, and an explicit verdict - SIGNIFICANT (survives the funnel's
-    IR > 0 and Benjamini-Hochberg q <= 0.05 gate of the same run), NOT_SIGNIFICANT,
-    below the observation floor, or UNVERIFIED. Point-in-time, derived-only, no raw
-    values; free lite answers, Pro gives every family. Not investment advice.
+    staleness flags, and an explicit verdict - SIGNIFICANT (survives the run's
+    IR > 0 and BH q <= 0.05 gate), NOT_SIGNIFICANT, below the observation floor,
+    or UNVERIFIED. Point-in-time, derived-only, no raw values; free lite answers,
+    Pro gives every family. Not investment advice.
     """
     return await pit_tools.pit_analysis(symbols=symbols, as_of=as_of, horizons=horizons,
                                         only_significant=only_significant, max_families=max_families)
