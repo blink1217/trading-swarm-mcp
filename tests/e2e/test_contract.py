@@ -24,6 +24,8 @@ WARDEN_TOOLS = {
     "warden.validate_order", "warden.audit_features", "warden.cost_check",
     "warden.validate_genome", "warden.explain_sizing", "warden.promotion_verdict",
     "warden.optimize_portfolio", "warden.plan_rebalance",
+    "audit.preflight", "audit.quote", "audit.run",
+    "audit.status", "audit.report", "audit.compare",
 }
 GYM_TOOLS = {
     "gym.label_regimes", "gym.probe_fragility", "gym.paired_preview",
@@ -54,7 +56,7 @@ def test_contract_inventory_is_exactly_26_tools(contracts):
     assert set(_by_name(contracts, "warden")) == WARDEN_TOOLS
     assert set(_by_name(contracts, "gym")) == GYM_TOOLS
     total = sum(len(v) for v in contracts.values())
-    assert total == 33, total
+    assert total == 39, total
 
 
 def test_contract_matches_golden_snapshot(contracts):

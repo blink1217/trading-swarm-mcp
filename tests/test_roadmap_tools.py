@@ -166,7 +166,7 @@ def test_warden_optimize_portfolio_methods_and_caps():
         assert out["verdict"] == "OPTIMIZED"
         assert out["method"] == method
         assert abs(sum(out["target_weights"].values()) - 1.0) < 1e-3
-        # House position cap is 0.25 for risk assets
+        # House position cap = 0.25 for risk assets
         for sym, w in out["target_weights"].items():
             if sym != "SGOV":
                 assert w <= 0.2501
@@ -196,7 +196,7 @@ def test_warden_plan_rebalance_sequencing_and_guards():
         equity=100_000.0,
         high_water_mark=100_000.0,
         current_positions={"AAA": 10_000.0},
-        target_weights={"AAA": 0.12, "BBB": 0.20},  # AAA diff is 2% (<3%); BBB has wide spread
+        target_weights={"AAA": 0.12, "BBB": 0.20},  # AAA diff = 2% (<3%); BBB has wide spread
         quotes={
             "AAA": {"bid": 99.95, "ask": 100.05},
             "BBB": {"bid": 99.00, "ask": 101.00},  # 200 bps spread > 15 bps gate

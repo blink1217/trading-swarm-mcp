@@ -157,8 +157,8 @@ def charge(token: str, tool: str, units: int) -> dict:
     if units <= 0:
         return {"ok": True, "charged": 0}
     try:
-        r = httpx.post(meter_url(), json={"tool": tool, "units": int(units)},
-                       headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT_S)
+        headers = {"Authorization": f"Bearer {token}"}
+        r = httpx.post(meter_url(), json={"tool": tool, "units": int(units)}, headers=headers, timeout=TIMEOUT_S)
     except httpx.HTTPError as e:
         raise MeterRefused(f"compute meter unreachable ({type(e).__name__}) — hosted compute "
                            "is refused rather than served unmetered", status_code=503) from e

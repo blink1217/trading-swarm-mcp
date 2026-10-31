@@ -69,8 +69,8 @@ def maybe_push_loki(records: list[dict], url: str | None = None) -> bool:
 
         stream = [[str(int(dt.datetime.now(dt.timezone.utc).timestamp() * 1e9)),
                    json.dumps(r, sort_keys=True)] for r in records]
-        resp = httpx.post(url, json={"streams": [{"stream": {"job": "swarm-mcp-harness"},
-                                                  "values": stream}]}, timeout=5.0)
+        payload = {"streams": [{"stream": {"job": "swarm-mcp-harness"}, "values": stream}]}
+        resp = httpx.post(url, json=payload, timeout=5.0)
         return resp.status_code < 400
     except Exception:
         return False
