@@ -1,0 +1,23 @@
+{
+  "as_of": "2026-10-15T20:00:00Z",
+  "features": [
+    {
+      "name": "mom_20d",
+      "source": "bars_1day",
+      "available_at": "2026-10-15T20:00:00Z",
+      "coverage": 1.0
+    },
+    {
+      "name": "atr",
+      "source": "bars_1day",
+      "available_at": "2026-10-15T20:00:00Z",
+      "coverage": 1.0
+    },
+    {
+      "name": "vol_ratio_20",
+      "source": "bars_1day",
+      "available_at": "2026-10-15T20:00:00Z",
+      "coverage": 0.98
+    }
+  ]
+}

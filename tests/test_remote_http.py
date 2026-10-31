@@ -280,14 +280,12 @@ def _tools_call(c, headers, name, arguments=None, call_id=7):
 
 
 def test_http_hard_refuses_pro_tool_on_free_plan(monkeypatch):
-    from genomes import baseline
-
     _site_verify(monkeypatch, {"ok": True, "plan": "free", "status": "active",
                                "upgrade_url": "https://1.21initiative.com/mcp/"})
     with TestClient(http_server.build_app()) as c:
         headers = _handshake(c, "free-token")
-        r = _tools_call(c, headers, "warden.promotion_verdict",
-                        {"challenger_genome": baseline()})
+        r = _tools_call(c, headers, "warden.optimize_portfolio",
+                        {"symbols": ["AAPL", "MSFT"]})
         assert r.status_code == 402
         body = r.json()
         assert body["error"]["code"] == -32002
@@ -343,8 +341,8 @@ def test_http_batch_with_gated_call_is_refused(monkeypatch):
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
              "params": {"name": "warden.cost_check", "arguments": {}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-             "params": {"name": "warden.promotion_verdict", "arguments": {}}},
+             "params": {"name": "warden.optimize_portfolio", "arguments": {}}},
         ], headers=headers)
         assert r.status_code == 402
-        assert r.json()["error"]["data"]["tool"] == "warden.promotion_verdict"
+        assert r.json()["error"]["data"]["tool"] == "warden.optimize_portfolio"
 

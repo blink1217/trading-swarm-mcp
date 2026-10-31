@@ -78,7 +78,12 @@ async def enrich_symbol_cached(db: CacheDB, symbol: str,
         return {"from_cache": True, **latest}
 
     require_online(f"enrich_symbol({symbol})")
-    payload = await _fetch_enrichment(symbol)
+    try:
+        payload = await _fetch_enrichment(symbol)
+    except Exception:
+        if latest is not None:
+            return {"from_cache": True, **latest}
+        raise
     fetched_at = db.append_enrichment(PROVIDER, symbol, KIND, payload)
     db.log_api_call(PROVIDER, "enrich", 1, 3, cached=False)
     return {"from_cache": False, "fetched_at": fetched_at, **payload}

@@ -1,0 +1,208 @@
+{
+  "job_id": "audit_906ea84d9a70a362",
+  "preflight_id": "pf_158d402e172551c6",
+  "strategy_name": "momentum_breakout_v1_flawed",
+  "status": "completed",
+  "mode": "local",
+  "overall_assessment": "PROBLEMS_OBSERVED",
+  "metrics": {
+    "n_observations": 180,
+    "n_weekly_blocks": 37,
+    "n_trades": 35,
+    "sharpe_gross_annualized": -1.642,
+    "sharpe_net_annualized": -2.065,
+    "sharpe_bootstrap_ci_90": [
+      -3.245,
+      0.505
+    ],
+    "gross_edge_bps_per_trade": 7.79,
+    "round_trip_cost_bps_1x": 15.0,
+    "net_edge_bps_per_trade_1x": -7.21,
+    "net_edge_bps_per_trade_2x": -22.21,
+    "breakeven_cost_multiplier": 0.52,
+    "net_return_total_bps": -252.5,
+    "max_drawdown_pct": 23.74,
+    "worst_5d_return_pct": -13.33,
+    "top5_pnl_share_pct": 93.2,
+    "max_position_weight_pct": 38.0,
+    "counts_by_category": {
+      "OBSERVED_PROBLEM": 5,
+      "SENSITIVITY_WARNING": 0,
+      "INSUFFICIENT_EVIDENCE": 0,
+      "PASSED": 0,
+      "NOT_TESTED": 2
+    },
+    "overall_assessment": "PROBLEMS_OBSERVED"
+  },
+  "findings": [
+    {
+      "finding": "Sample Depth & Statistical Power Floor",
+      "category": "OBSERVED_PROBLEM",
+      "evidence": "Observed 180 sessions (37 weekly blocks); annualized gross Sharpe is -1.64 with 90% bootstrap CI [-3.25, 0.50] crossing zero.",
+      "why_it_matters": "A bootstrap confidence interval that crosses zero indicates the observed positive return is within 1-sigma noise of a flat or losing strategy.",
+      "next_experiment": "Decompose returns by market regime (`gym.label_regimes`) and test whether a single drawdown cluster or noisy entry filter is diluting the signal.",
+      "limitation": "Bootstrap resampling preserves marginal distribution but does not test structural regime breaks."
+    },
+    {
+      "finding": "Pessimistic Execution Cost & Slippage Stress Survival",
+      "category": "OBSERVED_PROBLEM",
+      "evidence": "Mean gross edge is 7.79 bps/trade, which is consumed by 1.0x pessimistic round-trip costs of 15.00 bps/trade -> net -7.21 bps/trade (breakeven cost multiplier: 0.52x; annualized cost drag: 735.0 bps; net Sharpe: -2.07).",
+      "why_it_matters": "Strategies whose gross edge per trade is smaller than realistic spread + slippage + adverse selection bleed capital deterministically in live execution.",
+      "next_experiment": "Increase minimum holding horizon or signal conviction threshold to raise gross edge per trade above 22.5 bps, or reduce turnover via a wider no-trade buffer (`warden.plan_rebalance`).",
+      "limitation": "Assumes static per-trade bps friction; flash-crash tail slippage can exceed 2.0x normal assumptions."
+    },
+    {
+      "finding": "Drawdown Tail & Volatility-Regime Consistency",
+      "category": "OBSERVED_PROBLEM",
+      "evidence": "Max drawdown reached 23.74% (worst 5-session loss: -13.33%; calm-regime mean: 1.35 bps/day vs high-vol mean: -28.04 bps/day).",
+      "why_it_matters": "Drawdowns exceeding 25% or sharp 5-day crashes trigger risk-engine halts and force liquidation at the bottom.",
+      "next_experiment": "Apply ATR-scaled position sizing (`warden.explain_sizing`) and halve exposure on overnight gaps > 1.2x ATR.",
+      "limitation": "Evaluates close-to-close equity; intraday excursion can exceed close-to-close drawdown."
+    },
+    {
+      "finding": "Trade Outlier Concentration & House Position Cap Compliance",
+      "category": "OBSERVED_PROBLEM",
+      "evidence": "Top-5 trades account for 93.2% of positive gross PnL across 35 trades; max single-position weight reached 38.0% of equity (5 trade(s) breached the 25% house cap).",
+      "why_it_matters": "Backtests driven by a handful of oversized outlier trades fail in production when the live risk gate (`warden.validate_order`) clamps single-name exposure at 25% of equity.",
+      "next_experiment": "Re-run the backtest with hard pre-trade position clamping (`max_position_pct <= 0.25`, `max_gross_exposure_pct <= 0.60`) and winsorize top-5 trades to verify edge persists.",
+      "limitation": "Evaluates per-trade size; full intraday portfolio overlap requires timestamped position snapshots."
+    },
+    {
+      "finding": "Point-in-Time Feature Provenance & Lookahead Audit",
+      "category": "OBSERVED_PROBLEM",
+      "evidence": "Detected 1 timestamp lookahead leak(s) ['earnings_flag (available_at=2026-10-18T16:00:00Z > as_of=2026-10-15T20:00:00Z)'] and 1 banned actuals source(s) [\"weather_hdd_shock (source='open-meteo.archive')\"].",
+      "why_it_matters": "Features computed from timestamps after `as_of` or from archive actuals (rather than point-in-time vintage releases) inject future knowledge into historical decisions and invalidate the backtest.",
+      "next_experiment": "Lag offending features to their public filing/release timestamp (`available_at <= as_of`) and replace archive actuals with point-in-time vintage series (`warden.audit_features`).",
+      "limitation": "Audits declared manifest metadata; does not parse arbitrary Python/C# feature-engineering code."
+    },
+    {
+      "finding": "Benchmark Active Return & Information Ratio",
+      "category": "NOT_TESTED",
+      "evidence": "No benchmark return series (`benchmark_path` or `benchmark_rows`) was supplied.",
+      "why_it_matters": "Without a benchmark series, passive beta exposure cannot be separated from active alpha.",
+      "next_experiment": "Supply a benchmark CSV/Parquet (e.g. SPY or equal-weight universe) to compute active Information Ratio.",
+      "limitation": "Absolute Sharpe can be inflated by secular bull-market drift."
+    },
+    {
+      "finding": "Underlying Strategy Code & Multiple-Testing Trial Ledger Boundary",
+      "category": "NOT_TESTED",
+      "evidence": "Tabular artifact audit only \u2014 strategy source code and discarded trial count were not evaluated locally.",
+      "why_it_matters": "Even a clean return series and manifest cannot prove that 500 parameter combinations were not swept behind the scenes to find one lucky backtest.",
+      "next_experiment": "Submit the candidate genome to the hosted Shadow Tournament (`tournament.submit`) for paired replay against the live champion and Deflated Sharpe ratio accounting.",
+      "limitation": "Local tabular checks test the artifact you brought, not the research process that selected it."
+    }
+  ],
+  "coverage_matrix": {
+    "available_checks": [
+      {
+        "check_id": "sample_power_and_sharpe",
+        "title": "Sample Depth, Effective Weekly Blocks & Bootstrap Sharpe",
+        "description": "Evaluates 180 return observations (2026-02-06 to 2026-10-15) against the minimum sample floor (60 daily / 20 weekly blocks).",
+        "inputs_used": [
+          "returns"
+        ]
+      },
+      {
+        "check_id": "net_cost_survival",
+        "title": "Pessimistic Execution Cost & Stress Survival (1.0x / 1.5x / 2.0x)",
+        "description": "Applies the house pessimistic fill model (spread + slippage + adverse selection on both legs) and tests whether claimed edge survives 1.5x and 2.0x cost stress.",
+        "inputs_used": [
+          "returns",
+          "cost_assumptions",
+          "trades"
+        ]
+      },
+      {
+        "check_id": "drawdown_and_tail_profile",
+        "title": "Drawdown Depth, Tail Skew & Volatility-Regime Split",
+        "description": "Decomposes equity curve drawdown, worst 5-session loss, and high-volatility vs calm-regime return consistency.",
+        "inputs_used": [
+          "returns"
+        ]
+      },
+      {
+        "check_id": "trade_concentration_and_turnover",
+        "title": "Trade Concentration, House Position Caps (25% / 60%) & Turnover Fragility",
+        "description": "Audits 35 trade records for top-5 outlier PnL concentration, single-name position cap breaches (>25% equity), and turnover drag.",
+        "inputs_used": [
+          "trades",
+          "cost_assumptions"
+        ]
+      },
+      {
+        "check_id": "feature_provenance_and_leakage",
+        "title": "Point-in-Time Feature Provenance & Lookahead Timestamp Audit",
+        "description": "Audits every declared feature against banned actuals sources (e.g. archive weather/restated fundamentals), timestamp availability (`available_at <= as_of`), Tier-A/B/C classification, and universe coverage (>=90%).",
+        "inputs_used": [
+          "features_manifest"
+        ]
+      }
+    ],
+    "not_tested_checks": [
+      {
+        "check_id": "benchmark_excess_and_beta",
+        "title": "Benchmark Active Return, Beta & Information Ratio",
+        "status": "NOT_TESTED",
+        "reason": "No benchmark series (`benchmark_path` or `benchmark_rows`) was supplied.",
+        "required_input": "Timestamped benchmark return series covering the same session dates."
+      },
+      {
+        "check_id": "strategy_code_lookahead_proof",
+        "title": "Underlying Strategy Code & In-Sample Hyperparameter Snooping Proof",
+        "status": "NOT_TESTED",
+        "reason": "Tabular return and trade logs cannot prove that the underlying signal code avoided future-bar indexing or multiple-testing selection bias across discarded parameter trials.",
+        "required_input": "Hosted Shadow Tournament replay (`tournament.submit`) on sealed/causal features and the server-side Deflated Sharpe trials ledger."
+      }
+    ],
+    "outbound_data_preview": {
+      "local_mode": {
+        "mode": "local",
+        "bytes_sent": 0,
+        "fields_sent": [],
+        "destination": "none \u2014 100% local execution on your machine"
+      },
+      "hosted_mode": {
+        "mode": "hosted",
+        "bytes_sent": 8046,
+        "fields_sent": [
+          "strategy_returns_series (ts, ret)",
+          "cost_assumptions",
+          "trades_summary (ts, symbol, pnl_bps, size_pct)",
+          "features_manifest"
+        ],
+        "destination": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/warden (only if mode='hosted' is explicitly approved)"
+      }
+    }
+  },
+  "reproducibility_bundle": {
+    "job_id": "audit_906ea84d9a70a362",
+    "preflight_id": "pf_158d402e172551c6",
+    "strategy_name": "momentum_breakout_v1_flawed",
+    "input_sha256": "158d402e172551c6ae69b548be0e435c19f82159be0094a5f1be19c625eda825",
+    "artifact_hashes": {
+      "returns": "8513f8255edc52d55d733e2dc77a8740fb374f294999902b187ff908d3a33dac",
+      "trades": "402b7db6ab02e37ae67c88b1fcbdc9d85c725e66583b373095fc2e3068e9dfc9",
+      "cost_assumptions": "28bf32f0f5607e7aee1aa6cd2cbb41d7255a521be6922470e05b1bd35a23042d",
+      "features_manifest": "2ca34ad5845eca83dee0628dec4cf723a823793c5ccdb20b35dc451926f94bc1"
+    },
+    "cost_assumptions": {
+      "spread_bps": 2.0,
+      "slippage_bps": 3.0,
+      "adverse_selection_bps": 2.0,
+      "commission_bps": 0.5
+    },
+    "mode": "local",
+    "package_version": "0.7.0",
+    "random_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "approval_token": "aq1_afa3d09cf7152747ce4e4bbb2ef13a1a",
+    "idempotency_key": "demo-flawed-v1",
+    "generated_at": "2026-10-31T00:24:31.679414+00:00"
+  },
+  "credits_charged": 0
+}

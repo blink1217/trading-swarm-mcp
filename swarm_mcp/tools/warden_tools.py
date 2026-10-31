@@ -291,16 +291,33 @@ async def request_promotion_verdict(challenger_genome: dict,
 
     async def _do():
         gh = genome_compat.genome_hash_canonical(challenger_genome)
+        chal_eval, chal_err = genome_compat.normalize_for_validation(challenger_genome)
+        schema_errors = list(chal_err) if chal_err else list(validate_genome(chal_eval))
+        valid_genome = len(schema_errors) == 0
+
         summary = ["promotion verdicts are never issued locally — the selection machinery is server-side"]
+        tier: str | None = None
+        if not valid_genome:
+            summary.append(f"challenger genome failed schema validation ({len(schema_errors)} error(s))")
         if champion_genome is not None:
             # Compare evaluation copies: schema_version consts are not genes and
             # a raw v2/v3 mix would fail-close the tier diff at tier C.
             champ_eval, champ_err = genome_compat.normalize_for_validation(champion_genome)
-            chal_eval, chal_err = genome_compat.normalize_for_validation(challenger_genome)
             tier = highest_mutated_tier(champ_eval or champion_genome, chal_eval or challenger_genome)
             summary.append(f"highest mutated provenance tier vs champion: {tier or 'identical'}")
-            if tier in ("B", "C"):
+            if tier in ("B", "C", "PROMPT"):
                 summary.append(f"tier-{tier} mutations need tape-fidelity evidence (hosted tape replay — roadmap)")
+
+        if not valid_genome:
+            readiness_status = "BLOCKED_SCHEMA_INVALID"
+            next_action = "fix_genome_schema (run warden.validate_genome and resolve schema errors before submitting)"
+        elif tier in ("B", "C", "PROMPT"):
+            readiness_status = "BLOCKED_TIER_B_C_REQUIRES_TAPE"
+            next_action = f"restrict mutations to Tier-A genes (tier-{tier} requires hosted point-in-time tape replay)"
+        else:
+            readiness_status = "READY_FOR_HOSTED_TOURNAMENT"
+            next_action = "tournament.submit (200 credits, or 100 credits with contribute=True)"
+
         out = envelope.indeterminate_local(
             genome_hash=gh,
             violation_summary=summary,
@@ -310,6 +327,12 @@ async def request_promotion_verdict(challenger_genome: dict,
                     f"only on the hosted side ({len(REGIMES)} regimes: {', '.join(REGIMES)})"),
         )
         out["tool"] = "warden.promotion_verdict"
+        out["valid_genome"] = valid_genome
+        out["schema_errors"] = schema_errors[:10]
+        out["highest_mutated_tier"] = tier
+        out["readiness_status"] = readiness_status
+        out["next_action"] = next_action
+        out["credits_charged"] = 0
         out["regimes_required"] = REGIMES
         out["safety"] = NO_ORDER_PLACEMENT
         return out

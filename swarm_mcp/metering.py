@@ -51,7 +51,6 @@ BARS_ARG_TOOLS = frozenset({
 # Pro tools whose hosted cost is one cheap computation.
 SINGLE_SHOT_TOOLS = frozenset({
     "features.build",
-    "warden.promotion_verdict",
     "warden.optimize_portfolio",
     "gym.label_regimes",
     "gym.estimate_cloud_run",

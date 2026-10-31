@@ -64,11 +64,12 @@ def test_compute_units_follow_the_geometry():
     assert metering.compute_units("gym.probe_fragility", {"seeds": [0, 1, 2, 3], "per_regime": 1}) == 20
     assert metering.compute_units("gym.paired_preview", {"seeds": [0, 1], "per_regime": 2}) == 40  # x2 genomes
     assert metering.compute_units("features.build", {"symbols": ["AAPL"]}) == 1
-    assert metering.compute_units("warden.promotion_verdict", {}) == 1
+    assert metering.compute_units("warden.optimize_portfolio", {}) == 1
     assert metering.compute_units("gym.label_regimes", {}) == 1
-    # relay-metered / site-charged / free tools are not double-charged here
+    # relay-metered / site-charged / free tools (including warden.promotion_verdict readiness check) are not metered here
     for tool in ("market.pulse", "market.screen", "cache.warm", "tournament.submit",
-                 "tournament.verdict", "tournament.leaderboard", "warden.cost_check"):
+                 "tournament.verdict", "tournament.leaderboard", "warden.cost_check",
+                 "warden.promotion_verdict"):
         assert metering.compute_units(tool, {}) == 0, tool
     assert metering.seeds_for_budget(200, per_regime=4, genomes=2) == 5
 
@@ -114,12 +115,12 @@ def test_http_charges_hosted_compute_before_running(monkeypatch):
     with TestClient(http_server.build_app()) as c:
         headers = _handshake(c, "pro-token")
         r = c.post("/mcp/warden", json={"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                                        "params": {"name": "warden.promotion_verdict",
-                                                   "arguments": {"challenger_genome": baseline()}}},
+                                        "params": {"name": "warden.optimize_portfolio",
+                                                   "arguments": {"candidates": [{"symbol": "AAPL", "momentum_score": 0.5, "realized_vol_annual": 0.2}]}}},
                    headers=headers)
         assert r.status_code == 200, r.text
         assert "error" not in _post_body(r)
-    assert charged == [("pro-token", "warden.promotion_verdict", 1)]
+    assert charged == [("pro-token", "warden.optimize_portfolio", 1)]
 
 
 def test_http_refuses_hosted_compute_when_meter_refuses(monkeypatch):
@@ -166,8 +167,8 @@ def test_http_exhausted_pro_token_is_refused_on_pro_tools(monkeypatch):
     with TestClient(http_server.build_app()) as c:
         headers = _handshake(c, "stale-pro")
         r = c.post("/mcp/warden", json={"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-                                        "params": {"name": "warden.promotion_verdict",
-                                                   "arguments": {"challenger_genome": baseline()}}},
+                                        "params": {"name": "warden.optimize_portfolio",
+                                                   "arguments": {"candidates": [{"symbol": "AAPL", "momentum_score": 0.5, "realized_vol_annual": 0.2}]}}},
                    headers=headers)
         assert r.status_code == 402
         assert r.json()["error"]["data"]["status"] == "exhausted"
@@ -228,7 +229,7 @@ def test_paired_outcome_runs_full_geometry_on_identical_paths():
     assert set(r["per_regime_delta_bps"]) == set(gym_tools.REGIMES)
     assert r["champion_hash"] != r["challenger_hash"]
     assert "promotion" not in json.dumps(r).lower().replace("promotion gate", "")
-    assert r["runner_version"] == "0.6.2"
+    assert r["runner_version"] == "0.7.0"
     assert r["panel"]["symbols"] == len(SYMS)
     # determinism on identical paths
     r2 = tournament_runner.paired_outcome(panel, champion, mutate_a(champion),

@@ -71,12 +71,19 @@ TOURNAMENT: dict = {
 CONTRIBUTE_DISCOUNT = 0.5
 
 FREE_TOOLS = frozenset({
+    "audit.preflight",
+    "audit.quote",
+    "audit.run",
+    "audit.status",
+    "audit.report",
+    "audit.compare",
     "warden.validate_order",
     "warden.cost_check",
     "warden.explain_sizing",
     "warden.validate_genome",
     "warden.audit_features",
     "warden.plan_rebalance",
+    "warden.promotion_verdict",
     "market.pulse",
     "market.regime",
     "market.sentiment",
@@ -90,7 +97,6 @@ FREE_TOOLS = frozenset({
 PRO_TOOLS = frozenset({
     "features.build",
     "cache.warm",
-    "warden.promotion_verdict",
     "warden.optimize_portfolio",
     "gym.label_regimes",
     "gym.probe_fragility",
@@ -114,6 +120,7 @@ PRO_TOOLS = frozenset({
 # symbols with historical as_of is the Pro feature).
 PRO_FEATURES = frozenset({
     "pit.analysis:full",
+    "audit.run:hosted",
 })
 
 

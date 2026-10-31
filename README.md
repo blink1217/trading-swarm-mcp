@@ -18,7 +18,7 @@ Authored by the Principal Quantitative Technologist at [The 1.21 Initiative](htt
 
 Behind this package is a swarm that does not hand-tune strategies. A **champion** genome runs live; every cycle the swarm breeds **challengers** (tier-capped mutations), replays champion and challenger on the *identical* episode-seed matrix across five labelled market regimes (high-vol, drawdown, chop, melt-up, gap-heavy), and records the paired outcome in an **ELO ledger**. A surrogate prior pre-scores candidates so expensive replays are spent where they matter. Nothing is promoted on a single good backtest: promotion requires `MIN_EPISODES=20` paired episodes, a Wilcoxon-significant delta, a positive **worst-regime** margin (maximin, not mean), a **deflated-Sharpe** margin against the monotonic count of every trial ever attempted, and a **PBO** cap. This is the champion/challenger, self-play-style loop popularised by AlphaZero-style systems, applied honestly to markets — with the two things that do *not* transfer stated plainly: the market does not react to us, so there is no true self-play, and there is no learned dynamics model or tree search; selection is done by paired replay, ELO and statistical gates.
 
-Replay is only half of it. Every Sunday the swarm also runs a **forward league**: each league genome — the champion, the top-ELO challengers, contributed genomes, and a *planner* entrant whose weekend moves are chosen by a learned model — seals its positions for the coming week from Friday's causal features, and the SHA-256 commitment is stored before the week happens. The next cycle marks every sealed position against the realised closes (net of each genome's own cost model), ranks the field on the identical real week, and updates ELO on that. Sealed forecasts cannot be overfit to the week that follows; that is the swarm's ground truth, and it feeds a replay buffer where every position is decomposed into its component **moves** (screen, entry, size, weekend) so credit is assigned per move and regime, not to the strategy as a blob. The forward league started on 2026-09-02; the first realised settlements land mid-September, and the swarm runs untouched for eight weeks to collect them.
+Replay is only half of it. Every Sunday the swarm also runs a **forward league**: each league genome — the champion, the top-ELO challengers, contributed genomes, and a *planner* entrant whose weekend moves are chosen by a learned model — seals its positions for the coming week from Friday's causal features, and the SHA-256 commitment is stored before the week happens. The next cycle marks every sealed position against the realised closes (net of each genome's own cost model), ranks the field on the identical real week, and updates ELO on that. Sealed forecasts cannot be overfit to the week that follows; that is the swarm's ground truth, and it feeds a replay buffer where every position is decomposed into its component **moves** (screen, entry, size, weekend) so credit is assigned per move and regime, not to the strategy as a blob. **Forward-league status (as of 2026-10-31):** the initial 8-week live-paper collection window started on `2026-09-14` and is currently in **Week 7 of 8** (`0` weeks settled yet; first batch settlement closes after the 8-week horizon on `2026-11-09`).
 
 What that means for you: a local backtest tells you how a strategy did on one path. The Shadow Tournament tells you whether it beats an *evolving* champion on the same paths, in the regime that hurts it most, at a sample size that can actually have an opinion — and your result enters the swarm's ELO ledger. Opt in as a **contributor** and your genome becomes an external challenger in the swarm's next breeding cycle (at half price), scored in replay and, if it earns a league seat, on real weeks. That is the flywheel: every honest submission makes the champion harder to beat, and every user gets a harder benchmark.
 
@@ -34,7 +34,18 @@ Risk gates are not post-hoc reports — they are the pre-condition for every act
 - **Statistically honest refusals.** Promotion verdicts are **never** issued locally. Statistically undecidable outputs return `INDETERMINATE_LOCAL`/`UNDERPOWERED`/`UNSCORABLE`, name the exact missing inputs (`MIN_EPISODES=20`, PBO, DSR, worst-regime margins), and hand off to the hosted Shadow Tournament (`tournament.submit`).
 
 - Local-first, BYO-key: your Alpaca/AltData keys are read from env only when operating in BYOK mode; otherwise data flows through the hosted relay.
-- Your symbols, bars, features and orders never leave your machine. What can leave is only what you explicitly pass to `tournament.submit`: the genome parameter vector (public schema fields), and — for the **strategy-contributor** tier — an author-written disclosure and/or your strategy code. Submitted code is **never executed**: it is treated as inert text, read statically by the hosted LLM reviewer, reduced to a structured explanation plus a code hash, and the raw code is discarded after review. By default even the vector is deleted from the hosted side once scored.
+- **Explicit Per-Operation Data-Flow Matrix (no blanket claims):**
+  - **Strictly local stdio tools (`audit.preflight`, `audit.quote(mode="local")`, `audit.run(mode="local")`, `audit.status`, `audit.report`, `audit.compare`, `warden.*`, `gym.*` on local/cached bars, `market.*` with caller-supplied `bars`):** `0 bytes` of strategy returns, trades, orders, features, or bars leave your machine. Only `SWARM_MCP_ACCESS_TOKEN` (when set without `SWARM_MCP_LOCAL_TOKEN`) is verified once per 5 minutes against `POST /api/mcp/verify`.
+  - **Relay-backed data tools over stdio (`market.pulse`, `market.sentiment`, `market.regime`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`, `market.microstructure`, `volume.forecast`, `pit.analysis`, `cache.warm`):** send the requested `symbols`, `as_of` / `lookback_days`, and bearer token to `https://1.21initiative.com/api/mcp/*` (or Open-Meteo for `market.climate` coordinates).
+  - **Hosted Audit & Shadow Tournament submissions (`audit.run(mode="hosted")`, `tournament.submit`):** send only the explicitly quoted and approved payload. For `tournament.submit`, this is the `genome` parameter vector, its `genome_hash`, the `contribute` flag, and — on the strategy-contributor tier only — an author-written `disclosure` and/or `strategy_code` (treated as inert text, never executed, and deleted after static review).
+  - **Remote Streamable-HTTP endpoints (`https://swarm-mcp-503318750546.europe-west1.run.app/mcp/*`):** JSON-RPC tool arguments are transmitted over TLS to the hosted Cloud Run stateless container for execution.
+
+### Python vs. C# Evaluator Parity
+
+The live trading swarm's execution risk engine is written in C# (`services/risk/Program.cs`), while `quant-swarm` executes in Python (`swarm_mcp/vendored/alpha/order_checks.py`, `swarm_mcp/vendored/guardrails/objective.py`, and `swarm_mcp/tools/warden_tools.py`). Rather than running a local .NET runtime inside the Python wheel, the two implementations are locked together via two mechanisms enforced in CI:
+
+1. **Shared Pinned Thresholds (`tests/test_floors_parity.py`):** C# environment defaults, Terraform Cloud Run config (`cloud_run.tf`), vendored guardrails constants (`objective.py`), and `HOUSE_SIZING_FLOORS` in `warden_tools.py` are parsed and asserted equal (`MAX_POSITION_PCT = 0.25`, `MAX_GROSS_EXPOSURE_PCT = 0.60`, `RISK_PCT_PER_TRADE = 0.008`, `RISK_ATR_SIZING_MULT = 1.0`, `OVERNIGHT_GAP_ATR_MULT = 1.2`).
+2. **Numerical Step-by-Step Equivalence Fixtures (`tests/test_sizing_parity.py`, `tests/test_order_checks_parity.py`):** `warden.explain_sizing` and `warden.validate_order` are parity-tested against hand-computed C# risk-engine fixtures covering integer share floor rounding (`floor(equity * 0.008 / (atr * 1.0))`), 25% single-position cap trimming, overnight gap > 1.2x ATR halving, and 60% weekend gross-exposure headroom clamping.
 
 **One-click install on [Smithery](https://smithery.ai/servers/blink-kt/quant-swarm):**
 the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/quant-swarm) (package and Smithery slug are both `quant-swarm`); the Smithery stdio launcher starts `swarm-data-mcp`, and the hosted streamable-HTTP endpoints below serve all three servers. Configuration is optional — without a token the servers still start and list every tool; the first call points you at the free signup. Add a token any time to unlock the relay-backed and hosted tools.
@@ -45,9 +56,20 @@ the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/qua
 
 | Server | Hook | Tools |
 | --- | --- | --- |
-| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `pit.analysis`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
-| `swarm-warden-mcp` | Pre-trade invariant + leakage gate — the live-capital floors and the point-in-time guards | `warden.validate_order`, `warden.audit_features`, `warden.cost_check`, `warden.validate_genome`, `warden.explain_sizing`, `warden.promotion_verdict` |
-| `swarm-gym-mcp` | Regime fragility locally, then the **Shadow Tournament** against the swarm's live champion | `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, `gym.estimate_cloud_run`, `tournament.submit`, `tournament.verdict`, `tournament.leaderboard` |
+| `swarm-warden-mcp` | **Quant Swarm Audit (`audit.*`)** guided backtest workflow plus pre-trade invariant + leakage gates (`warden.*`) | `audit.preflight`, `audit.quote`, `audit.run`, `audit.status`, `audit.report`, `audit.compare`, `warden.validate_order`, `warden.audit_features`, `warden.cost_check`, `warden.validate_genome`, `warden.explain_sizing`, `warden.promotion_verdict`, `warden.optimize_portfolio`, `warden.plan_rebalance` |
+| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`, `pit.analysis`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
+| `swarm-gym-mcp` | Regime fragility locally, then the **Shadow Tournament** against the swarm's live champion | `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, `gym.estimate_cloud_run`, `gym.evaluate_graph`, `tournament.submit`, `tournament.verdict`, `tournament.leaderboard` |
+
+### Flagship Guided Workflow: Quant Swarm Audit (`audit.*`)
+
+Instead of chaining low-level primitives manually, start every backtest evaluation with the 6-step **`audit.*`** workflow on `swarm-warden-mcp`:
+
+1. **`audit.preflight`** (local, 0 credits) — Pass paths or inline rows for your strategy returns, trade records, benchmark series, execution cost assumptions, and optional feature-provenance manifest (CSV, Parquet, or JSON). Validates timestamps, duplicates, and schema, and returns a **Coverage & Scope Matrix** separating *Available checks*, *NOT_TESTED checks* (e.g. why returns alone cannot prove absence of lookahead bias in strategy code), and an *Outbound data preview* (`0 bytes` in local mode).
+2. **`audit.quote`** (0 credits) — Takes `preflight_id` and returns a deterministic execution plan, runtime estimate, exact credit/GBP cost (`£0.00` for `mode="local"`, `20 credits` for `mode="hosted"`), and an HMAC-SHA256 `approval_token` bound to your input hash.
+3. **`audit.run`** — Executes the audit after verifying `approval_token`, enforcing `max_credits` spend cap, and deduplicating retries via `idempotency_key` (never double-bills or charges on preflight refusals).
+4. **`audit.status`** (0 credits) — Read-only polling of an audit `job_id`.
+5. **`audit.report`** (0 credits) — Exports the machine-readable JSON bundle, cryptographic reproducibility manifest, and shareable HTML + Markdown reports where every finding uses the 5-state diagnostic schema (`OBSERVED_PROBLEM`, `SENSITIVITY_WARNING`, `INSUFFICIENT_EVIDENCE`, `PASSED`, `NOT_TESTED`).
+6. **`audit.compare`** (0 credits) — Compares two completed audit bundles (before/after remediation or version A vs. version B) and verifies whether fixes resolved `OBSERVED_PROBLEM` findings without regressions.
 
 Raw bar/enrichment access (`get_bars` / `enrich_symbol`) is internal only and no longer
 registered as tools — those paths echo raw provider values, and the data policy is
@@ -153,12 +175,13 @@ we never run hosted compute at a loss.
 | What | Credits | Notes |
 | --- | --- | --- |
 | Relay data call (`/data/bars`, `/data/enrich`, `/data/pit`) | 1 | any symbol count within your plan cap counts as one call |
-| Hosted single-shot Pro tool (`features.build`, `warden.promotion_verdict`, `gym.label_regimes`, `gym.estimate_cloud_run`) | 1 | charged only on the hosted endpoint |
-| Hosted gym episode (`gym.probe_fragility`, `gym.paired_preview`) | 1 per episode | 5 regimes × per_regime × seeds (× 2 genomes for the paired preview); `gym.estimate_cloud_run` prices any geometry before you run it |
+| Hosted single-shot Pro tool (`features.build`, `warden.optimize_portfolio`, `gym.label_regimes`, `gym.estimate_cloud_run`) | 1 | charged only on the hosted endpoint |
+| Hosted gym episode (`gym.probe_fragility`, `gym.paired_preview`, `gym.evaluate_graph`) | 1 per episode | 5 regimes × per_regime × seeds (× 2 genomes for the paired preview); `gym.estimate_cloud_run` prices any geometry before you run it |
+| Hosted Quant Swarm Audit (`audit.run` with `mode="hosted"`) | 20 | requires pre-run `audit.quote` `approval_token`, `idempotency_key`, and `max_credits >= 20`; local mode (`mode="local"`) is **0 credits (£0.00)** |
 | Shadow Tournament (`tournament.submit`) | **200** — **100** with `contribute=true` | fixed price for the full 100-paired-episode geometry vs the champion |
-| `tournament.verdict`, `tournament.leaderboard`, all warden checkers, `cache.*`, local stdio runs of any tool | 0 | local execution is never metered — your CPU, your electricity |
+| `audit.*` (local mode), `warden.promotion_verdict` (local readiness check), `tournament.verdict`, `tournament.leaderboard`, all warden checkers, `cache.*`, local stdio runs of any tool | 0 | local execution is never metered — your CPU, your electricity |
 
-- **Free** (instant token at signup): all warden checkers, the derived snapshots
+- **Free** (instant token at signup): full local **Quant Swarm Audit (`audit.*`)** workflow (`audit.preflight`, `audit.quote`, `audit.run(mode="local")`, `audit.status`, `audit.report`, `audit.compare`), all warden checkers (including `warden.promotion_verdict` readiness check and `warden.plan_rebalance`), the derived snapshots
   `market.pulse` / `market.sentiment` / `market.climate` / `market.regime`,
   `pit.analysis` **lite** (one symbol per call, headline counts + top families; Pro unlocks
    10 symbols, every family, full per-horizon detail and historical `as_of`),
@@ -166,10 +189,10 @@ we never run hosted compute at a loss.
    250 relay calls/month, 365-day backfill). No hosted compute,
   no GCP spend on your behalf beyond the relay allowance.
 - **Pro** — one-time credit packs, self-serve: **10,000 credits for £19** or **100,000 for £149**,
-  valid 90 days, no subscription, no unlimited plan. Unlocks `features.build`, `cache.warm`, the Pro
-  derived tools (`market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`; 50
-  symbols/call, full backfill), all gym tools, `warden.promotion_verdict`, and `tournament.submit` /
-  `tournament.verdict`. A Starter pack is 50 tournaments — 100 as a contributor.
+  valid 90 days, no subscription, no unlimited plan. Unlocks `features.build`, `cache.warm`, `warden.optimize_portfolio`, the Pro
+  derived tools (`market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`; 50
+  symbols/call, full backfill), all gym tools, hosted `audit.run(mode="hosted")`, and `tournament.submit` /
+  `tournament.verdict`. A Starter pack is 50 tournaments — 100 as a contributor — or 500 hosted audits.
 - **Institutional** (custom-quoted): Strategy Validation Audit engagements, custom universes,
   hosted league runs, SLA.
 

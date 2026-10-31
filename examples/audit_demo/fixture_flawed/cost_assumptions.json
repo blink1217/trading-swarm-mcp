@@ -1,0 +1,6 @@
+{
+  "spread_bps": 2.0,
+  "slippage_bps": 3.0,
+  "adverse_selection_bps": 2.0,
+  "commission_bps": 0.5
+}

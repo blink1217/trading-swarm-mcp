@@ -1,0 +1,211 @@
+{
+  "job_id": "audit_b05e984c671fe229",
+  "preflight_id": "pf_b287ae1fc4f67c62",
+  "strategy_name": "momentum_breakout_v2_remediated",
+  "status": "completed",
+  "mode": "local",
+  "overall_assessment": "PASSED_LOCAL_AUDIT",
+  "metrics": {
+    "n_observations": 180,
+    "n_weekly_blocks": 37,
+    "n_trades": 45,
+    "sharpe_gross_annualized": 3.089,
+    "sharpe_net_annualized": 2.161,
+    "sharpe_bootstrap_ci_90": [
+      1.09,
+      5.485
+    ],
+    "gross_edge_bps_per_trade": 39.68,
+    "round_trip_cost_bps_1x": 15.0,
+    "net_edge_bps_per_trade_1x": 24.68,
+    "net_edge_bps_per_trade_2x": 9.68,
+    "breakeven_cost_multiplier": 2.65,
+    "net_return_total_bps": 1110.8,
+    "max_drawdown_pct": 3.13,
+    "worst_5d_return_pct": -2.18,
+    "top5_pnl_share_pct": 15.2,
+    "max_position_weight_pct": 16.0,
+    "counts_by_category": {
+      "OBSERVED_PROBLEM": 0,
+      "SENSITIVITY_WARNING": 0,
+      "INSUFFICIENT_EVIDENCE": 0,
+      "PASSED": 6,
+      "NOT_TESTED": 1
+    },
+    "overall_assessment": "PASSED_LOCAL_AUDIT"
+  },
+  "findings": [
+    {
+      "finding": "Sample Depth & Statistical Power Floor",
+      "category": "PASSED",
+      "evidence": "Observed 180 sessions across 37 weekly blocks (clears 60-session / 20-week floor). Gross Sharpe 3.09, 90% bootstrap CI [1.09, 5.48].",
+      "why_it_matters": "Provides sufficient time-series degrees of freedom to evaluate regime stability and cost drag.",
+      "next_experiment": "Proceed to multi-seed paired comparison against the live champion (`tournament.submit`).",
+      "limitation": "Single-path historical depth does not account for unrecorded parameter trials (Deflated Sharpe)."
+    },
+    {
+      "finding": "Pessimistic Execution Cost & Slippage Stress Survival",
+      "category": "PASSED",
+      "evidence": "Gross edge of 39.68 bps/trade survives 1.0x (15.00 bps -> net +24.68 bps) and 2.0x pessimistic cost stress (30.00 bps -> net +9.68 bps; breakeven multiplier: 2.65x; net Sharpe: 2.16).",
+      "why_it_matters": "Confirms a structural buffer above realistic bid-ask spread, slippage, and adverse selection.",
+      "next_experiment": "Verify liquidity capacity on target symbols using `market.microstructure` before scaling notional.",
+      "limitation": "Based on declared/house bps parameters; borrow fees for short legs are not included."
+    },
+    {
+      "finding": "Drawdown Tail & Volatility-Regime Consistency",
+      "category": "PASSED",
+      "evidence": "Max drawdown contained at 3.13% (worst 5-session return: -2.18%); positive mean return in both calm (+15.65 bps/day) and elevated-volatility (+7.49 bps/day) windows.",
+      "why_it_matters": "Demonstrates controlled tail excursion and positive expectancy across volatility environments.",
+      "next_experiment": "Verify worst-regime margin across all 5 canonical regimes via `gym.probe_fragility`.",
+      "limitation": "Close-to-close series does not capture intraday stop-out slippage."
+    },
+    {
+      "finding": "Trade Outlier Concentration & House Position Cap Compliance",
+      "category": "PASSED",
+      "evidence": "Across 45 trades, top-5 trades account for 15.2% of gross gains (well below 45% threshold) and max single-position size is 16.0% (0 breaches of the 25% house floor).",
+      "why_it_matters": "Confirms broad-based trade breadth and full compliance with live-capital position sizing invariants.",
+      "next_experiment": "Validate multi-asset rebalance trade lists using `warden.plan_rebalance`.",
+      "limitation": "Assumes trade timestamps reflect actual execution fill times."
+    },
+    {
+      "finding": "Point-in-Time Feature Provenance & Lookahead Audit",
+      "category": "PASSED",
+      "evidence": "All 3 declared feature(s) passed point-in-time timestamp checks (`available_at <= as_of`), zero banned actuals sources, and coverage >= 90%.",
+      "why_it_matters": "Verifies declared feature inputs are causally knowable at decision time.",
+      "next_experiment": "Cross-check cross-sectional IC significance on alternative-data features with `pit.analysis`.",
+      "limitation": "Validates the feature manifest contract; does not verify internal code implementation."
+    },
+    {
+      "finding": "Benchmark Active Return & Information Ratio",
+      "category": "PASSED",
+      "evidence": "Matched 180 overlapping sessions vs benchmark; annualized active return is 2754.4 bps with Information Ratio 1.72.",
+      "why_it_matters": "Separates genuine active edge from passive market beta exposure.",
+      "next_experiment": "Verify active return stability across drawdown and chop regimes (`gym.paired_preview`).",
+      "limitation": "Linear benchmark subtraction does not capture nonlinear tail beta."
+    },
+    {
+      "finding": "Underlying Strategy Code & Multiple-Testing Trial Ledger Boundary",
+      "category": "NOT_TESTED",
+      "evidence": "Tabular artifact audit only \u2014 strategy source code and discarded trial count were not evaluated locally.",
+      "why_it_matters": "Even a clean return series and manifest cannot prove that 500 parameter combinations were not swept behind the scenes to find one lucky backtest.",
+      "next_experiment": "Submit the candidate genome to the hosted Shadow Tournament (`tournament.submit`) for paired replay against the live champion and Deflated Sharpe ratio accounting.",
+      "limitation": "Local tabular checks test the artifact you brought, not the research process that selected it."
+    }
+  ],
+  "coverage_matrix": {
+    "available_checks": [
+      {
+        "check_id": "sample_power_and_sharpe",
+        "title": "Sample Depth, Effective Weekly Blocks & Bootstrap Sharpe",
+        "description": "Evaluates 180 return observations (2026-02-06 to 2026-10-15) against the minimum sample floor (60 daily / 20 weekly blocks).",
+        "inputs_used": [
+          "returns"
+        ]
+      },
+      {
+        "check_id": "net_cost_survival",
+        "title": "Pessimistic Execution Cost & Stress Survival (1.0x / 1.5x / 2.0x)",
+        "description": "Applies the house pessimistic fill model (spread + slippage + adverse selection on both legs) and tests whether claimed edge survives 1.5x and 2.0x cost stress.",
+        "inputs_used": [
+          "returns",
+          "cost_assumptions",
+          "trades"
+        ]
+      },
+      {
+        "check_id": "drawdown_and_tail_profile",
+        "title": "Drawdown Depth, Tail Skew & Volatility-Regime Split",
+        "description": "Decomposes equity curve drawdown, worst 5-session loss, and high-volatility vs calm-regime return consistency.",
+        "inputs_used": [
+          "returns"
+        ]
+      },
+      {
+        "check_id": "trade_concentration_and_turnover",
+        "title": "Trade Concentration, House Position Caps (25% / 60%) & Turnover Fragility",
+        "description": "Audits 45 trade records for top-5 outlier PnL concentration, single-name position cap breaches (>25% equity), and turnover drag.",
+        "inputs_used": [
+          "trades",
+          "cost_assumptions"
+        ]
+      },
+      {
+        "check_id": "benchmark_excess_and_beta",
+        "title": "Benchmark Active Return, Beta & Information Ratio",
+        "description": "Computes active return, tracking error, and market beta against the supplied benchmark series.",
+        "inputs_used": [
+          "returns",
+          "benchmark"
+        ]
+      },
+      {
+        "check_id": "feature_provenance_and_leakage",
+        "title": "Point-in-Time Feature Provenance & Lookahead Timestamp Audit",
+        "description": "Audits every declared feature against banned actuals sources (e.g. archive weather/restated fundamentals), timestamp availability (`available_at <= as_of`), Tier-A/B/C classification, and universe coverage (>=90%).",
+        "inputs_used": [
+          "features_manifest"
+        ]
+      }
+    ],
+    "not_tested_checks": [
+      {
+        "check_id": "strategy_code_lookahead_proof",
+        "title": "Underlying Strategy Code & In-Sample Hyperparameter Snooping Proof",
+        "status": "NOT_TESTED",
+        "reason": "Tabular return and trade logs cannot prove that the underlying signal code avoided future-bar indexing or multiple-testing selection bias across discarded parameter trials.",
+        "required_input": "Hosted Shadow Tournament replay (`tournament.submit`) on sealed/causal features and the server-side Deflated Sharpe trials ledger."
+      }
+    ],
+    "outbound_data_preview": {
+      "local_mode": {
+        "mode": "local",
+        "bytes_sent": 0,
+        "fields_sent": [],
+        "destination": "none \u2014 100% local execution on your machine"
+      },
+      "hosted_mode": {
+        "mode": "hosted",
+        "bytes_sent": 8491,
+        "fields_sent": [
+          "strategy_returns_series (ts, ret)",
+          "cost_assumptions",
+          "trades_summary (ts, symbol, pnl_bps, size_pct)",
+          "features_manifest"
+        ],
+        "destination": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/warden (only if mode='hosted' is explicitly approved)"
+      }
+    }
+  },
+  "reproducibility_bundle": {
+    "job_id": "audit_b05e984c671fe229",
+    "preflight_id": "pf_b287ae1fc4f67c62",
+    "strategy_name": "momentum_breakout_v2_remediated",
+    "input_sha256": "b287ae1fc4f67c6204ec64a4f73f08a1d7235ab898028034c73677bc648617f5",
+    "artifact_hashes": {
+      "returns": "de053179e207ebeadd12f5d5dade4d65b1f57027d610f497e685afe65bf2541b",
+      "trades": "c9cbb91116395c9bda1bc52f13a66f7ef37cbabfbdd5055f308ba2829ebbbf4d",
+      "benchmark": "606aa085d26bdec4f36484ec6335fe10628018d441dd9d1d7a6a65a4829fa416",
+      "cost_assumptions": "28bf32f0f5607e7aee1aa6cd2cbb41d7255a521be6922470e05b1bd35a23042d",
+      "features_manifest": "1e83d3c64422303b8c47ae4166ac8fc64b6dbc8e9c526d19c34a95d0a07872fb"
+    },
+    "cost_assumptions": {
+      "spread_bps": 2.0,
+      "slippage_bps": 3.0,
+      "adverse_selection_bps": 2.0,
+      "commission_bps": 0.5
+    },
+    "mode": "local",
+    "package_version": "0.7.0",
+    "random_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "approval_token": "aq1_3ae700c96b0aad931c439f2cc5f9f88a",
+    "idempotency_key": "demo-clean-v2",
+    "generated_at": "2026-10-31T00:24:31.745476+00:00"
+  },
+  "credits_charged": 0
+}

@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quant Swarm Audit Report — momentum_breakout_v2_remediated</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #38bdf8;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1rem;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.55;
+    }
+    .container { max-width: 980px; margin: 0 auto; }
+    header.hero {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .kicker { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+    h1 { margin: 0.35rem 0 0.5rem; font-size: 1.65rem; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 1rem; font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    .metric-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .metric-box span { display: block; font-size: 0.78rem; color: var(--muted); }
+    .metric-box strong { font-family: var(--mono); font-size: 1.25rem; margin-top: 0.25rem; display: block; }
+    .finding-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .finding-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .finding-header h3 { margin: 0; font-size: 1.05rem; }
+    .badge {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .finding-grid { margin: 0; display: grid; gap: 0.5rem; }
+    .finding-grid div { display: grid; grid-template-columns: 140px 1fr; gap: 0.75rem; font-size: 0.92rem; }
+    .finding-grid dt { color: var(--muted); font-weight: 600; }
+    .finding-grid dd { margin: 0; }
+    pre {
+      background: #06090f;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: #d1d5db;
+    }
+    footer { margin-top: 2rem; font-size: 0.82rem; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <div class="kicker">Quant Swarm Audit &middot; Reproducible Evidence Report</div>
+      <h1>momentum_breakout_v2_remediated</h1>
+      <div class="meta-row">
+        <span>Job: audit_b05e984c671fe229</span>
+        <span>Assessment: PASSED_LOCAL_AUDIT</span>
+        <span>Input SHA-256: b287ae1fc4f67c6204ec64a4&hellip;</span>
+        <span>Package: quant-swarm==0.7.0</span>
+      </div>
+    </header>
+
+    <section class="finding-card" style="border-left: 4px solid #38bdf8; margin-bottom: 1.5rem;">
+      <header class="finding-header">
+        <h2>Remediation Comparison: momentum_breakout_v1_flawed &rarr; momentum_breakout_v2_remediated</h2>
+        <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">REMEDIATION_VERIFIED</span>
+      </header>
+      <p style="color:#9ca3af;margin-top:0;">
+        Before Job: <code>audit_906ea84d9a70a362</code> (<code>PROBLEMS_OBSERVED</code>, SHA-256 <code>158d402e172551c6&hellip;</code>)
+        &rarr; After Job: <code>audit_b05e984c671fe229</code> (<code>PASSED_LOCAL_AUDIT</code>, SHA-256 <code>b287ae1fc4f67c62&hellip;</code>)
+        &middot; Resolved findings: <strong>5</strong>
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.9rem;margin-bottom:1rem;">
+        <thead>
+          <tr style="border-bottom:1px solid #1f2937;text-align:left;color:#9ca3af;">
+            <th style="padding:0.45rem;">Metric</th>
+            <th style="padding:0.45rem;">Before (momentum_breakout_v1_flawed)</th>
+            <th style="padding:0.45rem;">After (momentum_breakout_v2_remediated)</th>
+            <th style="padding:0.45rem;">Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope='row'>Gross Annualized Sharpe</th><td>-1.642</td><td>3.089</td><td><strong>+4.731</strong></td></tr><tr><th scope='row'>Net Annualized Sharpe (1.0x House Costs)</th><td>-2.065</td><td>2.161</td><td><strong>+4.226</strong></td></tr><tr><th scope='row'>Mean Gross Edge / Trade (bps)</th><td>7.79</td><td>39.68</td><td><strong>+31.89</strong></td></tr><tr><th scope='row'>Mean Net Edge / Trade @ 1.0x Cost (bps)</th><td>-7.21</td><td>24.68</td><td><strong>+31.89</strong></td></tr><tr><th scope='row'>Mean Net Edge / Trade @ 2.0x Cost (bps)</th><td>-22.21</td><td>9.68</td><td><strong>+31.89</strong></td></tr><tr><th scope='row'>Breakeven Cost Multiplier (x)</th><td>0.52</td><td>2.65</td><td><strong>+2.13</strong></td></tr><tr><th scope='row'>Max Drawdown (%)</th><td>23.74</td><td>3.13</td><td><strong>-20.61</strong></td></tr><tr><th scope='row'>Top-5 Trade PnL Share (%)</th><td>93.2</td><td>15.2</td><td><strong>-78.0</strong></td></tr>
+        </tbody>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+        <thead>
+          <tr style="border-bottom:1px solid #1f2937;text-align:left;color:#9ca3af;">
+            <th style="padding:0.45rem;">Diagnostic Check</th>
+            <th style="padding:0.45rem;">Before</th>
+            <th style="padding:0.45rem;">After</th>
+            <th style="padding:0.45rem;">Post-Remediation Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope='row'>Sample Depth &amp; Statistical Power Floor</th><td><code>OBSERVED_PROBLEM</code></td><td><code>PASSED</code></td><td>Observed 180 sessions across 37 weekly blocks (clears 60-session / 20-week floor). Gross Sharpe 3.09, 90% bootstrap CI [1.09, 5.48].</td></tr><tr><th scope='row'>Pessimistic Execution Cost &amp; Slippage Stress Survival</th><td><code>OBSERVED_PROBLEM</code></td><td><code>PASSED</code></td><td>Gross edge of 39.68 bps/trade survives 1.0x (15.00 bps -&gt; net +24.68 bps) and 2.0x pessimistic cost stress (30.00 bps -&gt; net +9.68 bps; breakeven multiplier: 2.65x; net Sharpe: 2.16).</td></tr><tr><th scope='row'>Drawdown Tail &amp; Volatility-Regime Consistency</th><td><code>OBSERVED_PROBLEM</code></td><td><code>PASSED</code></td><td>Max drawdown contained at 3.13% (worst 5-session return: -2.18%); positive mean return in both calm (+15.65 bps/day) and elevated-volatility (+7.49 bps/day) windows.</td></tr><tr><th scope='row'>Trade Outlier Concentration &amp; House Position Cap Compliance</th><td><code>OBSERVED_PROBLEM</code></td><td><code>PASSED</code></td><td>Across 45 trades, top-5 trades account for 15.2% of gross gains (well below 45% threshold) and max single-position size is 16.0% (0 breaches of the 25% house floor).</td></tr><tr><th scope='row'>Point-in-Time Feature Provenance &amp; Lookahead Audit</th><td><code>OBSERVED_PROBLEM</code></td><td><code>PASSED</code></td><td>All 3 declared feature(s) passed point-in-time timestamp checks (`available_at &lt;= as_of`), zero banned actuals sources, and coverage &gt;= 90%.</td></tr><tr><th scope='row'>Benchmark Active Return &amp; Information Ratio</th><td><code>NOT_TESTED</code></td><td><code>PASSED</code></td><td>Matched 180 overlapping sessions vs benchmark; annualized active return is 2754.4 bps with Information Ratio 1.72.</td></tr><tr><th scope='row'>Underlying Strategy Code &amp; Multiple-Testing Trial Ledger Boundary</th><td><code>NOT_TESTED</code></td><td><code>NOT_TESTED</code></td><td>Tabular artifact audit only — strategy source code and discarded trial count were not evaluated locally.</td></tr>
+        </tbody>
+      </table>
+    </section>
+    
+
+    <section class="metrics-grid" aria-label="Headline metrics">
+      <div class="metric-box"><span>Observations / Weeks</span><strong>180 / 37w</strong></div>
+      <div class="metric-box"><span>Gross / Net Sharpe</span><strong>3.09 / 2.16</strong></div>
+      <div class="metric-box"><span>Net Edge (1.0x / 2.0x Cost)</span><strong>24.7 / 9.7 bps</strong></div>
+      <div class="metric-box"><span>Breakeven Cost Multiplier</span><strong>2.65x</strong></div>
+      <div class="metric-box"><span>Max Drawdown</span><strong>3.13%</strong></div>
+      <div class="metric-box"><span>Top-5 Trade Share</span><strong>15.2%</strong></div>
+    </section>
+
+    <section aria-label="Diagnostic findings">
+      <h2>Structured Diagnostic Findings</h2>
+      
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>1. Sample Depth &amp; Statistical Power Floor</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Observed 180 sessions across 37 weekly blocks (clears 60-session / 20-week floor). Gross Sharpe 3.09, 90% bootstrap CI [1.09, 5.48].</dd></div>
+          <div><dt>Why it matters</dt><dd>Provides sufficient time-series degrees of freedom to evaluate regime stability and cost drag.</dd></div>
+          <div><dt>Next experiment</dt><dd>Proceed to multi-seed paired comparison against the live champion (`tournament.submit`).</dd></div>
+          <div><dt>Limitation</dt><dd>Single-path historical depth does not account for unrecorded parameter trials (Deflated Sharpe).</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>2. Pessimistic Execution Cost &amp; Slippage Stress Survival</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Gross edge of 39.68 bps/trade survives 1.0x (15.00 bps -&gt; net +24.68 bps) and 2.0x pessimistic cost stress (30.00 bps -&gt; net +9.68 bps; breakeven multiplier: 2.65x; net Sharpe: 2.16).</dd></div>
+          <div><dt>Why it matters</dt><dd>Confirms a structural buffer above realistic bid-ask spread, slippage, and adverse selection.</dd></div>
+          <div><dt>Next experiment</dt><dd>Verify liquidity capacity on target symbols using `market.microstructure` before scaling notional.</dd></div>
+          <div><dt>Limitation</dt><dd>Based on declared/house bps parameters; borrow fees for short legs are not included.</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>3. Drawdown Tail &amp; Volatility-Regime Consistency</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Max drawdown contained at 3.13% (worst 5-session return: -2.18%); positive mean return in both calm (+15.65 bps/day) and elevated-volatility (+7.49 bps/day) windows.</dd></div>
+          <div><dt>Why it matters</dt><dd>Demonstrates controlled tail excursion and positive expectancy across volatility environments.</dd></div>
+          <div><dt>Next experiment</dt><dd>Verify worst-regime margin across all 5 canonical regimes via `gym.probe_fragility`.</dd></div>
+          <div><dt>Limitation</dt><dd>Close-to-close series does not capture intraday stop-out slippage.</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>4. Trade Outlier Concentration &amp; House Position Cap Compliance</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Across 45 trades, top-5 trades account for 15.2% of gross gains (well below 45% threshold) and max single-position size is 16.0% (0 breaches of the 25% house floor).</dd></div>
+          <div><dt>Why it matters</dt><dd>Confirms broad-based trade breadth and full compliance with live-capital position sizing invariants.</dd></div>
+          <div><dt>Next experiment</dt><dd>Validate multi-asset rebalance trade lists using `warden.plan_rebalance`.</dd></div>
+          <div><dt>Limitation</dt><dd>Assumes trade timestamps reflect actual execution fill times.</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>5. Point-in-Time Feature Provenance &amp; Lookahead Audit</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>All 3 declared feature(s) passed point-in-time timestamp checks (`available_at &lt;= as_of`), zero banned actuals sources, and coverage &gt;= 90%.</dd></div>
+          <div><dt>Why it matters</dt><dd>Verifies declared feature inputs are causally knowable at decision time.</dd></div>
+          <div><dt>Next experiment</dt><dd>Cross-check cross-sectional IC significance on alternative-data features with `pit.analysis`.</dd></div>
+          <div><dt>Limitation</dt><dd>Validates the feature manifest contract; does not verify internal code implementation.</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #86efac;">
+        <header class="finding-header">
+          <h3>6. Benchmark Active Return &amp; Information Ratio</h3>
+          <span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">PASSED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Matched 180 overlapping sessions vs benchmark; annualized active return is 2754.4 bps with Information Ratio 1.72.</dd></div>
+          <div><dt>Why it matters</dt><dd>Separates genuine active edge from passive market beta exposure.</dd></div>
+          <div><dt>Next experiment</dt><dd>Verify active return stability across drawdown and chop regimes (`gym.paired_preview`).</dd></div>
+          <div><dt>Limitation</dt><dd>Linear benchmark subtraction does not capture nonlinear tail beta.</dd></div>
+        </dl>
+      </article>
+      <article class="finding-card" style="border-left: 4px solid #d1d5db;">
+        <header class="finding-header">
+          <h3>7. Underlying Strategy Code &amp; Multiple-Testing Trial Ledger Boundary</h3>
+          <span class="badge" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;">NOT_TESTED</span>
+        </header>
+        <dl class="finding-grid">
+          <div><dt>Evidence</dt><dd>Tabular artifact audit only — strategy source code and discarded trial count were not evaluated locally.</dd></div>
+          <div><dt>Why it matters</dt><dd>Even a clean return series and manifest cannot prove that 500 parameter combinations were not swept behind the scenes to find one lucky backtest.</dd></div>
+          <div><dt>Next experiment</dt><dd>Submit the candidate genome to the hosted Shadow Tournament (`tournament.submit`) for paired replay against the live champion and Deflated Sharpe ratio accounting.</dd></div>
+          <div><dt>Limitation</dt><dd>Local tabular checks test the artifact you brought, not the research process that selected it.</dd></div>
+        </dl>
+      </article>
+    </section>
+
+    <section aria-label="Reproducibility bundle">
+      <h2>Reproducibility Bundle</h2>
+      <pre><code>{
+  &quot;job_id&quot;: &quot;audit_b05e984c671fe229&quot;,
+  &quot;preflight_id&quot;: &quot;pf_b287ae1fc4f67c62&quot;,
+  &quot;strategy_name&quot;: &quot;momentum_breakout_v2_remediated&quot;,
+  &quot;input_sha256&quot;: &quot;b287ae1fc4f67c6204ec64a4f73f08a1d7235ab898028034c73677bc648617f5&quot;,
+  &quot;artifact_hashes&quot;: {
+    &quot;returns&quot;: &quot;de053179e207ebeadd12f5d5dade4d65b1f57027d610f497e685afe65bf2541b&quot;,
+    &quot;trades&quot;: &quot;c9cbb91116395c9bda1bc52f13a66f7ef37cbabfbdd5055f308ba2829ebbbf4d&quot;,
+    &quot;benchmark&quot;: &quot;606aa085d26bdec4f36484ec6335fe10628018d441dd9d1d7a6a65a4829fa416&quot;,
+    &quot;cost_assumptions&quot;: &quot;28bf32f0f5607e7aee1aa6cd2cbb41d7255a521be6922470e05b1bd35a23042d&quot;,
+    &quot;features_manifest&quot;: &quot;1e83d3c64422303b8c47ae4166ac8fc64b6dbc8e9c526d19c34a95d0a07872fb&quot;
+  },
+  &quot;cost_assumptions&quot;: {
+    &quot;spread_bps&quot;: 2.0,
+    &quot;slippage_bps&quot;: 3.0,
+    &quot;adverse_selection_bps&quot;: 2.0,
+    &quot;commission_bps&quot;: 0.5
+  },
+  &quot;mode&quot;: &quot;local&quot;,
+  &quot;package_version&quot;: &quot;0.7.0&quot;,
+  &quot;random_seeds&quot;: [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  &quot;approval_token&quot;: &quot;aq1_3ae700c96b0aad931c439f2cc5f9f88a&quot;,
+  &quot;idempotency_key&quot;: &quot;demo-clean-v2&quot;,
+  &quot;generated_at&quot;: &quot;2026-10-31T00:24:31.745476+00:00&quot;
+}</code></pre>
+    </section>
+
+    <footer>
+      Generated by <code>quant-swarm==0.7.0</code> &middot; The 1.21 Initiative &middot; Diagnostic analysis only, not investment advice.
+    </footer>
+  </div>
+</body>
+</html>

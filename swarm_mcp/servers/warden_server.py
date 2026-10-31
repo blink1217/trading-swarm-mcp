@@ -18,22 +18,22 @@ from swarm_mcp.server_meta import (
     SITE_URL,
     annotations,
 )
-from swarm_mcp.tools import warden_tools
+from swarm_mcp.tools import audit_tools, warden_tools
 
-SERVER_TITLE = "Swarm Warden MCP"
+SERVER_TITLE = "Swarm Warden & Audit MCP"
 SERVER_DESCRIPTION = (
-    "Pre-trade invariant and leakage auditing from the 1.21 Initiative trading swarm: "
-    "order validation, cost reality checks, genome schema validation, sizing explanation, "
-    "and feature-manifest leakage audits. Runs locally — no IP upload."
+    "Quant Swarm Audit (`audit.*`) and pre-trade invariant/leakage checkers (`warden.*`): "
+    "guided backtest auditing (CSV/Parquet returns, trades, costs, feature manifests), "
+    "order validation, cost reality checks, genome schema validation, and sizing explanation."
 )
 
 INSTRUCTIONS = (
-    "Pre-trade invariant and leakage auditing — the same checker functions that gate live "
-    "capital in the trading swarm, run locally against your own manifest. No IP upload: your "
-    "orders, features, and genomes never leave this machine. Promotion verdicts are never "
-    "issued locally; undecidable requests return INDETERMINATE_LOCAL with the exact missing "
-    "statistical inputs, an audit_request block, and a cloud_job spec for the hosted "
-    "tournament. This server never places, cancels, or routes orders."
+    "Start backtest and strategy evaluations with the guided Quant Swarm Audit workflow: "
+    "`audit.preflight` -> `audit.quote` -> `audit.run` -> `audit.status` -> `audit.report` -> `audit.compare`. "
+    "For point checks, use `warden.*`. Over local stdio, your orders, returns, features, and genomes "
+    "stay on this machine unless you explicitly opt into `mode='hosted'`. Promotion verdicts are never "
+    "issued locally; `warden.promotion_verdict` runs a free local readiness check (`INDETERMINATE_LOCAL`). "
+    "This server never places, cancels, or routes orders."
 )
 
 
@@ -119,6 +119,12 @@ class PromotionVerdictOut(TypedDict, total=False):
     tool: str
     verdict: str
     why: str
+    valid_genome: bool
+    schema_errors: list[str]
+    highest_mutated_tier: str | None
+    readiness_status: str
+    next_action: str
+    credits_charged: int
     missing_inputs: list[str]
     audit_request: dict
     cloud_job: dict
@@ -318,7 +324,7 @@ async def explain_sizing(
 
 @mcp.tool(
     name="warden.promotion_verdict",
-    title="Request Promotion Verdict",
+    title="Promotion Readiness & Prerequisite Check",
     annotations=annotations(read_only=True, idempotent=True, open_world=False),
     structured_output=True,
 )
@@ -328,9 +334,13 @@ async def request_promotion_verdict(
     champion_genome: Annotated[dict | None, Field(
         description="Optional current champion genome; mutation tiers vs it are reported.")] = None,
 ) -> PromotionVerdictOut:
-    """Request a promotion verdict. Always INDETERMINATE_LOCAL: the selection machinery is
-    server-side. Names the exact missing statistical inputs and emits an audit_request plus
-    a cloud_job spec for the hosted tournament.
+    """Deterministic local promotion-readiness & prerequisite check (free, 0 credits).
+    Always returns verdict=INDETERMINATE_LOCAL because promotion selection machinery
+    (Deflated Sharpe, PBO cap, trials ledger) runs server-side only. Validates genome
+    schema, checks Tier-A/B/C mutation eligibility vs champion_genome, returns
+    readiness_status (READY_FOR_HOSTED_TOURNAMENT | BLOCKED_SCHEMA_INVALID |
+    BLOCKED_TIER_B_C_REQUIRES_TAPE), names missing statistical inputs, and emits an
+    audit_request plus cloud_job spec for tournament.submit.
     """
     return await warden_tools.request_promotion_verdict(challenger_genome=challenger_genome,
                                                         champion_genome=champion_genome)
@@ -419,6 +429,282 @@ async def plan_rebalance(
         cash_proxy_symbol=cash_proxy_symbol, max_drawdown_limit=max_drawdown_limit,
         drift_threshold=drift_threshold, max_spread_bps=max_spread_bps,
         limit_collar_bps=limit_collar_bps, feature_psi=feature_psi,
+    )
+
+
+class AuditGenericOut(TypedDict, total=False):
+    tool: str
+    preflight_id: str
+    job_id: str
+    job_id_a: str
+    job_id_b: str
+    strategy_name: str
+    strategy_a: str
+    strategy_b: str
+    eligible: bool
+    status: str
+    mode: str
+    validation_errors: list[str]
+    input_sha256: str
+    input_sha256_a: str
+    input_sha256_b: str
+    artifact_hashes: dict
+    cost_assumptions: dict
+    returns_summary: dict
+    trades_summary: dict | None
+    has_benchmark: bool
+    has_features_manifest: bool
+    coverage_matrix: dict
+    package_version: str
+    random_seeds: list[int]
+    execution_plan: list[dict]
+    not_tested_count: int
+    estimated_runtime_seconds: float
+    credits_cost: int
+    gbp_cost: dict
+    outbound_data_preview: dict
+    approval_token: str
+    idempotency_key: str
+    idempotent_replay: bool
+    credits_charged: int
+    required_credits: int
+    max_credits: int
+    overall_assessment: str
+    assessment_before: str
+    assessment_after: str
+    remediation_verdict: str
+    counts_by_category: dict
+    headline_metrics: dict
+    metrics: dict
+    metrics_diff: dict
+    findings: list[dict]
+    resolved_findings: list[dict]
+    new_warnings: list[dict]
+    finding_transitions: list[dict]
+    reproducibility_bundle: dict
+    markdown_report: str
+    html_report: str
+    written_files: dict
+    generated_at: str
+    next_step: str
+    reason: str
+    not_investment_advice: bool
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="audit.preflight",
+    title="Quant Swarm Audit — Preflight & Scope Matrix",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_preflight(
+    returns_path: Annotated[str | None, Field(
+        description="Path to CSV/Parquet/JSON strategy returns (columns: ts/date, strategy_return/return).")] = None,
+    returns_rows: Annotated[list[dict] | None, Field(
+        description="Inline list of strategy return rows [{ts, strategy_return}].")] = None,
+    trades_path: Annotated[str | None, Field(
+        description="Optional path to CSV/Parquet/JSON trade records (ts, symbol, pnl_bps, position_pct).")] = None,
+    trades_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline trade records [{ts, symbol, pnl_bps, position_pct}].")] = None,
+    benchmark_path: Annotated[str | None, Field(
+        description="Optional path to CSV/Parquet/JSON benchmark return series.")] = None,
+    benchmark_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline benchmark return rows [{ts, return}].")] = None,
+    cost_assumptions_path: Annotated[str | None, Field(
+        description="Optional path to JSON execution cost assumptions {spread_bps, slippage_bps, adverse_selection_bps}.")] = None,
+    cost_assumptions: Annotated[dict | None, Field(
+        description="Optional inline execution cost assumptions dict.")] = None,
+    features_manifest_path: Annotated[str | None, Field(
+        description="Optional path to JSON feature provenance manifest {as_of, features: [...]}.")] = None,
+    features_manifest: Annotated[dict | None, Field(
+        description="Optional inline feature provenance manifest dict.")] = None,
+    strategy_name: Annotated[str, Field(
+        description="Human-readable strategy or experiment identifier.")] = "candidate_strategy",
+) -> AuditGenericOut:
+    """Validates strategy returns, trades, benchmark, cost assumptions, and feature manifests locally at 0 credits.
+    Returns a Coverage & Scope Matrix separating available checks, NOT_TESTED checks, and an outbound data preview.
+    """
+    return await audit_tools.preflight(
+        returns_path=returns_path, returns_rows=returns_rows,
+        trades_path=trades_path, trades_rows=trades_rows,
+        benchmark_path=benchmark_path, benchmark_rows=benchmark_rows,
+        cost_assumptions_path=cost_assumptions_path, cost_assumptions=cost_assumptions,
+        features_manifest_path=features_manifest_path, features_manifest=features_manifest,
+        strategy_name=strategy_name,
+    )
+
+
+@mcp.tool(
+    name="audit.quote",
+    title="Quant Swarm Audit — Deterministic Quote & Approval Token",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_quote(
+    preflight_id: Annotated[str | None, Field(
+        description="Preflight ID returned by `audit.preflight`.")] = None,
+    mode: Annotated[str, Field(
+        description="Execution mode: 'local' (0 credits, £0.00) or 'hosted' (20 credits).")] = "local",
+    random_seeds: Annotated[list[int] | None, Field(
+        description="Deterministic bootstrap seeds (default [0, 1, 2, 3, 4]).")] = None,
+    returns_path: Annotated[str | None, Field(
+        description="Optional returns path if calling quote directly without preflight_id.")] = None,
+    returns_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline returns rows if calling quote directly.")] = None,
+    trades_path: Annotated[str | None, Field(
+        description="Optional trades path.")] = None,
+    trades_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline trades rows.")] = None,
+    benchmark_path: Annotated[str | None, Field(
+        description="Optional benchmark path.")] = None,
+    benchmark_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline benchmark rows.")] = None,
+    cost_assumptions_path: Annotated[str | None, Field(
+        description="Optional cost assumptions JSON path.")] = None,
+    cost_assumptions: Annotated[dict | None, Field(
+        description="Optional inline cost assumptions dict.")] = None,
+    features_manifest_path: Annotated[str | None, Field(
+        description="Optional feature manifest JSON path.")] = None,
+    features_manifest: Annotated[dict | None, Field(
+        description="Optional inline feature manifest dict.")] = None,
+    strategy_name: Annotated[str, Field(
+        description="Strategy identifier.")] = "candidate_strategy",
+) -> AuditGenericOut:
+    """Prices a validated preflight manifest before execution.
+    Returns the deterministic execution plan, runtime estimate, exact credit/GBP cost, and an input-bound approval_token.
+    """
+    return await audit_tools.quote(
+        preflight_id=preflight_id, mode=mode, random_seeds=random_seeds,
+        returns_path=returns_path, returns_rows=returns_rows,
+        trades_path=trades_path, trades_rows=trades_rows,
+        benchmark_path=benchmark_path, benchmark_rows=benchmark_rows,
+        cost_assumptions_path=cost_assumptions_path, cost_assumptions=cost_assumptions,
+        features_manifest_path=features_manifest_path, features_manifest=features_manifest,
+        strategy_name=strategy_name,
+    )
+
+
+@mcp.tool(
+    name="audit.run",
+    title="Quant Swarm Audit — Execute Strategy Audit",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_run(
+    approval_token: Annotated[str, Field(
+        description="Input-bound approval_token returned by `audit.quote`.")],
+    idempotency_key: Annotated[str, Field(
+        description="Caller-supplied idempotency key to prevent duplicate execution or billing on retries.")],
+    max_credits: Annotated[int, Field(
+        description="Hard spend cap in credits (0 for local runs; >=20 for hosted runs).", ge=0)] = 0,
+    preflight_id: Annotated[str | None, Field(
+        description="Preflight ID returned by `audit.preflight`.")] = None,
+    mode: Annotated[str, Field(
+        description="Execution mode: 'local' (0 credits) or 'hosted' (20 credits).")] = "local",
+    random_seeds: Annotated[list[int] | None, Field(
+        description="Deterministic bootstrap seeds (must match the seeds used in `audit.quote`).")] = None,
+    returns_path: Annotated[str | None, Field(
+        description="Optional returns path.")] = None,
+    returns_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline returns rows.")] = None,
+    trades_path: Annotated[str | None, Field(
+        description="Optional trades path.")] = None,
+    trades_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline trades rows.")] = None,
+    benchmark_path: Annotated[str | None, Field(
+        description="Optional benchmark path.")] = None,
+    benchmark_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline benchmark rows.")] = None,
+    cost_assumptions_path: Annotated[str | None, Field(
+        description="Optional cost assumptions JSON path.")] = None,
+    cost_assumptions: Annotated[dict | None, Field(
+        description="Optional inline cost assumptions dict.")] = None,
+    features_manifest_path: Annotated[str | None, Field(
+        description="Optional feature manifest JSON path.")] = None,
+    features_manifest: Annotated[dict | None, Field(
+        description="Optional inline feature manifest dict.")] = None,
+    strategy_name: Annotated[str, Field(
+        description="Strategy identifier.")] = "candidate_strategy",
+) -> AuditGenericOut:
+    """Executes the Quant Swarm Audit and records a reproducible job bundle.
+    Enforces approval_token verification, idempotency_key deduplication, and max_credits spend cap; never charges on preflight refusals.
+    """
+    return await audit_tools.run(
+        approval_token=approval_token, idempotency_key=idempotency_key,
+        max_credits=max_credits, preflight_id=preflight_id, mode=mode,
+        random_seeds=random_seeds, returns_path=returns_path, returns_rows=returns_rows,
+        trades_path=trades_path, trades_rows=trades_rows,
+        benchmark_path=benchmark_path, benchmark_rows=benchmark_rows,
+        cost_assumptions_path=cost_assumptions_path, cost_assumptions=cost_assumptions,
+        features_manifest_path=features_manifest_path, features_manifest=features_manifest,
+        strategy_name=strategy_name,
+    )
+
+
+@mcp.tool(
+    name="audit.status",
+    title="Quant Swarm Audit — Poll Job Status",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_status(
+    job_id: Annotated[str, Field(
+        description="Audit job_id returned by `audit.run`.")],
+) -> AuditGenericOut:
+    """Polls an audit job by job_id in read-only mode at 0 credits.
+    Returns completion status, overall diagnostic assessment, finding counts by category, and input SHA-256 hash.
+    """
+    return await audit_tools.status(job_id=job_id)
+
+
+@mcp.tool(
+    name="audit.report",
+    title="Quant Swarm Audit — Export Reproducible Evidence Report",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_report(
+    job_id: Annotated[str, Field(
+        description="Completed audit job_id returned by `audit.run`.")],
+    output_html_path: Annotated[str | None, Field(
+        description="Optional file path to write the standalone shareable HTML audit report.")] = None,
+    output_json_path: Annotated[str | None, Field(
+        description="Optional file path to write the machine-readable JSON audit bundle.")] = None,
+    output_markdown_path: Annotated[str | None, Field(
+        description="Optional file path to write the Markdown audit report.")] = None,
+) -> AuditGenericOut:
+    """Generates the structured JSON audit bundle, reproducibility manifest, and shareable HTML/Markdown reports.
+    Every finding includes category (OBSERVED_PROBLEM | SENSITIVITY_WARNING | INSUFFICIENT_EVIDENCE | PASSED | NOT_TESTED), evidence, impact, next experiment, and limitation.
+    """
+    return await audit_tools.report(
+        job_id=job_id, output_html_path=output_html_path,
+        output_json_path=output_json_path, output_markdown_path=output_markdown_path,
+    )
+
+
+@mcp.tool(
+    name="audit.compare",
+    title="Quant Swarm Audit — Compare Before/After Audit Bundles",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_compare(
+    job_id_a: Annotated[str, Field(
+        description="Baseline / before-remediation audit job_id.")],
+    job_id_b: Annotated[str, Field(
+        description="Candidate / after-remediation audit job_id.")],
+    output_html_path: Annotated[str | None, Field(
+        description="Optional file path to write the standalone before/after comparison HTML report.")] = None,
+) -> AuditGenericOut:
+    """Compares two completed audit jobs (version A vs version B or before/after remediation).
+    Returns a structured diff of Sharpe, net edge, cost sensitivity, drawdown, trade concentration, and resolved vs new warnings.
+    """
+    return await audit_tools.compare(
+        job_id_a=job_id_a, job_id_b=job_id_b, output_html_path=output_html_path,
     )
 
 
