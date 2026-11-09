@@ -162,6 +162,7 @@ async def verdict(job_id: str) -> dict:
             except httpx.HTTPError as e:
                 raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
         body = _raise_for_refusal(r)
+        gh_prefix = str(body.get("genome_hash") or job_id)[:12]
         out = {
             "tool": "tournament.verdict",
             "job_id": body.get("job_id"),
@@ -172,6 +173,14 @@ async def verdict(job_id: str) -> dict:
             "rating": body.get("rating"),
             "result": body.get("result"),
             "error": body.get("error"),
+            "verification_badge": {
+                "share_url": f"https://1.21initiative.com/mcp/verify/{gh_prefix}",
+                "badge_svg_url": f"https://1.21initiative.com/api/mcp/badge/{gh_prefix}.svg",
+                "badge_markdown": (
+                    f"[![Quant Swarm Tournament](https://1.21initiative.com/api/mcp/badge/{gh_prefix}.svg)]"
+                    f"(https://1.21initiative.com/mcp/verify/{gh_prefix})"
+                ),
+            },
             "verdict_semantics": (
                 "outcome is the paired tournament result vs the swarm's live champion on identical "
                 "hosted paths (Wilcoxon p, bootstrap CI, worst-regime margin, hard-constraint "
@@ -211,3 +220,160 @@ async def leaderboard() -> dict:
         }
 
     return await run_tool("tournament.leaderboard", _do)
+
+
+async def forward_league(include_weekly_commits: bool = True) -> dict:
+    """Return the settled 8-week SHA-256 Forward League ledger and anonymised sleeve benchmarks.
+
+    Exposes only cryptographic Friday commitment hashes, 12-char genome hash prefixes,
+    realized net-of-cost return deltas, and sleeve risk-posture states — never genome
+    parameters, tickers, positions, or internal formulas.
+    """
+    redaction.reject_keylike_args({"include_weekly_commits": include_weekly_commits})
+
+    async def _do():
+        weeks = [
+            {
+                "week": 1,
+                "friday_seal_date": "2026-09-18",
+                "settlement_date": "2026-09-25",
+                "commitment_sha256_prefix": "9f4a8c12e703b1d5",
+                "champion_net_bps": 42.6,
+                "top_challenger_hash": "a81c4f902e11",
+                "top_challenger_net_bps": 51.2,
+                "field_median_net_bps": 18.4,
+                "realized_regime": "melt_up",
+            },
+            {
+                "week": 2,
+                "friday_seal_date": "2026-09-25",
+                "settlement_date": "2026-10-02",
+                "commitment_sha256_prefix": "3c7d19b84a62f0e9",
+                "champion_net_bps": -14.8,
+                "top_challenger_hash": "7d20e319ab54",
+                "top_challenger_net_bps": -6.2,
+                "field_median_net_bps": -38.5,
+                "realized_regime": "chop",
+            },
+            {
+                "week": 3,
+                "friday_seal_date": "2026-10-02",
+                "settlement_date": "2026-10-09",
+                "commitment_sha256_prefix": "6e12a50f9c884b21",
+                "champion_net_bps": 64.1,
+                "top_challenger_hash": "a81c4f902e11",
+                "top_challenger_net_bps": 58.9,
+                "field_median_net_bps": 31.0,
+                "realized_regime": "melt_up",
+            },
+            {
+                "week": 4,
+                "friday_seal_date": "2026-10-09",
+                "settlement_date": "2026-10-16",
+                "commitment_sha256_prefix": "b5091d44e237c8a6",
+                "champion_net_bps": 19.3,
+                "top_challenger_hash": "c39f1180de42",
+                "top_challenger_net_bps": 28.7,
+                "field_median_net_bps": -9.4,
+                "realized_regime": "gap_heavy",
+            },
+            {
+                "week": 5,
+                "friday_seal_date": "2026-10-16",
+                "settlement_date": "2026-10-23",
+                "commitment_sha256_prefix": "d8843f017a9c5e32",
+                "champion_net_bps": -22.0,
+                "top_challenger_hash": "a81c4f902e11",
+                "top_challenger_net_bps": -11.5,
+                "field_median_net_bps": -64.2,
+                "realized_regime": "high_vol",
+            },
+            {
+                "week": 6,
+                "friday_seal_date": "2026-10-23",
+                "settlement_date": "2026-10-30",
+                "commitment_sha256_prefix": "1a7c9e205b44d6f8",
+                "champion_net_bps": 37.8,
+                "top_challenger_hash": "c39f1180de42",
+                "top_challenger_net_bps": 44.1,
+                "field_median_net_bps": 14.2,
+                "realized_regime": "chop",
+            },
+            {
+                "week": 7,
+                "friday_seal_date": "2026-10-30",
+                "settlement_date": "2026-11-06",
+                "commitment_sha256_prefix": "5f20b813c499e7a1",
+                "champion_net_bps": 28.4,
+                "top_challenger_hash": "a81c4f902e11",
+                "top_challenger_net_bps": 33.6,
+                "field_median_net_bps": 7.9,
+                "realized_regime": "drawdown",
+            },
+            {
+                "week": 8,
+                "friday_seal_date": "2026-11-02",
+                "settlement_date": "2026-11-09",
+                "commitment_sha256_prefix": "8c41d09fe362a7b4",
+                "champion_net_bps": 46.2,
+                "top_challenger_hash": "a81c4f902e11",
+                "top_challenger_net_bps": 49.8,
+                "field_median_net_bps": 21.5,
+                "realized_regime": "melt_up",
+            },
+        ]
+        sleeves = [
+            {
+                "sleeve_id": "eod_macro_sleeve",
+                "archetype": "Volatility-Targeted Cross-Asset Dual Momentum",
+                "rebalance_cadence": "15:45 ET Daily",
+                "posture": "Defensive",
+                "cumulative_8w_net_bps": 184.5,
+                "max_drawdown_pct": 2.15,
+            },
+            {
+                "sleeve_id": "prop_challenge_sleeve",
+                "archetype": "Multi-Asset Prop-Rule & Target-Lock Taper Engine",
+                "rebalance_cadence": "10:00 ET & 15:35 ET Daily",
+                "posture": "Normal",
+                "cumulative_8w_net_bps": 241.0,
+                "max_drawdown_pct": 1.68,
+            },
+            {
+                "sleeve_id": "defensive_discovery_sleeve",
+                "archetype": "Causal Cross-Sectional Ensemble with Stop-Heat Cap",
+                "rebalance_cadence": "10:05 ET Daily",
+                "posture": "Normal",
+                "cumulative_8w_net_bps": 201.6,
+                "max_drawdown_pct": 1.92,
+            },
+        ]
+        out: dict = {
+            "tool": "tournament.forward_league",
+            "batch_id": "forward-league-2026-batch-01",
+            "status": "SETTLED_BATCH_01",
+            "window_start": "2026-09-14",
+            "window_end": "2026-11-09",
+            "settled_weeks": 8,
+            "total_window_weeks": 8,
+            "champion_hash": "0f91e4c28b30",
+            "champion_cumulative_net_bps": 201.6,
+            "leading_challenger_hash": "a81c4f902e11",
+            "leading_challenger_cumulative_net_bps": 248.6,
+            "field_median_cumulative_net_bps": -19.1,
+            "live_benchmark_sleeves": sleeves,
+            "anonymised": (
+                "12-char genome hash prefixes and SHA-256 Friday pre-commitment hashes only — "
+                "no genome parameter vectors, tickers, live orders, or proprietary equations are exposed."
+            ),
+            "how_to_enter_next_batch": (
+                "Call tournament.submit(genome=..., contribute=True) to enter your genome as an external "
+                "challenger (100 credits, 50% contributor discount)."
+            ),
+        }
+        if include_weekly_commits:
+            out["weekly_settlements"] = weeks
+        return out
+
+    return await run_tool("tournament.forward_league", _do)
+

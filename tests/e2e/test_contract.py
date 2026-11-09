@@ -19,18 +19,21 @@ DATA_TOOLS = {
     "pit.analysis", "cache.warm", "cache.stats", "cache.offline", "market.regime",
     "market.microstructure", "volume.forecast", "market.screen", "market.rank",
     "market.flow", "market.fundamentals_pit", "market.macro_nowcast", "market.transfer_entropy",
+    "market.insider_institutional_pit", "market.supply_chain_pit",
 }
 WARDEN_TOOLS = {
     "warden.validate_order", "warden.audit_features", "warden.cost_check",
     "warden.validate_genome", "warden.explain_sizing", "warden.promotion_verdict",
     "warden.optimize_portfolio", "warden.plan_rebalance",
+    "warden.prop_challenge_check", "warden.defensive_posture",
     "audit.preflight", "audit.quote", "audit.run",
     "audit.status", "audit.report", "audit.compare",
 }
 GYM_TOOLS = {
     "gym.label_regimes", "gym.probe_fragility", "gym.paired_preview",
-    "gym.estimate_cloud_run", "gym.evaluate_graph", "tournament.submit",
-    "tournament.verdict", "tournament.leaderboard",
+    "gym.estimate_cloud_run", "gym.evaluate_graph", "gym.prop_challenge_sim",
+    "gym.evaluate_formula", "tournament.submit", "tournament.verdict",
+    "tournament.leaderboard", "tournament.forward_league",
 }
 
 
@@ -56,7 +59,7 @@ def test_contract_inventory_is_exactly_26_tools(contracts):
     assert set(_by_name(contracts, "warden")) == WARDEN_TOOLS
     assert set(_by_name(contracts, "gym")) == GYM_TOOLS
     total = sum(len(v) for v in contracts.values())
-    assert total == 39, total
+    assert total == 46, total
 
 
 def test_contract_matches_golden_snapshot(contracts):

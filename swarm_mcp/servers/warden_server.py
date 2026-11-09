@@ -432,6 +432,143 @@ async def plan_rebalance(
     )
 
 
+class PropChallengeCheckOut(TypedDict, total=False):
+    tool: str
+    verdict: str
+    format_type: str
+    recommended_risk_multiplier: float
+    max_recommended_trade_risk_usd: float
+    target_lock_taper_active: bool
+    daily_profit_locked: bool
+    consistency_ratio: float
+    consistency_cap_pct: float
+    floors: dict
+    proposed_trade: dict
+    violations: list[str]
+    simulation_handoff: dict
+    provenance: str
+    safety: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="warden.prop_challenge_check",
+    title="Prop-Challenge Compliance & Drawdown Check",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def prop_challenge_check(
+    initial_balance: Annotated[float, Field(
+        description="Initial prop-challenge evaluation balance in USD.", gt=0.0)] = 100_000.0,
+    current_equity: Annotated[float, Field(
+        description="Current account equity in USD.", gt=0.0)] = 100_000.0,
+    prev_day_close_equity: Annotated[float, Field(
+        description="Previous trading day's closing equity in USD.", gt=0.0)] = 100_000.0,
+    largest_single_day_profit: Annotated[float, Field(
+        description="Largest realized single-day profit so far in the evaluation (USD).", ge=0.0)] = 0.0,
+    proposed_risk_usd: Annotated[float, Field(
+        description="Optional proposed dollar stop-loss risk for the next trade.", ge=0.0)] = 0.0,
+    proposed_notional_usd: Annotated[float, Field(
+        description="Optional proposed order notional in USD (used for spread/swap friction).", ge=0.0)] = 0.0,
+    format_type: Annotated[str, Field(
+        description="Challenge format: 'TwoStep' (default 5% daily / 10% max loss) or 'OneStep' (4% daily / 6% max loss).")] = "TwoStep",
+    daily_loss_limit_pct: Annotated[float, Field(
+        description="Hard daily drawdown limit fraction (e.g. 0.05 for 5%).", gt=0.0, le=0.50)] = 0.05,
+    max_loss_limit_pct: Annotated[float, Field(
+        description="Hard overall drawdown limit fraction (e.g. 0.10 for 10%).", gt=0.0, le=0.50)] = 0.10,
+    profit_target_pct: Annotated[float, Field(
+        description="Phase profit target fraction (e.g. 0.08 for 8%).", gt=0.0, le=0.50)] = 0.08,
+    consistency_cap_pct: Annotated[float, Field(
+        description="Maximum single-day share of total profit allowed by consistency rules (e.g. 0.40 for 40%).", gt=0.0, le=1.0)] = 0.40,
+    spread_bps: Annotated[float, Field(
+        description="Estimated round-trip bid-ask spread in basis points.", ge=0.0)] = 2.0,
+    overnight_swap_bps: Annotated[float, Field(
+        description="Estimated daily overnight financing/swap drag in basis points.", ge=0.0)] = 0.0,
+    planned_hold_days: Annotated[int, Field(
+        description="Planned holding period in trading days.", ge=1, le=60)] = 1,
+) -> PropChallengeCheckOut:
+    """Evaluates prop-firm evaluation rules (FTMO/Topstep/Apex style TwoStep or OneStep):
+    hard and safe daily loss floors, overall drawdown stop, 30-40% single-day consistency
+    cap, 0.55x Target-Lock Taper when >=70% of profit target is banked, and friction-adjusted
+    trade risk. Pure risk/compliance rules — never places orders or exposes trading signals.
+    """
+    return await warden_tools.prop_challenge_check(
+        initial_balance=initial_balance,
+        current_equity=current_equity,
+        prev_day_close_equity=prev_day_close_equity,
+        largest_single_day_profit=largest_single_day_profit,
+        proposed_risk_usd=proposed_risk_usd,
+        proposed_notional_usd=proposed_notional_usd,
+        format_type=format_type,
+        daily_loss_limit_pct=daily_loss_limit_pct,
+        max_loss_limit_pct=max_loss_limit_pct,
+        profit_target_pct=profit_target_pct,
+        consistency_cap_pct=consistency_cap_pct,
+        spread_bps=spread_bps,
+        overnight_swap_bps=overnight_swap_bps,
+        planned_hold_days=planned_hold_days,
+    )
+
+
+class DefensivePostureOut(TypedDict, total=False):
+    tool: str
+    posture: str
+    risk_scale_multiplier: float
+    stop_tightening_factor: float
+    effective_stop_heat_cap_pct: float
+    downward_selloff_active: bool
+    defensive_rotation_active: bool
+    reasons: list[str]
+    telemetry: dict
+    provenance: str
+    safety: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="warden.defensive_posture",
+    title="Causal Portfolio Defensive Posture Classifier",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def defensive_posture(
+    benchmark_return_1d_pct: Annotated[float, Field(
+        description="Trailing 1-day benchmark return in percent (e.g. -1.25 for -1.25%).")] = 0.0,
+    benchmark_return_5d_pct: Annotated[float, Field(
+        description="Trailing 5-day benchmark return in percent.")] = 0.0,
+    realized_vol_20d_pct: Annotated[float, Field(
+        description="Trailing 20-day annualized realized volatility in percent.", ge=0.0)] = 15.0,
+    efficiency_ratio_20d: Annotated[float, Field(
+        description="Trailing 20-day Kaufman efficiency ratio in [0.0, 1.0].", ge=0.0, le=1.0)] = 0.30,
+    account_daily_pnl_pct: Annotated[float, Field(
+        description="Current account daily PnL in percent.")] = 0.0,
+    open_unrealized_pnl_pct: Annotated[float, Field(
+        description="Current open portfolio unrealized PnL in percent.")] = 0.0,
+    base_max_stop_heat_pct: Annotated[float, Field(
+        description="Baseline maximum aggregate portfolio stop-heat percentage.", gt=0.0, le=20.0)] = 3.20,
+) -> DefensivePostureOut:
+    """Classifies portfolio risk posture into Normal, Cautious, Defensive, or CrisisShield
+    from trailing volatility, efficiency ratio, and drawdown stress. Returns the recommended
+    risk-scale multiplier (1.00x down to 0.20x), stop-tightening factor (1.00x down to 0.55x),
+    and effective portfolio stop-heat cap. Pure risk governance — no alpha signals.
+    """
+    return await warden_tools.defensive_posture(
+        benchmark_return_1d_pct=benchmark_return_1d_pct,
+        benchmark_return_5d_pct=benchmark_return_5d_pct,
+        realized_vol_20d_pct=realized_vol_20d_pct,
+        efficiency_ratio_20d=efficiency_ratio_20d,
+        account_daily_pnl_pct=account_daily_pnl_pct,
+        open_unrealized_pnl_pct=open_unrealized_pnl_pct,
+        base_max_stop_heat_pct=base_max_stop_heat_pct,
+    )
+
+
 class AuditGenericOut(TypedDict, total=False):
     tool: str
     preflight_id: str

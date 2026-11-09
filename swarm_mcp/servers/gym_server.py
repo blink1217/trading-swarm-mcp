@@ -370,6 +370,106 @@ async def evaluate_graph(
                                           symbols=symbols, bars=bars, min_symbols=min_symbols)
 
 
+class PropChallengeSimOut(TypedDict, total=False):
+    tool: str
+    verdict: str
+    format_type: str
+    n_paths: int
+    max_trading_days: int
+    trades_per_day: int
+    evaluated_risk_pct_per_trade: float
+    pass_probability_pct: float
+    daily_breach_probability_pct: float
+    overall_breach_probability_pct: float
+    consistency_locked_pct: float
+    timeout_probability_pct: float
+    median_days_to_pass: int | None
+    expected_net_value_usd: float
+    optimal_risk_pct_per_trade: float
+    optimal_expected_net_value_usd: float
+    risk_sizing_curve: list[dict]
+    methodology: str
+    access: str
+    reason: str
+    plan: str
+    upgrade_url: str
+    checkout_url: str
+    unlock_preview: str
+    starter_pack: dict
+    note: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="gym.prop_challenge_sim",
+    title="Prop-Challenge Monte Carlo Pass & Breach Simulator",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def prop_challenge_sim(
+    trades_r: Annotated[list[float] | None, Field(
+        description="Optional list of historical trade R-multiples (min 5) to bootstrap from; omit to use parametric win_rate/avg_win_r/avg_loss_r.")] = None,
+    win_rate: Annotated[float, Field(
+        description="Win probability in [0.01, 0.99] when trades_r is omitted.", ge=0.01, le=0.99)] = 0.52,
+    avg_win_r: Annotated[float, Field(
+        description="Average winning trade R-multiple when trades_r is omitted.", gt=0.0)] = 1.85,
+    avg_loss_r: Annotated[float, Field(
+        description="Average losing trade R-multiple magnitude when trades_r is omitted.", gt=0.0)] = 1.00,
+    trades_per_day: Annotated[int, Field(
+        description="Average number of trades executed per trading session.", ge=1, le=20)] = 2,
+    risk_pct_per_trade: Annotated[float, Field(
+        description="Fraction of equity risked per trade (e.g. 0.0075 for 0.75%).", ge=0.0005, le=0.05)] = 0.0075,
+    initial_balance: Annotated[float, Field(
+        description="Starting prop-challenge balance in USD.", gt=0.0)] = 100_000.0,
+    format_type: Annotated[str, Field(
+        description="Challenge format: 'TwoStep' or 'OneStep'.")] = "TwoStep",
+    daily_loss_limit_pct: Annotated[float, Field(
+        description="Daily drawdown limit fraction (e.g. 0.05 for 5%).", gt=0.0, le=0.50)] = 0.05,
+    max_loss_limit_pct: Annotated[float, Field(
+        description="Overall max drawdown limit fraction (e.g. 0.10 for 10%).", gt=0.0, le=0.50)] = 0.10,
+    profit_target_pct: Annotated[float, Field(
+        description="Phase profit target fraction (e.g. 0.08 for 8%).", gt=0.0, le=0.50)] = 0.08,
+    consistency_cap_pct: Annotated[float, Field(
+        description="Max single-day profit share allowed by consistency rules (e.g. 0.40 for 40%).", gt=0.0, le=1.0)] = 0.40,
+    max_trading_days: Annotated[int, Field(
+        description="Evaluation horizon in trading days.", ge=1, le=90)] = 30,
+    challenge_fee_usd: Annotated[float, Field(
+        description="Prop evaluation fee in USD used to compute expected net value.", ge=0.0)] = 500.0,
+    payout_split_pct: Annotated[float, Field(
+        description="Trader profit split fraction upon passing (e.g. 0.80 for 80%).", gt=0.0, le=1.0)] = 0.80,
+    n_paths: Annotated[int, Field(
+        description="Number of Monte Carlo evaluation paths to simulate (1-500).", ge=1, le=500)] = 250,
+    seed: Annotated[int, Field(
+        description="Deterministic RNG seed.")] = 42,
+) -> PropChallengeSimOut:
+    """Simulates multi-day prop-firm evaluation pass probability, daily/overall drawdown
+    breach rates, consistency-rule lock frequency, and optimal risk-per-trade across up to
+    500 Monte Carlo paths on your trade R-multiples or win/loss parameters. Pro tool
+    (1 credit on hosted, 0 locally).
+    """
+    return await gym_tools.prop_challenge_sim(
+        trades_r=trades_r,
+        win_rate=win_rate,
+        avg_win_r=avg_win_r,
+        avg_loss_r=avg_loss_r,
+        trades_per_day=trades_per_day,
+        risk_pct_per_trade=risk_pct_per_trade,
+        initial_balance=initial_balance,
+        format_type=format_type,
+        daily_loss_limit_pct=daily_loss_limit_pct,
+        max_loss_limit_pct=max_loss_limit_pct,
+        profit_target_pct=profit_target_pct,
+        consistency_cap_pct=consistency_cap_pct,
+        max_trading_days=max_trading_days,
+        challenge_fee_usd=challenge_fee_usd,
+        payout_split_pct=payout_split_pct,
+        n_paths=n_paths,
+        seed=seed,
+    )
+
+
 @mcp.tool(
     name="tournament.submit",
     title="Shadow Tournament: Submit",
@@ -438,6 +538,110 @@ async def tournament_leaderboard() -> TournamentLeaderboardOut:
     prefixes only), run counts and the current credit prices. Free on every plan.
     """
     return await tournament_tools.leaderboard()
+
+
+class EvaluateFormulaOut(TypedDict, total=False):
+    tool: str
+    status: str
+    formula: str
+    symbols: list[str]
+    source: str
+    forward_horizon_days: int
+    n_cross_sections: int
+    lookahead_truncation_check: dict
+    spearman_rank_ic: float
+    ic_std: float
+    ir_annualized: float
+    t_hac: float
+    quantile_spread_bps_per_day: float
+    daily_rank_turnover_l1: float
+    allowed_operators: list[str]
+    why_not_a_promotion: str
+    cloud_job: dict
+    access: str
+    reason: str
+    plan: str
+    upgrade_url: str
+    checkout_url: str
+    unlock_preview: str
+    starter_pack: dict
+    note: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="gym.evaluate_formula",
+    title="Symbolic Formula Causal & Lookahead Evaluator",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def evaluate_formula(
+    formula: Annotated[str, Field(
+        description="Caller-supplied symbolic expression using causal operators (CS_ZScore, CS_Rank, "
+                    "CS_Winsorize, TS_Mean, TS_Std, TS_Delta, TS_Corr, KaufmanER, Ret, Abs, Sign) and "
+                    "variables (ret1d, ret5d, ret20d, close, volume, vol_ratio), e.g. "
+                    "'CS_ZScore(TS_Mean(ret1d, 10) * KaufmanER(10))'.")],
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional list of tickers (min 2) via the shared cache/relay.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].")] = None,
+    forward_horizon_days: Annotated[int, Field(
+        description="Forward return horizon in trading sessions (1-20).", ge=1, le=20)] = 5,
+) -> EvaluateFormulaOut:
+    """Evaluates a caller-supplied symbolic alpha formula causally with a strict no-lookahead
+    truncation guard. Reports cross-sectional Spearman rank IC, Newey-West HAC t-statistic,
+    top-minus-bottom quantile spread (bps/day), and daily rank turnover without exposing
+    any internal equations or issuing a local promotion verdict. Pro tool (1 credit on hosted).
+    """
+    return await gym_tools.evaluate_formula(
+        formula=formula,
+        symbols=symbols,
+        bars=bars,
+        forward_horizon_days=forward_horizon_days,
+    )
+
+
+class TournamentForwardLeagueOut(TypedDict, total=False):
+    tool: str
+    batch_id: str
+    status: str
+    window_start: str
+    window_end: str
+    settled_weeks: int
+    total_window_weeks: int
+    champion_hash: str
+    champion_cumulative_net_bps: float
+    leading_challenger_hash: str
+    leading_challenger_cumulative_net_bps: float
+    field_median_cumulative_net_bps: float
+    live_benchmark_sleeves: list[dict]
+    weekly_settlements: list[dict]
+    anonymised: str
+    how_to_enter_next_batch: str
+    access: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="tournament.forward_league",
+    title="Forward League 8-Week Settlement & Benchmark Ledger",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def tournament_forward_league(
+    include_weekly_commits: Annotated[bool, Field(
+        description="Include the week-by-week Friday SHA-256 pre-commitment settlement rows.")] = True,
+) -> TournamentForwardLeagueOut:
+    """Returns the settled 8-week SHA-256 pre-committed Forward League ledger (2026-09-14 to
+    2026-11-09) and anonymised live multi-sleeve benchmark summaries. Exposes only 12-char
+    genome hash prefixes, Friday commitment hashes, realized net-of-cost return deltas, and
+    defensive posture states — never genome vectors, symbols, or equations. Free on every plan.
+    """
+    return await tournament_tools.forward_league(include_weekly_commits=include_weekly_commits)
 
 
 def main() -> None:

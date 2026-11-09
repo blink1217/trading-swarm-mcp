@@ -159,5 +159,8 @@ jobs:
             --region="$GCP_REGION" \
             --project="${{ secrets.GCP_PROJECT_ID }}" \
             --allow-unauthenticated \
+            --min-instances=0 \
+            --cpu-throttling \
+            --timeout=60s \
             --port=8080 \
             --quiet

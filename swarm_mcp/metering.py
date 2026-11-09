@@ -46,6 +46,9 @@ BARS_ARG_TOOLS = frozenset({
     "market.fundamentals_pit",
     "market.macro_nowcast",
     "market.transfer_entropy",
+    "market.insider_institutional_pit",
+    "market.supply_chain_pit",
+    "gym.evaluate_formula",
 })
 
 # Pro tools whose hosted cost is one cheap computation.
@@ -54,6 +57,8 @@ SINGLE_SHOT_TOOLS = frozenset({
     "warden.optimize_portfolio",
     "gym.label_regimes",
     "gym.estimate_cloud_run",
+    "gym.prop_challenge_sim",
+    "gym.evaluate_formula",
 })
 
 # Pro tools priced per simulated episode (5 regimes x per_regime x seeds
@@ -77,6 +82,8 @@ RELAY_METERED_TOOLS = frozenset({
     "market.fundamentals_pit",
     "market.macro_nowcast",
     "market.transfer_entropy",
+    "market.insider_institutional_pit",
+    "market.supply_chain_pit",
     "pit.analysis",
     "tournament.submit",
     "tournament.verdict",

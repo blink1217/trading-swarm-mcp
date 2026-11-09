@@ -13,7 +13,21 @@ requires-python = ">=3.11"
 # reserved with a limited permission). The metadata must not claim MIT for it.
 license = { text = "MIT AND LicenseRef-Guardrails-Source-Available" }
 authors = [{ name = "The 1.21 Initiative" }]
-keywords = ["mcp", "trading", "backtest-audit", "point-in-time", "regimes", "tournament", "evolution"]
+keywords = [
+    "mcp",
+    "trading",
+    "prop-firm",
+    "ftmo",
+    "backtest-audit",
+    "lookahead-bias",
+    "point-in-time",
+    "stock-screener",
+    "insider-trading",
+    "symbolic-alpha",
+    "portfolio-optimization",
+    "regimes",
+    "tournament",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",

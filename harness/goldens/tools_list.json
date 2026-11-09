@@ -642,6 +642,143 @@
         }
        ],
        "default": null,
+       "description": "Optional point-in-time cutoff date (YYYY-MM-DD); records after this date are masked.",
+       "title": "As Of"
+      },
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to evaluate via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_insider_institutional_pitArguments",
+     "type": "object"
+    },
+    "name": "market.insider_institutional_pit",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "checkout_url": {
+       "title": "Checkout Url",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "plan": {
+       "title": "Plan",
+       "type": "string"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "smart_money": {
+       "additionalProperties": true,
+       "title": "Smart Money",
+       "type": "object"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "starter_pack": {
+       "additionalProperties": true,
+       "title": "Starter Pack",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "unlock_preview": {
+       "title": "Unlock Preview",
+       "type": "string"
+      },
+      "upgrade_url": {
+       "title": "Upgrade Url",
+       "type": "string"
+      }
+     },
+     "title": "MarketInsiderInstitutionalPitOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
        "description": "Optional point-in-time cutoff date (YYYY-MM-DD).",
        "title": "As Of"
       },
@@ -1356,6 +1493,143 @@
     },
     "inputSchema": {
      "properties": {
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time cutoff date (YYYY-MM-DD).",
+       "title": "As Of"
+      },
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers to evaluate via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "title": "market_supply_chain_pitArguments",
+     "type": "object"
+    },
+    "name": "market.supply_chain_pit",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "checkout_url": {
+       "title": "Checkout Url",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "learn_more": {
+       "title": "Learn More",
+       "type": "string"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "plan": {
+       "title": "Plan",
+       "type": "string"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "starter_pack": {
+       "additionalProperties": true,
+       "title": "Starter Pack",
+       "type": "object"
+      },
+      "supply_chain": {
+       "additionalProperties": true,
+       "title": "Supply Chain",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "unlock_preview": {
+       "title": "Unlock Preview",
+       "type": "string"
+      },
+      "upgrade_url": {
+       "title": "Upgrade Url",
+       "type": "string"
+      }
+     },
+     "title": "MarketSupplyChainPitOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
       "bars": {
        "anyOf": [
         {
@@ -1826,6 +2100,197 @@
       }
      },
      "title": "EstimateCloudRunOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "bars": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].",
+       "title": "Bars"
+      },
+      "formula": {
+       "description": "Caller-supplied symbolic expression using causal operators (CS_ZScore, CS_Rank, CS_Winsorize, TS_Mean, TS_Std, TS_Delta, TS_Corr, KaufmanER, Ret, Abs, Sign) and variables (ret1d, ret5d, ret20d, close, volume, vol_ratio), e.g. 'CS_ZScore(TS_Mean(ret1d, 10) * KaufmanER(10))'.",
+       "title": "Formula",
+       "type": "string"
+      },
+      "forward_horizon_days": {
+       "default": 5,
+       "description": "Forward return horizon in trading sessions (1-20).",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Forward Horizon Days",
+       "type": "integer"
+      },
+      "symbols": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of tickers (min 2) via the shared cache/relay.",
+       "title": "Symbols"
+      }
+     },
+     "required": [
+      "formula"
+     ],
+     "title": "evaluate_formulaArguments",
+     "type": "object"
+    },
+    "name": "gym.evaluate_formula",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "allowed_operators": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Allowed Operators",
+       "type": "array"
+      },
+      "checkout_url": {
+       "title": "Checkout Url",
+       "type": "string"
+      },
+      "cloud_job": {
+       "additionalProperties": true,
+       "title": "Cloud Job",
+       "type": "object"
+      },
+      "daily_rank_turnover_l1": {
+       "title": "Daily Rank Turnover L1",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "formula": {
+       "title": "Formula",
+       "type": "string"
+      },
+      "forward_horizon_days": {
+       "title": "Forward Horizon Days",
+       "type": "integer"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "ic_std": {
+       "title": "Ic Std",
+       "type": "number"
+      },
+      "ir_annualized": {
+       "title": "Ir Annualized",
+       "type": "number"
+      },
+      "lookahead_truncation_check": {
+       "additionalProperties": true,
+       "title": "Lookahead Truncation Check",
+       "type": "object"
+      },
+      "n_cross_sections": {
+       "title": "N Cross Sections",
+       "type": "integer"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "plan": {
+       "title": "Plan",
+       "type": "string"
+      },
+      "quantile_spread_bps_per_day": {
+       "title": "Quantile Spread Bps Per Day",
+       "type": "number"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "source": {
+       "title": "Source",
+       "type": "string"
+      },
+      "spearman_rank_ic": {
+       "title": "Spearman Rank Ic",
+       "type": "number"
+      },
+      "starter_pack": {
+       "additionalProperties": true,
+       "title": "Starter Pack",
+       "type": "object"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "symbols": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Symbols",
+       "type": "array"
+      },
+      "t_hac": {
+       "title": "T Hac",
+       "type": "number"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "unlock_preview": {
+       "title": "Unlock Preview",
+       "type": "string"
+      },
+      "upgrade_url": {
+       "title": "Upgrade Url",
+       "type": "string"
+      },
+      "why_not_a_promotion": {
+       "title": "Why Not A Promotion",
+       "type": "string"
+      }
+     },
+     "title": "EvaluateFormulaOut",
      "type": "object"
     }
    },
@@ -2657,6 +3122,406 @@
       }
      },
      "title": "ProbeFragilityOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "avg_loss_r": {
+       "default": 1.0,
+       "description": "Average losing trade R-multiple magnitude when trades_r is omitted.",
+       "exclusiveMinimum": 0.0,
+       "title": "Avg Loss R",
+       "type": "number"
+      },
+      "avg_win_r": {
+       "default": 1.85,
+       "description": "Average winning trade R-multiple when trades_r is omitted.",
+       "exclusiveMinimum": 0.0,
+       "title": "Avg Win R",
+       "type": "number"
+      },
+      "challenge_fee_usd": {
+       "default": 500.0,
+       "description": "Prop evaluation fee in USD used to compute expected net value.",
+       "minimum": 0.0,
+       "title": "Challenge Fee Usd",
+       "type": "number"
+      },
+      "consistency_cap_pct": {
+       "default": 0.4,
+       "description": "Max single-day profit share allowed by consistency rules (e.g. 0.40 for 40%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "title": "Consistency Cap Pct",
+       "type": "number"
+      },
+      "daily_loss_limit_pct": {
+       "default": 0.05,
+       "description": "Daily drawdown limit fraction (e.g. 0.05 for 5%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Daily Loss Limit Pct",
+       "type": "number"
+      },
+      "format_type": {
+       "default": "TwoStep",
+       "description": "Challenge format: 'TwoStep' or 'OneStep'.",
+       "title": "Format Type",
+       "type": "string"
+      },
+      "initial_balance": {
+       "default": 100000.0,
+       "description": "Starting prop-challenge balance in USD.",
+       "exclusiveMinimum": 0.0,
+       "title": "Initial Balance",
+       "type": "number"
+      },
+      "max_loss_limit_pct": {
+       "default": 0.1,
+       "description": "Overall max drawdown limit fraction (e.g. 0.10 for 10%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Max Loss Limit Pct",
+       "type": "number"
+      },
+      "max_trading_days": {
+       "default": 30,
+       "description": "Evaluation horizon in trading days.",
+       "maximum": 90,
+       "minimum": 1,
+       "title": "Max Trading Days",
+       "type": "integer"
+      },
+      "n_paths": {
+       "default": 250,
+       "description": "Number of Monte Carlo evaluation paths to simulate (1-500).",
+       "maximum": 500,
+       "minimum": 1,
+       "title": "N Paths",
+       "type": "integer"
+      },
+      "payout_split_pct": {
+       "default": 0.8,
+       "description": "Trader profit split fraction upon passing (e.g. 0.80 for 80%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "title": "Payout Split Pct",
+       "type": "number"
+      },
+      "profit_target_pct": {
+       "default": 0.08,
+       "description": "Phase profit target fraction (e.g. 0.08 for 8%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Profit Target Pct",
+       "type": "number"
+      },
+      "risk_pct_per_trade": {
+       "default": 0.0075,
+       "description": "Fraction of equity risked per trade (e.g. 0.0075 for 0.75%).",
+       "maximum": 0.05,
+       "minimum": 0.0005,
+       "title": "Risk Pct Per Trade",
+       "type": "number"
+      },
+      "seed": {
+       "default": 42,
+       "description": "Deterministic RNG seed.",
+       "title": "Seed",
+       "type": "integer"
+      },
+      "trades_per_day": {
+       "default": 2,
+       "description": "Average number of trades executed per trading session.",
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Trades Per Day",
+       "type": "integer"
+      },
+      "trades_r": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "number"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional list of historical trade R-multiples (min 5) to bootstrap from; omit to use parametric win_rate/avg_win_r/avg_loss_r.",
+       "title": "Trades R"
+      },
+      "win_rate": {
+       "default": 0.52,
+       "description": "Win probability in [0.01, 0.99] when trades_r is omitted.",
+       "maximum": 0.99,
+       "minimum": 0.01,
+       "title": "Win Rate",
+       "type": "number"
+      }
+     },
+     "title": "prop_challenge_simArguments",
+     "type": "object"
+    },
+    "name": "gym.prop_challenge_sim",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "checkout_url": {
+       "title": "Checkout Url",
+       "type": "string"
+      },
+      "consistency_locked_pct": {
+       "title": "Consistency Locked Pct",
+       "type": "number"
+      },
+      "daily_breach_probability_pct": {
+       "title": "Daily Breach Probability Pct",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "evaluated_risk_pct_per_trade": {
+       "title": "Evaluated Risk Pct Per Trade",
+       "type": "number"
+      },
+      "expected_net_value_usd": {
+       "title": "Expected Net Value Usd",
+       "type": "number"
+      },
+      "format_type": {
+       "title": "Format Type",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "max_trading_days": {
+       "title": "Max Trading Days",
+       "type": "integer"
+      },
+      "median_days_to_pass": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Median Days To Pass"
+      },
+      "methodology": {
+       "title": "Methodology",
+       "type": "string"
+      },
+      "n_paths": {
+       "title": "N Paths",
+       "type": "integer"
+      },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
+      "optimal_expected_net_value_usd": {
+       "title": "Optimal Expected Net Value Usd",
+       "type": "number"
+      },
+      "optimal_risk_pct_per_trade": {
+       "title": "Optimal Risk Pct Per Trade",
+       "type": "number"
+      },
+      "overall_breach_probability_pct": {
+       "title": "Overall Breach Probability Pct",
+       "type": "number"
+      },
+      "pass_probability_pct": {
+       "title": "Pass Probability Pct",
+       "type": "number"
+      },
+      "plan": {
+       "title": "Plan",
+       "type": "string"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "risk_sizing_curve": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Risk Sizing Curve",
+       "type": "array"
+      },
+      "starter_pack": {
+       "additionalProperties": true,
+       "title": "Starter Pack",
+       "type": "object"
+      },
+      "timeout_probability_pct": {
+       "title": "Timeout Probability Pct",
+       "type": "number"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "trades_per_day": {
+       "title": "Trades Per Day",
+       "type": "integer"
+      },
+      "unlock_preview": {
+       "title": "Unlock Preview",
+       "type": "string"
+      },
+      "upgrade_url": {
+       "title": "Upgrade Url",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      }
+     },
+     "title": "PropChallengeSimOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "include_weekly_commits": {
+       "default": true,
+       "description": "Include the week-by-week Friday SHA-256 pre-commitment settlement rows.",
+       "title": "Include Weekly Commits",
+       "type": "boolean"
+      }
+     },
+     "title": "tournament_forward_leagueArguments",
+     "type": "object"
+    },
+    "name": "tournament.forward_league",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "anonymised": {
+       "title": "Anonymised",
+       "type": "string"
+      },
+      "batch_id": {
+       "title": "Batch Id",
+       "type": "string"
+      },
+      "champion_cumulative_net_bps": {
+       "title": "Champion Cumulative Net Bps",
+       "type": "number"
+      },
+      "champion_hash": {
+       "title": "Champion Hash",
+       "type": "string"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "field_median_cumulative_net_bps": {
+       "title": "Field Median Cumulative Net Bps",
+       "type": "number"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "how_to_enter_next_batch": {
+       "title": "How To Enter Next Batch",
+       "type": "string"
+      },
+      "leading_challenger_cumulative_net_bps": {
+       "title": "Leading Challenger Cumulative Net Bps",
+       "type": "number"
+      },
+      "leading_challenger_hash": {
+       "title": "Leading Challenger Hash",
+       "type": "string"
+      },
+      "live_benchmark_sleeves": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Live Benchmark Sleeves",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "settled_weeks": {
+       "title": "Settled Weeks",
+       "type": "integer"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "total_window_weeks": {
+       "title": "Total Window Weeks",
+       "type": "integer"
+      },
+      "weekly_settlements": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Weekly Settlements",
+       "type": "array"
+      },
+      "window_end": {
+       "title": "Window End",
+       "type": "string"
+      },
+      "window_start": {
+       "title": "Window Start",
+       "type": "string"
+      }
+     },
+     "title": "TournamentForwardLeagueOut",
      "type": "object"
     }
    },
@@ -5716,6 +6581,138 @@
     },
     "inputSchema": {
      "properties": {
+      "account_daily_pnl_pct": {
+       "default": 0.0,
+       "description": "Current account daily PnL in percent.",
+       "title": "Account Daily Pnl Pct",
+       "type": "number"
+      },
+      "base_max_stop_heat_pct": {
+       "default": 3.2,
+       "description": "Baseline maximum aggregate portfolio stop-heat percentage.",
+       "exclusiveMinimum": 0.0,
+       "maximum": 20.0,
+       "title": "Base Max Stop Heat Pct",
+       "type": "number"
+      },
+      "benchmark_return_1d_pct": {
+       "default": 0.0,
+       "description": "Trailing 1-day benchmark return in percent (e.g. -1.25 for -1.25%).",
+       "title": "Benchmark Return 1D Pct",
+       "type": "number"
+      },
+      "benchmark_return_5d_pct": {
+       "default": 0.0,
+       "description": "Trailing 5-day benchmark return in percent.",
+       "title": "Benchmark Return 5D Pct",
+       "type": "number"
+      },
+      "efficiency_ratio_20d": {
+       "default": 0.3,
+       "description": "Trailing 20-day Kaufman efficiency ratio in [0.0, 1.0].",
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "title": "Efficiency Ratio 20D",
+       "type": "number"
+      },
+      "open_unrealized_pnl_pct": {
+       "default": 0.0,
+       "description": "Current open portfolio unrealized PnL in percent.",
+       "title": "Open Unrealized Pnl Pct",
+       "type": "number"
+      },
+      "realized_vol_20d_pct": {
+       "default": 15.0,
+       "description": "Trailing 20-day annualized realized volatility in percent.",
+       "minimum": 0.0,
+       "title": "Realized Vol 20D Pct",
+       "type": "number"
+      }
+     },
+     "title": "defensive_postureArguments",
+     "type": "object"
+    },
+    "name": "warden.defensive_posture",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "defensive_rotation_active": {
+       "title": "Defensive Rotation Active",
+       "type": "boolean"
+      },
+      "downward_selloff_active": {
+       "title": "Downward Selloff Active",
+       "type": "boolean"
+      },
+      "effective_stop_heat_cap_pct": {
+       "title": "Effective Stop Heat Cap Pct",
+       "type": "number"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "posture": {
+       "title": "Posture",
+       "type": "string"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "reasons": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Reasons",
+       "type": "array"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "risk_scale_multiplier": {
+       "title": "Risk Scale Multiplier",
+       "type": "number"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "stop_tightening_factor": {
+       "title": "Stop Tightening Factor",
+       "type": "number"
+      },
+      "telemetry": {
+       "additionalProperties": true,
+       "title": "Telemetry",
+       "type": "object"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "DefensivePostureOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
       "atr_14": {
        "description": "14-bar average true range of the instrument.",
        "exclusiveMinimum": 0.0,
@@ -6351,6 +7348,211 @@
       }
      },
      "title": "PromotionVerdictOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "consistency_cap_pct": {
+       "default": 0.4,
+       "description": "Maximum single-day share of total profit allowed by consistency rules (e.g. 0.40 for 40%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "title": "Consistency Cap Pct",
+       "type": "number"
+      },
+      "current_equity": {
+       "default": 100000.0,
+       "description": "Current account equity in USD.",
+       "exclusiveMinimum": 0.0,
+       "title": "Current Equity",
+       "type": "number"
+      },
+      "daily_loss_limit_pct": {
+       "default": 0.05,
+       "description": "Hard daily drawdown limit fraction (e.g. 0.05 for 5%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Daily Loss Limit Pct",
+       "type": "number"
+      },
+      "format_type": {
+       "default": "TwoStep",
+       "description": "Challenge format: 'TwoStep' (default 5% daily / 10% max loss) or 'OneStep' (4% daily / 6% max loss).",
+       "title": "Format Type",
+       "type": "string"
+      },
+      "initial_balance": {
+       "default": 100000.0,
+       "description": "Initial prop-challenge evaluation balance in USD.",
+       "exclusiveMinimum": 0.0,
+       "title": "Initial Balance",
+       "type": "number"
+      },
+      "largest_single_day_profit": {
+       "default": 0.0,
+       "description": "Largest realized single-day profit so far in the evaluation (USD).",
+       "minimum": 0.0,
+       "title": "Largest Single Day Profit",
+       "type": "number"
+      },
+      "max_loss_limit_pct": {
+       "default": 0.1,
+       "description": "Hard overall drawdown limit fraction (e.g. 0.10 for 10%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Max Loss Limit Pct",
+       "type": "number"
+      },
+      "overnight_swap_bps": {
+       "default": 0.0,
+       "description": "Estimated daily overnight financing/swap drag in basis points.",
+       "minimum": 0.0,
+       "title": "Overnight Swap Bps",
+       "type": "number"
+      },
+      "planned_hold_days": {
+       "default": 1,
+       "description": "Planned holding period in trading days.",
+       "maximum": 60,
+       "minimum": 1,
+       "title": "Planned Hold Days",
+       "type": "integer"
+      },
+      "prev_day_close_equity": {
+       "default": 100000.0,
+       "description": "Previous trading day's closing equity in USD.",
+       "exclusiveMinimum": 0.0,
+       "title": "Prev Day Close Equity",
+       "type": "number"
+      },
+      "profit_target_pct": {
+       "default": 0.08,
+       "description": "Phase profit target fraction (e.g. 0.08 for 8%).",
+       "exclusiveMinimum": 0.0,
+       "maximum": 0.5,
+       "title": "Profit Target Pct",
+       "type": "number"
+      },
+      "proposed_notional_usd": {
+       "default": 0.0,
+       "description": "Optional proposed order notional in USD (used for spread/swap friction).",
+       "minimum": 0.0,
+       "title": "Proposed Notional Usd",
+       "type": "number"
+      },
+      "proposed_risk_usd": {
+       "default": 0.0,
+       "description": "Optional proposed dollar stop-loss risk for the next trade.",
+       "minimum": 0.0,
+       "title": "Proposed Risk Usd",
+       "type": "number"
+      },
+      "spread_bps": {
+       "default": 2.0,
+       "description": "Estimated round-trip bid-ask spread in basis points.",
+       "minimum": 0.0,
+       "title": "Spread Bps",
+       "type": "number"
+      }
+     },
+     "title": "prop_challenge_checkArguments",
+     "type": "object"
+    },
+    "name": "warden.prop_challenge_check",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "consistency_cap_pct": {
+       "title": "Consistency Cap Pct",
+       "type": "number"
+      },
+      "consistency_ratio": {
+       "title": "Consistency Ratio",
+       "type": "number"
+      },
+      "daily_profit_locked": {
+       "title": "Daily Profit Locked",
+       "type": "boolean"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "floors": {
+       "additionalProperties": true,
+       "title": "Floors",
+       "type": "object"
+      },
+      "format_type": {
+       "title": "Format Type",
+       "type": "string"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "max_recommended_trade_risk_usd": {
+       "title": "Max Recommended Trade Risk Usd",
+       "type": "number"
+      },
+      "proposed_trade": {
+       "additionalProperties": true,
+       "title": "Proposed Trade",
+       "type": "object"
+      },
+      "provenance": {
+       "title": "Provenance",
+       "type": "string"
+      },
+      "recommended_risk_multiplier": {
+       "title": "Recommended Risk Multiplier",
+       "type": "number"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "safety": {
+       "title": "Safety",
+       "type": "string"
+      },
+      "simulation_handoff": {
+       "additionalProperties": true,
+       "title": "Simulation Handoff",
+       "type": "object"
+      },
+      "target_lock_taper_active": {
+       "title": "Target Lock Taper Active",
+       "type": "boolean"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "verdict": {
+       "title": "Verdict",
+       "type": "string"
+      },
+      "violations": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Violations",
+       "type": "array"
+      }
+     },
+     "title": "PropChallengeCheckOut",
      "type": "object"
     }
    },

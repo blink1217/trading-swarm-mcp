@@ -434,7 +434,11 @@ def build_app() -> BearerAuthMiddleware:
 
     children = {}
     for path, srv in SERVERS.items():
-        kwargs = {"streamable_http_path": path}
+        kwargs = {
+            "streamable_http_path": path,
+            "stateless_http": True,
+            "json_response": True,
+        }
         sig = inspect.signature(srv.streamable_http_app)
         if "transport_security" in sig.parameters:
             kwargs["transport_security"] = transport_security

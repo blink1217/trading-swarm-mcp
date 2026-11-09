@@ -669,3 +669,250 @@ async def plan_rebalance(
 
     return await run_tool("warden.plan_rebalance", _do)
 
+
+async def prop_challenge_check(
+    initial_balance: float = 100_000.0,
+    current_equity: float = 100_000.0,
+    prev_day_close_equity: float = 100_000.0,
+    largest_single_day_profit: float = 0.0,
+    proposed_risk_usd: float = 0.0,
+    proposed_notional_usd: float = 0.0,
+    format_type: str = "TwoStep",
+    daily_loss_limit_pct: float = 0.05,
+    max_loss_limit_pct: float = 0.10,
+    profit_target_pct: float = 0.08,
+    consistency_cap_pct: float = 0.40,
+    spread_bps: float = 2.0,
+    overnight_swap_bps: float = 0.0,
+    planned_hold_days: int = 1,
+) -> dict:
+    """Pre-trade prop-firm evaluation compliance and drawdown guard.
+
+    Checks daily loss floor, overall max-loss floor, single-day consistency rule cap,
+    target-lock sizing taper (0.55x when >= 70% of phase target is banked), and
+    friction-adjusted trade risk. Pure accounting/risk rules only — no trading signals.
+    """
+    redaction.reject_keylike_args({
+        "initial_balance": initial_balance,
+        "current_equity": current_equity,
+        "prev_day_close_equity": prev_day_close_equity,
+        "largest_single_day_profit": largest_single_day_profit,
+        "proposed_risk_usd": proposed_risk_usd,
+        "proposed_notional_usd": proposed_notional_usd,
+        "format_type": format_type,
+    })
+
+    async def _do():
+        if initial_balance <= 0 or current_equity <= 0 or prev_day_close_equity <= 0:
+            raise ValueError("initial_balance, current_equity, and prev_day_close_equity must be > 0")
+
+        fmt = str(format_type or "TwoStep").strip()
+        if fmt not in ("TwoStep", "OneStep"):
+            raise ValueError("format_type must be 'TwoStep' or 'OneStep'")
+
+        eff_daily_pct = float(daily_loss_limit_pct) if daily_loss_limit_pct > 0 else (0.04 if fmt == "OneStep" else 0.05)
+        eff_max_pct = float(max_loss_limit_pct) if max_loss_limit_pct > 0 else (0.06 if fmt == "OneStep" else 0.10)
+        eff_target_pct = float(profit_target_pct) if profit_target_pct > 0 else (0.10 if fmt == "OneStep" else 0.08)
+        eff_cons_cap = max(0.10, min(1.0, float(consistency_cap_pct)))
+
+        daily_ref = max(float(initial_balance), float(prev_day_close_equity)) if fmt == "OneStep" else float(prev_day_close_equity)
+        hard_daily_floor = round(daily_ref * (1.0 - eff_daily_pct), 2)
+        safe_daily_buffer = round(daily_ref * (eff_daily_pct * 0.64), 2)
+        safe_daily_stop = round(daily_ref - safe_daily_buffer, 2)
+
+        hard_overall_floor = round(float(initial_balance) * (1.0 - eff_max_pct), 2)
+        safe_overall_stop = round(float(initial_balance) * (1.0 - eff_max_pct * 0.80), 2)
+
+        phase_target_usd = round(float(initial_balance) * eff_target_pct, 2)
+        cum_profit = round(float(current_equity) - float(initial_balance), 2)
+        today_profit = round(float(current_equity) - float(prev_day_close_equity), 2)
+
+        rem_hard_daily = round(max(0.0, float(current_equity) - hard_daily_floor), 2)
+        rem_safe_daily = round(max(0.0, float(current_equity) - safe_daily_stop), 2)
+        rem_safe_overall = round(max(0.0, float(current_equity) - safe_overall_stop), 2)
+
+        effective_max_day = max(float(largest_single_day_profit), max(0.0, today_profit))
+        denom = max(cum_profit, phase_target_usd * 0.25, 1.0)
+        consistency_ratio = round(effective_max_day / denom, 4) if cum_profit > 0 else 0.0
+        safe_daily_profit_cap = round(phase_target_usd * (eff_cons_cap * 0.875), 2)
+        daily_profit_locked = bool(today_profit >= safe_daily_profit_cap and eff_cons_cap < 0.99)
+
+        progress_ratio = cum_profit / phase_target_usd if phase_target_usd > 0 else 0.0
+        target_lock_taper = bool(progress_ratio >= 0.70)
+
+        hold_days = max(1, int(planned_hold_days))
+        total_friction_bps = round(max(0.0, float(spread_bps)) + max(0.0, float(overnight_swap_bps)) * max(0, hold_days - 1), 2)
+        friction_usd = round(max(0.0, float(proposed_notional_usd)) * (total_friction_bps / 10000.0), 2)
+        all_in_risk_usd = round(max(0.0, float(proposed_risk_usd)) + friction_usd, 2)
+
+        violations: list[str] = []
+        if current_equity <= safe_daily_stop:
+            violations.append(f"daily_drawdown_stop: current_equity ({current_equity:.2f}) <= safe_daily_loss_stop ({safe_daily_stop:.2f})")
+        if current_equity <= safe_overall_stop:
+            violations.append(f"overall_drawdown_stop: current_equity ({current_equity:.2f}) <= safe_overall_loss_stop ({safe_overall_stop:.2f})")
+        if daily_profit_locked:
+            violations.append(f"consistency_profit_lock: today_profit ({today_profit:.2f}) >= safe_daily_profit_cap ({safe_daily_profit_cap:.2f})")
+        if all_in_risk_usd > 0 and all_in_risk_usd > rem_safe_daily:
+            violations.append(f"risk_exceeds_safe_daily_headroom: all_in_risk_usd ({all_in_risk_usd:.2f}) > remaining_safe_daily_risk_usd ({rem_safe_daily:.2f})")
+        if all_in_risk_usd > 0 and all_in_risk_usd > rem_safe_overall:
+            violations.append(f"risk_exceeds_safe_overall_headroom: all_in_risk_usd ({all_in_risk_usd:.2f}) > remaining_safe_overall_risk_usd ({rem_safe_overall:.2f})")
+
+        if violations:
+            verdict = "REJECTED"
+            rec_mult = 0.0
+        elif target_lock_taper:
+            verdict = "TAPER_REQUIRED"
+            rec_mult = 0.55
+        else:
+            verdict = "APPROVED"
+            rec_mult = 1.0
+
+        max_recommended_risk_usd = round(min(rem_safe_daily, rem_safe_overall, float(initial_balance) * 0.01) * rec_mult, 2)
+
+        return {
+            "tool": "warden.prop_challenge_check",
+            "verdict": verdict,
+            "format_type": fmt,
+            "recommended_risk_multiplier": rec_mult,
+            "max_recommended_trade_risk_usd": max_recommended_risk_usd,
+            "target_lock_taper_active": target_lock_taper,
+            "daily_profit_locked": daily_profit_locked,
+            "consistency_ratio": consistency_ratio,
+            "consistency_cap_pct": eff_cons_cap,
+            "floors": {
+                "hard_daily_loss_floor_usd": hard_daily_floor,
+                "safe_daily_loss_stop_usd": safe_daily_stop,
+                "remaining_hard_daily_risk_usd": rem_hard_daily,
+                "remaining_safe_daily_risk_usd": rem_safe_daily,
+                "hard_overall_loss_floor_usd": hard_overall_floor,
+                "safe_overall_loss_stop_usd": safe_overall_stop,
+                "remaining_safe_overall_risk_usd": rem_safe_overall,
+                "phase_profit_target_usd": phase_target_usd,
+                "safe_daily_profit_cap_usd": safe_daily_profit_cap,
+            },
+            "proposed_trade": {
+                "raw_risk_usd": round(max(0.0, float(proposed_risk_usd)), 2),
+                "friction_cost_usd": friction_usd,
+                "total_friction_bps": total_friction_bps,
+                "all_in_risk_usd": all_in_risk_usd,
+            },
+            "violations": violations,
+            "simulation_handoff": {
+                "tool": "gym.prop_challenge_sim",
+                "note": (
+                    "Call gym.prop_challenge_sim (Pro, 1 credit on hosted) with your historical "
+                    "trade R-multiples or win-rate/payoff parameters to stress-test 500 Monte "
+                    "Carlo evaluation paths and find the exact risk-per-trade that maximizes "
+                    "pass probability net of challenge reset fees."
+                ),
+            },
+            "provenance": LIVE_CAPITAL_NOTE,
+            "safety": NO_ORDER_PLACEMENT,
+        }
+
+    return await run_tool("warden.prop_challenge_check", _do)
+
+
+async def defensive_posture(
+    benchmark_return_1d_pct: float = 0.0,
+    benchmark_return_5d_pct: float = 0.0,
+    realized_vol_20d_pct: float = 15.0,
+    efficiency_ratio_20d: float = 0.30,
+    account_daily_pnl_pct: float = 0.0,
+    open_unrealized_pnl_pct: float = 0.0,
+    base_max_stop_heat_pct: float = 3.20,
+) -> dict:
+    """Causal portfolio risk-posture classifier (Normal / Cautious / Defensive / CrisisShield).
+
+    Evaluates trailing benchmark drawdown, 20-day realized volatility, Kaufman efficiency
+    ratio, and open portfolio drawdown to compute recommended risk scaling, stop-distance
+    tightening, and maximum open stop-heat caps. Pure risk governance — no proprietary
+    alpha signals or price forecasts.
+    """
+    redaction.reject_keylike_args({
+        "benchmark_return_1d_pct": benchmark_return_1d_pct,
+        "benchmark_return_5d_pct": benchmark_return_5d_pct,
+        "realized_vol_20d_pct": realized_vol_20d_pct,
+        "efficiency_ratio_20d": efficiency_ratio_20d,
+        "account_daily_pnl_pct": account_daily_pnl_pct,
+        "open_unrealized_pnl_pct": open_unrealized_pnl_pct,
+        "base_max_stop_heat_pct": base_max_stop_heat_pct,
+    })
+
+    async def _do():
+        if base_max_stop_heat_pct <= 0 or realized_vol_20d_pct < 0:
+            raise ValueError("base_max_stop_heat_pct must be > 0 and realized_vol_20d_pct >= 0")
+
+        r1d = float(benchmark_return_1d_pct)
+        r5d = float(benchmark_return_5d_pct)
+        vol20 = float(realized_vol_20d_pct)
+        er20 = max(0.0, min(1.0, float(efficiency_ratio_20d)))
+        acct_1d = float(account_daily_pnl_pct)
+        unreal = float(open_unrealized_pnl_pct)
+        base_heat = float(base_max_stop_heat_pct)
+
+        downward_selloff = bool(r1d <= -0.95 or r5d <= -2.10 or vol20 >= 24.0)
+        severe_selloff = bool(r1d <= -2.10 or r5d <= -3.80 or vol20 >= 32.0)
+        account_stress = bool(acct_1d <= -1.25 or unreal <= -1.10)
+        severe_account_stress = bool(acct_1d <= -2.25 or unreal <= -1.85)
+
+        reasons: list[str] = []
+        if severe_selloff or severe_account_stress:
+            posture = "CrisisShield"
+            risk_mult = 0.20
+            stop_tighten = 0.55
+            heat_cap = min(base_heat, 0.75)
+            def_rotation = True
+            if severe_selloff:
+                reasons.append(f"severe_market_selloff (1d={r1d:.2f}%, 5d={r5d:.2f}%, vol20d={vol20:.1f}%)")
+            if severe_account_stress:
+                reasons.append(f"severe_account_drawdown (daily_pnl={acct_1d:.2f}%, open_unrealized={unreal:.2f}%)")
+        elif downward_selloff or account_stress:
+            posture = "Defensive"
+            risk_mult = 0.42
+            stop_tighten = 0.65
+            heat_cap = min(base_heat, 1.40)
+            def_rotation = True
+            if downward_selloff:
+                reasons.append(f"downward_market_selloff (1d={r1d:.2f}%, 5d={r5d:.2f}%, vol20d={vol20:.1f}%)")
+            if account_stress:
+                reasons.append(f"account_drawdown_stress (daily_pnl={acct_1d:.2f}%, open_unrealized={unreal:.2f}%)")
+        elif r1d <= -0.40 or r5d <= -1.00 or vol20 >= 19.5 or er20 <= 0.18 or acct_1d <= -0.60:
+            posture = "Cautious"
+            risk_mult = 0.68
+            stop_tighten = 0.78
+            heat_cap = min(base_heat, 2.20)
+            def_rotation = r5d <= -1.25
+            reasons.append(f"elevated_chop_or_pullback (1d={r1d:.2f}%, 5d={r5d:.2f}%, vol20d={vol20:.1f}%, er20={er20:.2f})")
+        else:
+            posture = "Normal"
+            risk_mult = 1.00
+            stop_tighten = 1.00
+            heat_cap = base_heat
+            def_rotation = False
+            reasons.append("constructive_volatility_and_drawdown_headroom")
+
+        return {
+            "tool": "warden.defensive_posture",
+            "posture": posture,
+            "risk_scale_multiplier": round(risk_mult, 2),
+            "stop_tightening_factor": round(stop_tighten, 2),
+            "effective_stop_heat_cap_pct": round(heat_cap, 2),
+            "downward_selloff_active": downward_selloff,
+            "defensive_rotation_active": def_rotation,
+            "reasons": reasons,
+            "telemetry": {
+                "benchmark_return_1d_pct": round(r1d, 3),
+                "benchmark_return_5d_pct": round(r5d, 3),
+                "realized_vol_20d_pct": round(vol20, 2),
+                "efficiency_ratio_20d": round(er20, 3),
+                "account_daily_pnl_pct": round(acct_1d, 3),
+                "open_unrealized_pnl_pct": round(unreal, 3),
+            },
+            "provenance": LIVE_CAPITAL_NOTE,
+            "safety": NO_ORDER_PLACEMENT,
+        }
+
+    return await run_tool("warden.defensive_posture", _do)
+
+

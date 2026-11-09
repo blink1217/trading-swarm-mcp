@@ -1737,6 +1737,17 @@ async def report(
             mp.write_text(md_report, encoding="utf-8")
             written_files["markdown"] = str(mp)
 
+        rb = bundle["reproducibility_bundle"]
+        sha_prefix = str(rb.get("input_sha256", jid))[:12]
+        verification_badge = {
+            "share_url": f"https://1.21initiative.com/mcp/verify/{sha_prefix}",
+            "badge_svg_url": f"https://1.21initiative.com/api/mcp/badge/{sha_prefix}.svg",
+            "badge_markdown": (
+                f"[![Quant Swarm Audit](https://1.21initiative.com/api/mcp/badge/{sha_prefix}.svg)]"
+                f"(https://1.21initiative.com/mcp/verify/{sha_prefix})"
+            ),
+        }
+
         return {
             "tool": "audit.report",
             "job_id": jid,
@@ -1746,6 +1757,7 @@ async def report(
             "findings": bundle["findings"],
             "coverage_matrix": bundle["coverage_matrix"],
             "reproducibility_bundle": bundle["reproducibility_bundle"],
+            "verification_badge": verification_badge,
             "markdown_report": md_report,
             "html_report": html_report,
             "written_files": written_files,

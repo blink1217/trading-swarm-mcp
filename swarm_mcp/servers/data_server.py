@@ -677,6 +677,89 @@ async def market_transfer_entropy(
     return await alt_derived_tools.market_transfer_entropy(symbols=symbols, bars=bars, window=window)
 
 
+class MarketInsiderInstitutionalPitOut(TypedDict, total=False):
+    tool: str
+    source: str
+    smart_money: dict
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    reason: str
+    plan: str
+    upgrade_url: str
+    checkout_url: str
+    unlock_preview: str
+    starter_pack: dict
+    note: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="market.insider_institutional_pit",
+    title="Point-in-Time Smart Money & Filing Flow",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_insider_institutional_pit(
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional list of tickers to evaluate via the shared cache/relay.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].")] = None,
+    as_of: Annotated[str | None, Field(
+        description="Optional point-in-time cutoff date (YYYY-MM-DD); records after this date are masked.")] = None,
+) -> MarketInsiderInstitutionalPitOut:
+    """Returns point-in-time filing-gated insider cluster activity buckets, institutional
+    accumulation percentiles, stealth quiet-session absorption percentiles, and flow-price
+    divergence z-scores strictly dated on or before as_of. Never echoes raw share counts or
+    dollar figures. Pro tool.
+    """
+    return await alt_derived_tools.market_insider_institutional_pit(symbols=symbols, bars=bars, as_of=as_of)
+
+
+class MarketSupplyChainPitOut(TypedDict, total=False):
+    tool: str
+    source: str
+    supply_chain: dict
+    methodology: str
+    not_investment_advice: bool
+    learn_more: str
+    access: str
+    reason: str
+    plan: str
+    upgrade_url: str
+    checkout_url: str
+    unlock_preview: str
+    starter_pack: dict
+    note: str
+    error: str
+    request_access_at: str
+    how: str
+
+
+@mcp.tool(
+    name="market.supply_chain_pit",
+    title="Point-in-Time Supply-Chain & Cross-Border Flow",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def market_supply_chain_pit(
+    symbols: Annotated[list[str] | None, Field(
+        description="Optional list of tickers to evaluate via the shared cache/relay.")] = None,
+    bars: Annotated[list[dict] | None, Field(
+        description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, close, volume}].")] = None,
+    as_of: Annotated[str | None, Field(
+        description="Optional point-in-time cutoff date (YYYY-MM-DD).")] = None,
+) -> MarketSupplyChainPitOut:
+    """Returns point-in-time freight/volume velocity percentiles, cross-border session flow
+    percentiles, margin-resilience composites, and pre-earnings conviction buckets strictly
+    dated on or before as_of. Never echoes raw provider values. Pro tool.
+    """
+    return await alt_derived_tools.market_supply_chain_pit(symbols=symbols, bars=bars, as_of=as_of)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

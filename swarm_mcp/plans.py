@@ -33,13 +33,18 @@ PLANS: dict[str, dict] = {
 }
 
 # One-time credit packs (mirror of src/mcp/plans.ts CREDIT_PACKS):
-# pack_id -> {calls, price_gbp}
+# pack_id -> {calls, price_gbp, price_usd, price_eur}
 CREDIT_PACKS: dict[str, dict] = {
-    "credits-10k": {"calls": 10_000, "price_gbp": 19},
-    "credits-100k": {"calls": 100_000, "price_gbp": 149},
+    "credits-10k": {"calls": 10_000, "price_gbp": 19, "price_usd": 24, "price_eur": 22},
+    "credits-100k": {"calls": 100_000, "price_gbp": 149, "price_usd": 189, "price_eur": 175},
 }
 
 CREDITS_VALIDITY_DAYS = 90
+
+# Bonus Pro trial credits granted to new self-serve developer signups so every
+# new user can run 1 contributor Shadow Tournament (100 credits) or 5 hosted
+# audits / 100 Pro calls before purchasing a £19 ($24 / €22) Starter pack.
+STARTER_TRIAL_CREDITS = 100
 
 # Compute rate card (mirror of src/mcp/plans.ts COMPUTE_RATES). One credit is
 # the unit for everything that costs the operator money: a relay data call, a
@@ -83,6 +88,8 @@ FREE_TOOLS = frozenset({
     "warden.validate_genome",
     "warden.audit_features",
     "warden.plan_rebalance",
+    "warden.prop_challenge_check",
+    "warden.defensive_posture",
     "warden.promotion_verdict",
     "market.pulse",
     "market.regime",
@@ -92,6 +99,7 @@ FREE_TOOLS = frozenset({
     "cache.stats",
     "cache.offline",
     "tournament.leaderboard",
+    "tournament.forward_league",
 })
 
 PRO_TOOLS = frozenset({
@@ -103,6 +111,8 @@ PRO_TOOLS = frozenset({
     "gym.paired_preview",
     "gym.estimate_cloud_run",
     "gym.evaluate_graph",
+    "gym.prop_challenge_sim",
+    "gym.evaluate_formula",
     "market.microstructure",
     "volume.forecast",
     "market.screen",
@@ -111,6 +121,8 @@ PRO_TOOLS = frozenset({
     "market.fundamentals_pit",
     "market.macro_nowcast",
     "market.transfer_entropy",
+    "market.insider_institutional_pit",
+    "market.supply_chain_pit",
     "tournament.verdict",
     "tournament.submit",
 })

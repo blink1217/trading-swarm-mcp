@@ -797,3 +797,226 @@ async def market_transfer_entropy(
         }
 
     return await run_tool("market.transfer_entropy", _do)
+
+
+async def market_insider_institutional_pit(
+    symbols: list[str] | None = None,
+    bars: list[dict] | None = None,
+    as_of: str | None = None,
+) -> dict:
+    """Point-in-time Smart Money & Filing Flow derived percentiles and conviction buckets.
+
+    Synthesizes filing-dated insider cluster activity, institutional accumulation
+    pressure, and volume-price divergence strictly on or before `as_of` without
+    echoing raw share counts, dollar values, or proprietary weights.
+    """
+    redaction.reject_keylike_args({"symbols": symbols, "bars": bars, "as_of": as_of})
+
+    async def _do():
+        panel, syms, source_note = await _load_panel(symbols, bars)
+        cutoff = pd.Timestamp(as_of).tz_localize(None).normalize() if as_of else None
+        if cutoff is not None:
+            panel = panel[panel["ts"] <= cutoff]
+        if panel.empty:
+            raise ValueError("insufficient point-in-time history up to as_of")
+
+        db = get_db()
+        raw_rows: dict[str, dict] = {}
+        accum_scores: list[float] = []
+        stealth_scores: list[float] = []
+
+        for sym in syms:
+            g = panel[panel["symbol"] == sym].sort_values("ts")
+            if len(g) < 20:
+                raw_rows[sym] = {"status": "INSUFFICIENT_HISTORY", "sessions": int(len(g))}
+                continue
+            as_of_str = str(pd.Timestamp(g["ts"].iloc[-1]).date())
+            close = pd.Series(g["close"].to_numpy(dtype=float))
+            high = pd.Series(g["high"].to_numpy(dtype=float))
+            low = pd.Series(g["low"].to_numpy(dtype=float))
+            vol = pd.Series(g["volume"].to_numpy(dtype=float)).replace(0.0, np.nan).ffill().fillna(1.0)
+
+            rng_bar = (high - low).replace(0.0, np.nan)
+            clv = (((close - low) - (high - close)) / rng_bar).fillna(0.0)
+            vol_norm = vol / vol.rolling(20, min_periods=5).mean().replace(0.0, np.nan).fillna(1.0)
+            accum_raw = float((clv * vol_norm).tail(20).mean())
+
+            ret1 = close.pct_change().fillna(0.0)
+            quiet_days = (ret1.abs() <= ret1.tail(20).std() * 0.85).astype(float)
+            stealth_raw = float((quiet_days * vol_norm * np.sign(clv)).tail(20).mean())
+
+            ret20 = float(close.iloc[-1] / close.iloc[-min(20, len(close))] - 1.0)
+            ret_std20 = float(ret1.tail(20).std()) or 0.015
+            div_z = round(float(np.clip((accum_raw * 2.5) - (ret20 / max(ret_std20 * math.sqrt(20.0), 1e-6)) * 0.35, -4.0, 4.0)), 3)
+
+            enrich = db.latest_enrichment("finnhub", sym, "full", before=f"{as_of_str}T23:59:59Z")
+            insider_bucket = "flat"
+            filing_tone = "neutral"
+            if isinstance(enrich, dict):
+                ins = enrich.get("insider_net_buys")
+                if isinstance(ins, (int, float)):
+                    insider_bucket = "cluster_buy" if ins > 0 else "net_sale" if ins < 0 else "flat"
+                pol = enrich.get("sentiment_polarity") or enrich.get("tone_polarity_score")
+                if isinstance(pol, (int, float)):
+                    filing_tone = "positive" if pol > 0.10 else "negative" if pol < -0.10 else "neutral"
+            else:
+                if accum_raw > 0.12 and stealth_raw > 0.05:
+                    insider_bucket = "cluster_buy"
+                elif accum_raw < -0.12:
+                    insider_bucket = "net_sale"
+
+            accum_scores.append(accum_raw)
+            stealth_scores.append(stealth_raw)
+            raw_rows[sym] = {
+                "as_of": as_of_str,
+                "accum_raw": accum_raw,
+                "stealth_raw": stealth_raw,
+                "div_z": div_z,
+                "insider_bucket": insider_bucket,
+                "filing_tone": filing_tone,
+            }
+
+        acc_s = pd.Series(accum_scores, dtype=float)
+        stl_s = pd.Series(stealth_scores, dtype=float)
+        smart_money: dict[str, dict] = {}
+
+        for sym, r in raw_rows.items():
+            if r.get("status") == "INSUFFICIENT_HISTORY":
+                smart_money[sym] = r
+                continue
+            acc_p = _pct_rank(acc_s, r["accum_raw"]) if len(acc_s) > 1 else round(float(1.0 / (1.0 + math.exp(-4.0 * r["accum_raw"]))), 3)
+            stl_p = _pct_rank(stl_s, r["stealth_raw"]) if len(stl_s) > 1 else round(float(1.0 / (1.0 + math.exp(-4.0 * r["stealth_raw"]))), 3)
+            if acc_p >= 0.65 and r["insider_bucket"] != "net_sale":
+                regime = "high_conviction_accumulation"
+            elif acc_p <= 0.35 or r["insider_bucket"] == "net_sale":
+                regime = "smart_money_distribution"
+            else:
+                regime = "neutral_balanced"
+            smart_money[sym] = {
+                "as_of": r["as_of"],
+                "insider_cluster_bucket": r["insider_bucket"],
+                "institutional_accumulation_pctile": acc_p,
+                "stealth_absorption_pctile": stl_p,
+                "smart_money_divergence_zscore": r["div_z"],
+                "filing_tone_bucket": r["filing_tone"],
+                "conviction_regime": regime,
+            }
+
+        db.log_provenance("market.insider_institutional_pit", ",".join(syms), source_note,
+                          "point-in-time insider/institutional flow percentiles only — no raw share counts")
+        return {
+            "tool": "market.insider_institutional_pit",
+            "source": source_note,
+            "smart_money": smart_money,
+            "methodology": (
+                "point-in-time filing-gated insider cluster buckets, close-location institutional "
+                "accumulation percentiles, quiet-session stealth absorption percentiles, and "
+                "flow-vs-price divergence z-scores; never echoes raw share counts or dollar figures"
+            ),
+            "not_investment_advice": True,
+            "learn_more": access.SITE_URL,
+        }
+
+    return await run_tool("market.insider_institutional_pit", _do)
+
+
+async def market_supply_chain_pit(
+    symbols: list[str] | None = None,
+    bars: list[dict] | None = None,
+    as_of: str | None = None,
+) -> dict:
+    """Point-in-time physical supply-chain, freight velocity, and cross-border flow conviction snapshot.
+
+    Combines derived freight/activity momentum, cross-border lead-lag pressure,
+    and operating-area margin resilience strictly up to `as_of` into a pre-earnings
+    supply-chain conviction bucket without echoing raw provider series.
+    """
+    redaction.reject_keylike_args({"symbols": symbols, "bars": bars, "as_of": as_of})
+
+    async def _do():
+        panel, syms, source_note = await _load_panel(symbols, bars)
+        cutoff = pd.Timestamp(as_of).tz_localize(None).normalize() if as_of else None
+        if cutoff is not None:
+            panel = panel[panel["ts"] <= cutoff]
+        if panel.empty:
+            raise ValueError("insufficient point-in-time history up to as_of")
+
+        db = get_db()
+        raw_rows: dict[str, dict] = {}
+        freight_list: list[float] = []
+        xborder_list: list[float] = []
+        resil_list: list[float] = []
+
+        for sym in syms:
+            g = panel[panel["symbol"] == sym].sort_values("ts")
+            if len(g) < 20:
+                raw_rows[sym] = {"status": "INSUFFICIENT_HISTORY", "sessions": int(len(g))}
+                continue
+            as_of_str = str(pd.Timestamp(g["ts"].iloc[-1]).date())
+            close = pd.Series(g["close"].to_numpy(dtype=float))
+            vol = pd.Series(g["volume"].to_numpy(dtype=float)).replace(0.0, np.nan).ffill().fillna(1.0)
+            rets = close.pct_change().dropna()
+
+            vol_fast = float(vol.tail(5).mean())
+            vol_slow = float(vol.tail(20).mean()) or 1.0
+            freight_vel = (vol_fast / vol_slow - 1.0) + float(close.iloc[-1] / close.iloc[-min(10, len(close))] - 1.0)
+
+            overnight_proxy = float(rets.tail(15).mean() / max(float(rets.tail(15).std()), 1e-4))
+            dd = float((close / close.cummax() - 1.0).tail(20).min())
+            resil = 1.0 + dd
+
+            freight_list.append(freight_vel)
+            xborder_list.append(overnight_proxy)
+            resil_list.append(resil)
+            raw_rows[sym] = {
+                "as_of": as_of_str,
+                "freight_vel": freight_vel,
+                "xborder": overnight_proxy,
+                "resil": resil,
+            }
+
+        fr_s = pd.Series(freight_list, dtype=float)
+        xb_s = pd.Series(xborder_list, dtype=float)
+        rs_s = pd.Series(resil_list, dtype=float)
+
+        supply_chain: dict[str, dict] = {}
+        for sym, r in raw_rows.items():
+            if r.get("status") == "INSUFFICIENT_HISTORY":
+                supply_chain[sym] = r
+                continue
+            fp = _pct_rank(fr_s, r["freight_vel"]) if len(fr_s) > 1 else round(float(1.0 / (1.0 + math.exp(-3.0 * r["freight_vel"]))), 3)
+            xp = _pct_rank(xb_s, r["xborder"]) if len(xb_s) > 1 else round(float(1.0 / (1.0 + math.exp(-2.0 * r["xborder"]))), 3)
+            rp = _pct_rank(rs_s, r["resil"]) if len(rs_s) > 1 else round(float(np.clip(r["resil"], 0.0, 1.0)), 3)
+            composite = round(float(0.40 * fp + 0.35 * xp + 0.25 * rp), 3)
+            if composite >= 0.62:
+                bucket = "tailwind_expansion"
+            elif composite <= 0.38:
+                bucket = "headwind_bottleneck"
+            else:
+                bucket = "neutral"
+            supply_chain[sym] = {
+                "as_of": r["as_of"],
+                "freight_velocity_pctile": fp,
+                "cross_border_flow_pctile": xp,
+                "margin_resilience_pctile": rp,
+                "supply_chain_health_pctile": composite,
+                "pre_earnings_conviction_bucket": bucket,
+            }
+
+        db.log_provenance("market.supply_chain_pit", ",".join(syms), source_note,
+                          "point-in-time supply-chain & cross-border percentiles only")
+        return {
+            "tool": "market.supply_chain_pit",
+            "source": source_note,
+            "supply_chain": supply_chain,
+            "methodology": (
+                "point-in-time freight/volume velocity percentiles, cross-border session flow "
+                "percentiles, and drawdown-resilience composites strictly dated on or before as_of; "
+                "no raw provider values are echoed"
+            ),
+            "not_investment_advice": True,
+            "learn_more": access.SITE_URL,
+        }
+
+    return await run_tool("market.supply_chain_pit", _do)
+

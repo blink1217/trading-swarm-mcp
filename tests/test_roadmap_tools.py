@@ -275,3 +275,143 @@ def test_gym_evaluate_graph_valid_and_cycle_rejection(tmp_cache):
     bad = run_async(gym_tools.evaluate_graph(graph=cyclic_graph, bars=rows))
     assert bad["valid_graph"] is False
     assert any("cycle" in e for e in bad["errors"])
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Prop-Challenge Compliance, Defensive Posture & Sim + Upgrade Funnel
+# ---------------------------------------------------------------------------
+
+def test_warden_prop_challenge_check_taper_and_violations():
+    # 1. Healthy start -> APPROVED (1.0x multiplier)
+    ok = run_async(warden_tools.prop_challenge_check(
+        initial_balance=100_000.0,
+        current_equity=101_200.0,
+        prev_day_close_equity=100_500.0,
+        largest_single_day_profit=700.0,
+        proposed_risk_usd=750.0,
+        proposed_notional_usd=25_000.0,
+    ))
+    assert ok["tool"] == "warden.prop_challenge_check"
+    assert ok["verdict"] == "APPROVED"
+    assert ok["recommended_risk_multiplier"] == 1.0
+    assert ok["target_lock_taper_active"] is False
+
+    # 2. Near profit target (>=70% of $8,000 = $5,600) -> TAPER_REQUIRED (0.55x multiplier)
+    taper = run_async(warden_tools.prop_challenge_check(
+        initial_balance=100_000.0,
+        current_equity=106_000.0,
+        prev_day_close_equity=105_000.0,
+        largest_single_day_profit=1_800.0,
+        proposed_risk_usd=600.0,
+    ))
+    assert taper["verdict"] == "TAPER_REQUIRED"
+    assert taper["target_lock_taper_active"] is True
+    assert taper["recommended_risk_multiplier"] == 0.55
+
+    # 3. Daily drawdown breach -> REJECTED (0.0x multiplier)
+    breach = run_async(warden_tools.prop_challenge_check(
+        initial_balance=100_000.0,
+        current_equity=96_500.0,
+        prev_day_close_equity=100_000.0,
+        proposed_risk_usd=500.0,
+    ))
+    assert breach["verdict"] == "REJECTED"
+    assert breach["recommended_risk_multiplier"] == 0.0
+    assert any("daily_drawdown_stop" in v for v in breach["violations"])
+
+
+def test_warden_defensive_posture_transitions():
+    normal = run_async(warden_tools.defensive_posture(
+        benchmark_return_1d_pct=0.25, benchmark_return_5d_pct=0.80,
+        realized_vol_20d_pct=14.0, efficiency_ratio_20d=0.35,
+    ))
+    assert normal["posture"] == "Normal"
+    assert normal["risk_scale_multiplier"] == 1.0
+
+    cautious = run_async(warden_tools.defensive_posture(
+        benchmark_return_1d_pct=-0.50, benchmark_return_5d_pct=-1.35,
+        realized_vol_20d_pct=21.5, efficiency_ratio_20d=0.19,
+    ))
+    assert cautious["posture"] == "Cautious"
+    assert cautious["risk_scale_multiplier"] == 0.68
+
+    defensive = run_async(warden_tools.defensive_posture(
+        benchmark_return_1d_pct=-1.45, benchmark_return_5d_pct=-2.35,
+        realized_vol_20d_pct=27.5, efficiency_ratio_20d=0.25,
+    ))
+    assert defensive["posture"] == "Defensive"
+    assert defensive["risk_scale_multiplier"] == 0.42
+    assert defensive["defensive_rotation_active"] is True
+
+    crisis = run_async(warden_tools.defensive_posture(
+        benchmark_return_1d_pct=-3.10, benchmark_return_5d_pct=-4.50,
+        realized_vol_20d_pct=38.0, efficiency_ratio_20d=0.40,
+    ))
+    assert crisis["posture"] == "CrisisShield"
+    assert crisis["risk_scale_multiplier"] == 0.20
+    assert crisis["effective_stop_heat_cap_pct"] <= 0.75
+
+
+def test_gym_prop_challenge_sim_and_upgrade_preview():
+    from swarm_mcp import envelope
+
+    sim = run_async(gym_tools.prop_challenge_sim(
+        trades_r=[1.8, -1.0, 2.2, -1.0, 1.5, 2.4, -1.0, 1.9, -0.8, 2.1],
+        trades_per_day=2,
+        risk_pct_per_trade=0.0075,
+        n_paths=100,
+        seed=42,
+    ))
+    assert sim["tool"] == "gym.prop_challenge_sim"
+    assert sim["pass_probability_pct"] > 0.0
+    assert len(sim["risk_sizing_curve"]) == 6
+    assert 0.0025 <= sim["optimal_risk_pct_per_trade"] <= 0.015
+
+    upg = envelope.upgrade_required("gym.prop_challenge_sim", "free", "https://1.21initiative.com/mcp/")
+    assert upg["access"] == "UPGRADE_REQUIRED"
+    assert "500-path Monte Carlo" in upg["unlock_preview"]
+    assert "tool=gym.prop_challenge_sim" in upg["checkout_url"]
+    assert upg["starter_pack"]["price_usd"] == 24
+    assert upg["starter_pack"]["price_eur"] == 22
+
+
+def test_gym_evaluate_formula_and_pit_smart_money_and_forward_league(tmp_cache):
+    from swarm_mcp.tools import tournament_tools
+
+    rows = synthetic_bars(["AAA", "BBB", "CCC", "DDD"], days=120, seed=55)
+
+    # 1. Symbolic Formula Evaluator (causal + truncation check)
+    ev = run_async(gym_tools.evaluate_formula(
+        formula="CS_ZScore(TS_Mean(ret1d, 10) * KaufmanER(10))",
+        bars=rows,
+        forward_horizon_days=5,
+    ))
+    assert ev["tool"] == "gym.evaluate_formula"
+    assert ev["status"] == "UNDERPOWERED_LOCAL"
+    assert ev["lookahead_truncation_check"]["passed"] is True
+    assert isinstance(ev["spearman_rank_ic"], float)
+    assert isinstance(ev["t_hac"], float)
+
+    # 2. Insider & Institutional PIT + Supply Chain PIT
+    as_of = str(rows[-1]["ts"])[:10]
+    ins = run_async(alt_derived_tools.market_insider_institutional_pit(bars=rows, as_of=as_of))
+    assert ins["tool"] == "market.insider_institutional_pit"
+    assert "AAA" in ins["smart_money"]
+    assert 0.0 <= ins["smart_money"]["AAA"]["institutional_accumulation_pctile"] <= 1.0
+
+    sc = run_async(alt_derived_tools.market_supply_chain_pit(bars=rows, as_of=as_of))
+    assert sc["tool"] == "market.supply_chain_pit"
+    assert "AAA" in sc["supply_chain"]
+    assert sc["supply_chain"]["AAA"]["pre_earnings_conviction_bucket"] in (
+        "tailwind_expansion", "headwind_bottleneck", "neutral",
+    )
+
+    # 3. Settled 8-week Forward League Ledger
+    fl = run_async(tournament_tools.forward_league(include_weekly_commits=True))
+    assert fl["tool"] == "tournament.forward_league"
+    assert fl["status"] == "SETTLED_BATCH_01"
+    assert fl["settled_weeks"] == 8
+    assert len(fl["weekly_settlements"]) == 8
+    assert len(fl["live_benchmark_sleeves"]) == 3
+
+

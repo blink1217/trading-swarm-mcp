@@ -774,3 +774,467 @@ async def evaluate_graph(
 
     return await run_tool("gym.evaluate_graph", _do)
 
+
+async def prop_challenge_sim(
+    trades_r: list[float] | None = None,
+    win_rate: float = 0.52,
+    avg_win_r: float = 1.85,
+    avg_loss_r: float = 1.00,
+    trades_per_day: int = 2,
+    risk_pct_per_trade: float = 0.0075,
+    initial_balance: float = 100_000.0,
+    format_type: str = "TwoStep",
+    daily_loss_limit_pct: float = 0.05,
+    max_loss_limit_pct: float = 0.10,
+    profit_target_pct: float = 0.08,
+    consistency_cap_pct: float = 0.40,
+    max_trading_days: int = 30,
+    challenge_fee_usd: float = 500.0,
+    payout_split_pct: float = 0.80,
+    n_paths: int = 250,
+    seed: int = 42,
+) -> dict:
+    """Monte Carlo prop-firm challenge survival and optimal risk-sizing simulator.
+
+    Replays caller-supplied trade R-multiples (`trades_r`) or parametric win/loss
+    payoffs across `n_paths` multi-day prop evaluations enforcing intraday/daily
+    loss limits, overall drawdown floors, and single-day consistency rules.
+    Pure statistical simulation on user-supplied trade distributions — no proprietary
+    signals or alpha equations.
+    """
+    redaction.reject_keylike_args({
+        "trades_r": trades_r,
+        "win_rate": win_rate,
+        "avg_win_r": avg_win_r,
+        "avg_loss_r": avg_loss_r,
+        "trades_per_day": trades_per_day,
+        "risk_pct_per_trade": risk_pct_per_trade,
+        "initial_balance": initial_balance,
+        "format_type": format_type,
+    })
+
+    async def _do():
+        if initial_balance <= 0:
+            raise ValueError("initial_balance must be > 0")
+        fmt = str(format_type or "TwoStep").strip()
+        if fmt not in ("TwoStep", "OneStep"):
+            raise ValueError("format_type must be 'TwoStep' or 'OneStep'")
+        if not (0.0005 <= risk_pct_per_trade <= 0.05):
+            raise ValueError("risk_pct_per_trade must be in [0.0005, 0.05]")
+        if not (1 <= n_paths <= 500):
+            raise ValueError("n_paths must be in [1, 500]")
+        if not (1 <= trades_per_day <= 20):
+            raise ValueError("trades_per_day must be in [1, 20]")
+        if not (1 <= max_trading_days <= 90):
+            raise ValueError("max_trading_days must be in [1, 90]")
+
+        eff_daily = float(daily_loss_limit_pct) if daily_loss_limit_pct > 0 else (0.04 if fmt == "OneStep" else 0.05)
+        eff_max = float(max_loss_limit_pct) if max_loss_limit_pct > 0 else (0.06 if fmt == "OneStep" else 0.10)
+        eff_target = float(profit_target_pct) if profit_target_pct > 0 else (0.10 if fmt == "OneStep" else 0.08)
+        eff_cons = max(0.15, min(1.0, float(consistency_cap_pct)))
+
+        clean_r: np.ndarray | None = None
+        if trades_r is not None:
+            if len(trades_r) < 5:
+                raise ValueError("trades_r must contain at least 5 trade R-multiples when supplied")
+            arr = np.array([float(x) for x in trades_r], dtype=float)
+            arr = arr[np.isfinite(arr)]
+            if len(arr) < 5:
+                raise ValueError("trades_r must contain at least 5 finite R-multiples")
+            clean_r = np.clip(arr, -5.0, 15.0)
+        else:
+            if not (0.01 <= win_rate <= 0.99):
+                raise ValueError("win_rate must be in [0.01, 0.99]")
+            if avg_win_r <= 0 or avg_loss_r <= 0:
+                raise ValueError("avg_win_r and avg_loss_r must be > 0")
+
+        def _sim_risk_level(r_pct: float, rng_seed: int) -> dict:
+            rng = np.random.default_rng(rng_seed)
+            n_total = n_paths * max_trading_days * trades_per_day
+            if clean_r is not None:
+                draws = rng.choice(clean_r, size=(n_paths, max_trading_days, trades_per_day), replace=True)
+            else:
+                wins = rng.random((n_paths, max_trading_days, trades_per_day)) < float(win_rate)
+                # Add modest payoff dispersion around avg_win_r / avg_loss_r
+                noise = rng.normal(1.0, 0.15, size=(n_paths, max_trading_days, trades_per_day))
+                noise = np.clip(noise, 0.5, 1.8)
+                draws = np.where(wins, float(avg_win_r) * noise, -float(avg_loss_r) * noise)
+
+            passed = 0
+            daily_breach = 0
+            overall_breach = 0
+            consistency_locked = 0
+            days_to_pass: list[int] = []
+
+            target_profit = initial_balance * eff_target
+            overall_floor = initial_balance * (1.0 - eff_max)
+
+            for p in range(n_paths):
+                eq = float(initial_balance)
+                max_day_pnl = 0.0
+                outcome = "timeout"
+                for d in range(max_trading_days):
+                    day_start_eq = eq
+                    daily_ref = max(float(initial_balance), day_start_eq) if fmt == "OneStep" else day_start_eq
+                    daily_floor = daily_ref * (1.0 - eff_daily)
+                    # Apply 0.55x target-lock taper when >= 70% of target is reached
+                    prog = (eq - initial_balance) / target_profit if target_profit > 0 else 0.0
+                    eff_r_pct = r_pct * 0.55 if prog >= 0.70 else r_pct
+
+                    for t in range(trades_per_day):
+                        trade_pnl = day_start_eq * eff_r_pct * float(draws[p, d, t])
+                        eq += trade_pnl
+                        if eq <= daily_floor:
+                            outcome = "daily_breach"
+                            break
+                        if eq <= overall_floor:
+                            outcome = "overall_breach"
+                            break
+                    if outcome in ("daily_breach", "overall_breach"):
+                        break
+
+                    day_pnl = eq - day_start_eq
+                    if day_pnl > max_day_pnl:
+                        max_day_pnl = day_pnl
+
+                    cum_pnl = eq - initial_balance
+                    if cum_pnl >= target_profit:
+                        if eff_cons < 0.99 and max_day_pnl > cum_pnl * eff_cons:
+                            outcome = "consistency_locked"
+                        else:
+                            outcome = "passed"
+                            days_to_pass.append(d + 1)
+                            break
+
+                if outcome == "passed":
+                    passed += 1
+                elif outcome == "daily_breach":
+                    daily_breach += 1
+                elif outcome == "overall_breach":
+                    overall_breach += 1
+                elif outcome == "consistency_locked":
+                    consistency_locked += 1
+
+            pass_prob = round((passed / n_paths) * 100.0, 2)
+            d_breach_prob = round((daily_breach / n_paths) * 100.0, 2)
+            o_breach_prob = round((overall_breach / n_paths) * 100.0, 2)
+            c_lock_prob = round((consistency_locked / n_paths) * 100.0, 2)
+            timeout_prob = round(max(0.0, 100.0 - pass_prob - d_breach_prob - o_breach_prob - c_lock_prob), 2)
+            med_days = int(np.median(days_to_pass)) if days_to_pass else None
+            gross_payout = target_profit * float(payout_split_pct)
+            ev_net = round((passed / n_paths) * gross_payout - (1.0 - (passed / n_paths)) * float(challenge_fee_usd), 2)
+            return {
+                "risk_pct_per_trade": round(r_pct, 5),
+                "pass_probability_pct": pass_prob,
+                "daily_breach_probability_pct": d_breach_prob,
+                "overall_breach_probability_pct": o_breach_prob,
+                "consistency_locked_pct": c_lock_prob,
+                "timeout_probability_pct": timeout_prob,
+                "median_days_to_pass": med_days,
+                "expected_net_value_usd": ev_net,
+            }
+
+        primary = _sim_risk_level(float(risk_pct_per_trade), int(seed))
+        grid = [0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015]
+        curve = [_sim_risk_level(g, int(seed) + idx * 17) for idx, g in enumerate(grid)]
+        best = max(curve, key=lambda x: (x["expected_net_value_usd"], x["pass_probability_pct"]))
+
+        if primary["pass_probability_pct"] >= 55.0 and primary["daily_breach_probability_pct"] <= 20.0:
+            verdict = "FAVORABLE_EVALUATION_GEOMETRY"
+        elif primary["daily_breach_probability_pct"] + primary["overall_breach_probability_pct"] >= 50.0:
+            verdict = "HIGH_BREACH_RISK_REDUCE_SIZING"
+        else:
+            verdict = "MARGINAL_EVALUATION_ODDS"
+
+        return {
+            "tool": "gym.prop_challenge_sim",
+            "verdict": verdict,
+            "format_type": fmt,
+            "n_paths": n_paths,
+            "max_trading_days": max_trading_days,
+            "trades_per_day": trades_per_day,
+            "evaluated_risk_pct_per_trade": primary["risk_pct_per_trade"],
+            "pass_probability_pct": primary["pass_probability_pct"],
+            "daily_breach_probability_pct": primary["daily_breach_probability_pct"],
+            "overall_breach_probability_pct": primary["overall_breach_probability_pct"],
+            "consistency_locked_pct": primary["consistency_locked_pct"],
+            "timeout_probability_pct": primary["timeout_probability_pct"],
+            "median_days_to_pass": primary["median_days_to_pass"],
+            "expected_net_value_usd": primary["expected_net_value_usd"],
+            "optimal_risk_pct_per_trade": best["risk_pct_per_trade"],
+            "optimal_expected_net_value_usd": best["expected_net_value_usd"],
+            "risk_sizing_curve": curve,
+            "methodology": (
+                "Monte Carlo path simulation on caller-supplied trade R-multiples (or parametric "
+                "win/loss payoffs) with 0.55x target-lock taper at >=70% profit target progress; "
+                "never a guarantee of future prop-evaluation results."
+            ),
+        }
+
+    return await run_tool("gym.prop_challenge_sim", _do)
+
+
+def _eval_symbolic_ast(
+    formula: str,
+    close_mat: pd.DataFrame,
+    vol_mat: pd.DataFrame,
+) -> pd.DataFrame:
+    """Safely evaluate a caller-supplied symbolic formula on a (dates x symbols) panel.
+
+    Supports only causal time-series and cross-sectional primitives via a strict
+    AST whitelist — never eval() or arbitrary attribute access, and never exposes
+    any internal formulas.
+    """
+    import ast as _ast
+
+    ret1d = close_mat.pct_change()
+    vol_avg20 = vol_mat.rolling(20, min_periods=5).mean().replace(0.0, np.nan)
+    vol_ratio_base = (vol_mat / vol_avg20).fillna(1.0)
+
+    def _to_df(val: Any) -> pd.DataFrame:
+        if isinstance(val, pd.DataFrame):
+            return val
+        return pd.DataFrame(float(val), index=close_mat.index, columns=close_mat.columns)
+
+    def _cs_zscore(x: Any) -> pd.DataFrame:
+        df = _to_df(x)
+        mu = df.mean(axis=1)
+        sd = df.std(axis=1, ddof=0).replace(0.0, np.nan)
+        return df.sub(mu, axis=0).div(sd, axis=0).fillna(0.0)
+
+    def _cs_rank(x: Any) -> pd.DataFrame:
+        df = _to_df(x)
+        return df.rank(axis=1, pct=True).fillna(0.5) - 0.5
+
+    def _cs_winsorize(x: Any, clip_z: Any = 3.0) -> pd.DataFrame:
+        z = _cs_zscore(x)
+        lim = max(0.5, min(float(clip_z), 10.0))
+        return z.clip(lower=-lim, upper=lim)
+
+    def _ts_mean(x: Any, window: Any = 20) -> pd.DataFrame:
+        w = max(2, min(int(window), 120))
+        return _to_df(x).rolling(w, min_periods=max(2, w // 2)).mean().fillna(0.0)
+
+    def _ts_std(x: Any, window: Any = 20) -> pd.DataFrame:
+        w = max(2, min(int(window), 120))
+        return _to_df(x).rolling(w, min_periods=max(2, w // 2)).std(ddof=0).fillna(0.0)
+
+    def _ts_delta(x: Any, window: Any = 5) -> pd.DataFrame:
+        w = max(1, min(int(window), 120))
+        return _to_df(x).diff(w).fillna(0.0)
+
+    def _ts_corr(x: Any, y: Any, window: Any = 20) -> pd.DataFrame:
+        w = max(5, min(int(window), 120))
+        dx, dy = _to_df(x), _to_df(y)
+        return dx.rolling(w, min_periods=max(5, w // 2)).corr(dy).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+    def _ret(window: Any = 1) -> pd.DataFrame:
+        w = max(1, min(int(window), 120))
+        return close_mat.pct_change(w).fillna(0.0)
+
+    def _kaufman_er(window: Any = 10) -> pd.DataFrame:
+        w = max(2, min(int(window), 120))
+        direction = close_mat.diff(w).abs()
+        volatility = close_mat.diff(1).abs().rolling(w, min_periods=2).sum().replace(0.0, np.nan)
+        return (direction / volatility).fillna(0.0)
+
+    funcs = {
+        "CS_ZScore": _cs_zscore,
+        "CS_Rank": _cs_rank,
+        "CS_Winsorize": _cs_winsorize,
+        "TS_Mean": _ts_mean,
+        "TS_Std": _ts_std,
+        "TS_Delta": _ts_delta,
+        "TS_Corr": _ts_corr,
+        "KaufmanER": _kaufman_er,
+        "Ret": _ret,
+        "Abs": lambda x: _to_df(x).abs(),
+        "Sign": lambda x: np.sign(_to_df(x)),
+    }
+    names = {
+        "ret1d": ret1d.fillna(0.0),
+        "ret5d": close_mat.pct_change(5).fillna(0.0),
+        "ret20d": close_mat.pct_change(20).fillna(0.0),
+        "close": close_mat,
+        "volume": vol_mat,
+        "vol_ratio": vol_ratio_base,
+    }
+
+    tree = _ast.parse(formula.strip(), mode="eval")
+
+    def _walk(node: _ast.AST) -> Any:
+        if isinstance(node, _ast.Expression):
+            return _walk(node.body)
+        if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, _ast.Name):
+            if node.id in names:
+                return names[node.id]
+            raise ValueError(f"Unknown variable {node.id!r}; allowed variables: {sorted(names)}")
+        if isinstance(node, _ast.UnaryOp):
+            v = _walk(node.operand)
+            if isinstance(node.op, _ast.USub):
+                return -v
+            if isinstance(node.op, _ast.UAdd):
+                return v
+            raise ValueError("Unsupported unary operator")
+        if isinstance(node, _ast.BinOp):
+            left = _walk(node.left)
+            right = _walk(node.right)
+            if isinstance(node.op, _ast.Add):
+                return left + right
+            if isinstance(node.op, _ast.Sub):
+                return left - right
+            if isinstance(node.op, _ast.Mult):
+                return left * right
+            if isinstance(node.op, _ast.Div):
+                denom = right.replace(0.0, np.nan) if isinstance(right, pd.DataFrame) else (right if right != 0 else np.nan)
+                res = left / denom
+                return res.replace([np.inf, -np.inf], 0.0).fillna(0.0) if isinstance(res, pd.DataFrame) else float(res)
+            raise ValueError("Unsupported binary operator")
+        if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name):
+            fn_name = node.func.id
+            if fn_name not in funcs:
+                raise ValueError(f"Unsupported function {fn_name!r}; allowed functions: {sorted(funcs)}")
+            pos_args = [_walk(a) for a in node.args]
+            return funcs[fn_name](*pos_args)
+        raise ValueError(f"Unsupported syntax node {type(node).__name__} in symbolic formula")
+
+    out = _to_df(_walk(tree))
+    return out.replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+
+async def evaluate_formula(
+    formula: str,
+    symbols: list[str] | None = None,
+    bars: list[dict] | None = None,
+    forward_horizon_days: int = 5,
+) -> dict:
+    """Evaluate a caller-supplied symbolic formula causally with a strict no-lookahead check.
+
+    Computes out-of-sample Spearman cross-sectional rank IC, Newey-West HAC t-statistic,
+    top-minus-bottom quantile spread (bps/day), daily turnover, and causal truncation
+    invariance. Never exposes internal formulas or issues local promotion verdicts.
+    """
+    redaction.reject_keylike_args({
+        "formula": formula,
+        "symbols": symbols,
+        "bars": bars,
+        "forward_horizon_days": forward_horizon_days,
+    })
+
+    async def _do():
+        expr = (formula or "").strip()
+        if not expr or len(expr) > 400:
+            raise ValueError("formula must be a non-empty symbolic expression up to 400 characters")
+        h = max(1, min(int(forward_horizon_days), 20))
+        panel_df = _load_panel(symbols, bars)
+        syms = sorted(panel_df["symbol"].astype(str).unique().tolist())
+        source_note = "caller_supplied_bars" if bars else "local_sqlite_cache"
+        if len(syms) < 2:
+            raise ValueError("gym.evaluate_formula requires at least 2 symbols for cross-sectional IC")
+
+        close_mat = panel_df.pivot_table(index="ts", columns="symbol", values="close", aggfunc="last").sort_index().ffill()
+        vol_mat = panel_df.pivot_table(index="ts", columns="symbol", values="volume", aggfunc="last").sort_index().ffill().fillna(1.0)
+        if len(close_mat) < max(25, h + 15):
+            raise ValueError(f"need at least {max(25, h + 15)} sessions to evaluate symbolic formula")
+
+        sig_full = _eval_symbolic_ast(expr, close_mat, vol_mat)
+
+        # Explicit no-lookahead truncation guard: recompute on panel truncated 5 sessions early
+        trunc_idx = len(close_mat) - 5
+        sig_trunc = _eval_symbolic_ast(expr, close_mat.iloc[:trunc_idx], vol_mat.iloc[:trunc_idx])
+        max_trunc_diff = float((sig_full.iloc[:trunc_idx] - sig_trunc).abs().max().max())
+        lookahead_clean = bool(max_trunc_diff <= 1e-9)
+
+        # Forward h-day return aligned causally at decision date t (close_{t+h} / close_t - 1)
+        fwd_ret = close_mat.shift(-h) / close_mat - 1.0
+        valid_rows = sig_full.iloc[20 : len(close_mat) - h]
+        valid_fwd = fwd_ret.iloc[20 : len(close_mat) - h]
+
+        ic_series: list[float] = []
+        spread_bps_series: list[float] = []
+        for dt in valid_rows.index:
+            s_row = valid_rows.loc[dt].dropna()
+            r_row = valid_fwd.loc[dt].dropna()
+            common = s_row.index.intersection(r_row.index)
+            if len(common) < 2:
+                continue
+            sv = s_row.loc[common].to_numpy(dtype=float)
+            rv = r_row.loc[common].to_numpy(dtype=float)
+            if float(np.std(sv)) <= 1e-12 or float(np.std(rv)) <= 1e-12:
+                ic_series.append(0.0)
+                spread_bps_series.append(0.0)
+                continue
+            sr = pd.Series(sv).rank().to_numpy(dtype=float)
+            rr = pd.Series(rv).rank().to_numpy(dtype=float)
+            corr = float(np.corrcoef(sr, rr)[0, 1])
+            if math.isfinite(corr):
+                ic_series.append(corr)
+            q_cut = max(1, len(common) // 3)
+            order = np.argsort(sv)
+            bot_ret = float(np.mean(rv[order[:q_cut]]))
+            top_ret = float(np.mean(rv[order[-q_cut:]]))
+            spread_bps_series.append(((top_ret - bot_ret) / h) * 10_000.0)
+
+        if not ic_series:
+            raise ValueError("formula produced constant or degenerate cross-sectional values across symbols")
+
+        ic_arr = np.asarray(ic_series, dtype=float)
+        n_obs = len(ic_arr)
+        mean_ic = float(np.mean(ic_arr))
+        std_ic = float(np.std(ic_arr, ddof=1)) if n_obs > 1 else 1.0
+
+        # Newey-West HAC variance adjustment for overlapping forward horizons (lag = h - 1)
+        lag = max(0, h - 1)
+        gamma0 = float(np.mean((ic_arr - mean_ic) ** 2))
+        hac_var = gamma0
+        for k in range(1, min(lag + 1, n_obs // 2)):
+            weight = 1.0 - k / (lag + 1.0)
+            cov_k = float(np.mean((ic_arr[k:] - mean_ic) * (ic_arr[:-k] - mean_ic)))
+            hac_var += 2.0 * weight * cov_k
+        se_hac = math.sqrt(max(hac_var, 1e-12) / max(n_obs, 1))
+        t_hac = round(mean_ic / se_hac, 3) if se_hac > 1e-9 else 0.0
+        ir_annualized = round((mean_ic / max(std_ic, 1e-6)) * math.sqrt(252.0 / h), 3)
+
+        rank_df = valid_rows.rank(axis=1, pct=True) - 0.5
+        turnover_l1 = round(float(rank_df.diff().abs().mean(axis=1).dropna().mean()), 4) if len(rank_df) > 1 else 0.0
+        mean_spread_bps = round(float(np.mean(spread_bps_series)), 2) if spread_bps_series else 0.0
+
+        return {
+            "tool": "gym.evaluate_formula",
+            "status": "UNDERPOWERED_LOCAL",
+            "formula": expr,
+            "symbols": syms,
+            "source": source_note,
+            "forward_horizon_days": h,
+            "n_cross_sections": n_obs,
+            "lookahead_truncation_check": {
+                "passed": lookahead_clean,
+                "max_abs_truncation_diff": round(max_trunc_diff, 12),
+            },
+            "spearman_rank_ic": round(mean_ic, 4),
+            "ic_std": round(std_ic, 4),
+            "ir_annualized": ir_annualized,
+            "t_hac": t_hac,
+            "quantile_spread_bps_per_day": mean_spread_bps,
+            "daily_rank_turnover_l1": turnover_l1,
+            "allowed_operators": [
+                "CS_ZScore", "CS_Rank", "CS_Winsorize", "TS_Mean", "TS_Std",
+                "TS_Delta", "TS_Corr", "KaufmanER", "Ret", "Abs", "Sign",
+            ],
+            "why_not_a_promotion": (
+                "Local formula evaluation tests only caller-supplied expressions on your panel window "
+                "without the monotonic trials ledger, deflated-Sharpe gate, or 5-regime paired replay "
+                "against the live champion."
+            ),
+            "cloud_job": {
+                "tool": "tournament.submit",
+                "next": "Encode your signal thresholds into a genome and submit to tournament.submit for 100-episode paired evaluation.",
+            },
+        }
+
+    return await run_tool("gym.evaluate_formula", _do)
+
+
+

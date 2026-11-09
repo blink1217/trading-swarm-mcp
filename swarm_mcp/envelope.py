@@ -137,6 +137,68 @@ def indeterminate_local(missing_inputs: list[str] | None = None, *,
     return out
 
 
+TOOL_UNLOCK_PREVIEWS: dict[str, str] = {
+    "gym.prop_challenge_sim": (
+        "Unlock 500-path Monte Carlo prop-firm evaluation simulations to compute your exact "
+        "pass probability, daily drawdown breach risk, consistency-lock rate, and optimal "
+        "risk-per-trade before paying a challenge reset fee."
+    ),
+    "gym.probe_fragility": (
+        "Unlock multi-regime fragility replay across high_vol, drawdown, chop, melt_up, and "
+        "gap_heavy episodes to expose which regime breaks your strategy before deploying capital."
+    ),
+    "gym.paired_preview": (
+        "Unlock paired head-to-head episode replay comparing your challenger genome against a "
+        "baseline on identical market paths with Wilcoxon p-values and worst-regime margins."
+    ),
+    "gym.evaluate_graph": (
+        "Unlock multi-node ExpressionGraph (strategy-spec-v3) DAG evaluation across all 5 "
+        "causal market regimes with turnover and worst-regime net bps diagnostics."
+    ),
+    "tournament.submit": (
+        "Unlock the 100-paired-episode Hosted Shadow Tournament against the live Swarm Champion "
+        "(half price with contribute=true) and enter the ELO leaderboard."
+    ),
+    "warden.optimize_portfolio": (
+        "Unlock constrained portfolio weight optimization (volatility-targeted dual momentum, "
+        "Hierarchical Risk Parity, and Ledoit-Wolf shrinkage MVO) with house exposure caps."
+    ),
+    "market.flow": (
+        "Unlock point-in-time FINRA dark-pool short-volume z-scores, SEC Form 4 insider net "
+        "buy-sell ratios, 13F institutional breadth, and Congressional trading flow."
+    ),
+    "market.fundamentals_pit": (
+        "Unlock filing-date-gated SEC XBRL fundamentals: Piotroski F-Score, Altman Z-Score, "
+        "accruals quality, and gross profitability with zero restatement lookahead."
+    ),
+    "market.macro_nowcast": (
+        "Unlock point-in-time macro regime nowcasts (yield-curve slope, credit-spread z-score, "
+        "VIX term structure, real-rate proxy, and shipping stress)."
+    ),
+    "market.screen": (
+        "Unlock multi-factor cross-sectional screening across up to 50 symbols per call with "
+        "point-in-time momentum, volatility, and quality filters."
+    ),
+    "gym.evaluate_formula": (
+        "Unlock causal symbolic formula evaluation (CS_ZScore, CS_Rank, TS_Corr, KaufmanER) "
+        "with a strict no-lookahead truncation check, Spearman rank IC, Newey-West t_hac, "
+        "and quantile spread diagnostics."
+    ),
+    "market.insider_institutional_pit": (
+        "Unlock point-in-time filing-gated insider cluster buying buckets, institutional "
+        "accumulation percentiles, quiet-session stealth absorption, and smart-money divergence z-scores."
+    ),
+    "market.supply_chain_pit": (
+        "Unlock point-in-time freight velocity percentiles, cross-border flow pressure, "
+        "and pre-earnings supply-chain conviction buckets."
+    ),
+    "market.rank": (
+        "Unlock cross-sectional percentile ranking and composite factor scoring across your "
+        "symbol universe."
+    ),
+}
+
+
 def upgrade_required(tool: str, plan: str, upgrade_url: str) -> dict:
     """Non-error envelope for a Pro tool attempted on a non-paid plan.
 
@@ -145,19 +207,36 @@ def upgrade_required(tool: str, plan: str, upgrade_url: str) -> dict:
     Advisory on the open-source stdio servers; hard-enforced on the hosted
     streamable-HTTP endpoint.
     """
+    preview = TOOL_UNLOCK_PREVIEWS.get(
+        tool,
+        f"Unlock {tool} plus 50 symbols/call, 10-year backfill, and hosted gym/tournament compute.",
+    )
+    sep = "&" if "?" in upgrade_url else "?"
+    checkout_url = f"{upgrade_url}{sep}upgrade=1&pack=credits-10k&tool={tool}"
     return {
         "tool": tool,
         "access": "UPGRADE_REQUIRED",
         "reason": "plan_required",
         "plan": plan,
         "upgrade_url": upgrade_url,
-        "note": ("this tool needs a funded credit pack (Pro) — buy a one-time pack at the URL "
-                 "above (10k or 100k credits, 90-day validity, no subscription). Credits pay for "
-                 "relay data calls, hosted compute (1 credit per simulated episode) and Shadow "
-                 "Tournament runs. Free tokens include the warden checkers, market.pulse, "
-                 "market.sentiment, market.regime, cache.stats, cache.offline and "
-                 "tournament.leaderboard. This client-side check is advisory; quota and plan "
-                 "enforcement happen server-side."),
+        "checkout_url": checkout_url,
+        "unlock_preview": preview,
+        "starter_pack": {
+            "pack_id": "credits-10k",
+            "credits": 10_000,
+            "price_gbp": 19,
+            "price_usd": 24,
+            "price_eur": 22,
+            "validity_days": 90,
+            "billing": "one-time payment, never auto-renews",
+        },
+        "note": (f"{preview} This tool needs a funded credit pack (Pro) — buy a one-time pack at "
+                 f"{checkout_url} (10k credits for £19 (~$24 / €22) or 100k for £149 (~$189 / €175), 90-day validity, no "
+                 "subscription). Credits pay for relay data calls, hosted compute (1 credit per "
+                 "simulated episode) and Shadow Tournament runs. Free tokens include the warden "
+                 "checkers, market.pulse, market.sentiment, market.regime, cache.stats, "
+                 "cache.offline and tournament.leaderboard. This client-side check is advisory; "
+                 "quota and plan enforcement happen server-side."),
     }
 
 
