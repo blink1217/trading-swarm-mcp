@@ -490,10 +490,11 @@ async def prop_challenge_check(
     planned_hold_days: Annotated[int, Field(
         description="Planned holding period in trading days.", ge=1, le=60)] = 1,
 ) -> PropChallengeCheckOut:
-    """Evaluates prop-firm evaluation rules (FTMO/Topstep/Apex style TwoStep or OneStep):
-    hard and safe daily loss floors, overall drawdown stop, 30-40% single-day consistency
-    cap, 0.55x Target-Lock Taper when >=70% of profit target is banked, and friction-adjusted
-    trade risk. Pure risk/compliance rules — never places orders or exposes trading signals.
+    """Checks a proposed trade against TwoStep or OneStep prop-firm drawdown and consistency rules.
+
+    Evaluates hard and safe daily loss floors, overall drawdown stop, 30-40% single-day
+    consistency cap, 0.55x Target-Lock Taper when >=70% of profit target is banked, and
+    friction-adjusted trade risk. Pure risk/compliance rules — never places orders.
     """
     return await warden_tools.prop_challenge_check(
         initial_balance=initial_balance,
@@ -553,10 +554,11 @@ async def defensive_posture(
     base_max_stop_heat_pct: Annotated[float, Field(
         description="Baseline maximum aggregate portfolio stop-heat percentage.", gt=0.0, le=20.0)] = 3.20,
 ) -> DefensivePostureOut:
-    """Classifies portfolio risk posture into Normal, Cautious, Defensive, or CrisisShield
-    from trailing volatility, efficiency ratio, and drawdown stress. Returns the recommended
-    risk-scale multiplier (1.00x down to 0.20x), stop-tightening factor (1.00x down to 0.55x),
-    and effective portfolio stop-heat cap. Pure risk governance — no alpha signals.
+    """Classifies portfolio risk posture into Normal, Cautious, Defensive, or CrisisShield.
+
+    Uses trailing volatility, efficiency ratio, and drawdown stress to compute the
+    recommended risk-scale multiplier (1.00x down to 0.20x), stop-tightening factor
+    (1.00x down to 0.55x), and effective portfolio stop-heat cap. Pure risk governance.
     """
     return await warden_tools.defensive_posture(
         benchmark_return_1d_pct=benchmark_return_1d_pct,

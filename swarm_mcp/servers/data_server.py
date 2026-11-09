@@ -711,10 +711,11 @@ async def market_insider_institutional_pit(
     as_of: Annotated[str | None, Field(
         description="Optional point-in-time cutoff date (YYYY-MM-DD); records after this date are masked.")] = None,
 ) -> MarketInsiderInstitutionalPitOut:
-    """Returns point-in-time filing-gated insider cluster activity buckets, institutional
-    accumulation percentiles, stealth quiet-session absorption percentiles, and flow-price
-    divergence z-scores strictly dated on or before as_of. Never echoes raw share counts or
-    dollar figures. Pro tool.
+    """Returns point-in-time insider cluster and institutional flow buckets up to as_of.
+
+    Includes filing-gated insider cluster activity, institutional accumulation percentiles,
+    stealth quiet-session absorption percentiles, and flow-price divergence z-scores. Never
+    echoes raw share counts or dollar figures. Pro tool.
     """
     return await alt_derived_tools.market_insider_institutional_pit(symbols=symbols, bars=bars, as_of=as_of)
 
@@ -753,9 +754,11 @@ async def market_supply_chain_pit(
     as_of: Annotated[str | None, Field(
         description="Optional point-in-time cutoff date (YYYY-MM-DD).")] = None,
 ) -> MarketSupplyChainPitOut:
-    """Returns point-in-time freight/volume velocity percentiles, cross-border session flow
-    percentiles, margin-resilience composites, and pre-earnings conviction buckets strictly
-    dated on or before as_of. Never echoes raw provider values. Pro tool.
+    """Returns point-in-time supply-chain velocity and cross-border flow buckets up to as_of.
+
+    Includes freight/volume velocity percentiles, cross-border session flow percentiles,
+    margin-resilience composites, and pre-earnings conviction buckets. Never echoes raw
+    provider values. Pro tool.
     """
     return await alt_derived_tools.market_supply_chain_pit(symbols=symbols, bars=bars, as_of=as_of)
 

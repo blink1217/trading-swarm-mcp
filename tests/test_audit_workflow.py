@@ -267,7 +267,7 @@ def test_all_three_servers_register_expected_tools():
         "audit.report",
         "audit.compare",
     } <= warden_names
-    assert len(data_names) == 17
-    assert len(warden_names) == 14
-    assert len(gym_names) == 8
-    assert len(data_names | warden_names | gym_names) == 39
+    assert len(data_names) == 19
+    assert len(warden_names) == 16
+    assert len(gym_names) == 11
+    assert len(data_names | warden_names | gym_names) == 46

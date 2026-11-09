@@ -25,7 +25,7 @@ def synthetic_bars(tickers: list[str], days: int = 420, seed: int = 0,
         price = rng.uniform(30.0, 400.0)
         for d in dates:
             ret = drift + rng.normal(0.0, vol)
-            if si % 7 == 0 and 120 <= d.dayofyear % 365 <= 135:
+            if si % 7 == 0 and 120 <= d.day_of_year % 365 <= 135:
                 ret += rng.normal(0.0, vol * 2.5)
             open_p = price * (1 + rng.normal(0.0, vol * 0.3))
             close_p = price * (1 + ret)

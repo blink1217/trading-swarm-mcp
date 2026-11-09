@@ -444,9 +444,10 @@ async def prop_challenge_sim(
     seed: Annotated[int, Field(
         description="Deterministic RNG seed.")] = 42,
 ) -> PropChallengeSimOut:
-    """Simulates multi-day prop-firm evaluation pass probability, daily/overall drawdown
-    breach rates, consistency-rule lock frequency, and optimal risk-per-trade across up to
-    500 Monte Carlo paths on your trade R-multiples or win/loss parameters. Pro tool
+    """Simulates multi-day prop-firm evaluation pass and breach rates across up to 500 paths.
+
+    Computes daily/overall drawdown breach rates, consistency-rule lock frequency, and
+    optimal risk-per-trade on your trade R-multiples or win/loss parameters. Pro tool
     (1 credit on hosted, 0 locally).
     """
     return await gym_tools.prop_challenge_sim(
@@ -590,10 +591,11 @@ async def evaluate_formula(
     forward_horizon_days: Annotated[int, Field(
         description="Forward return horizon in trading sessions (1-20).", ge=1, le=20)] = 5,
 ) -> EvaluateFormulaOut:
-    """Evaluates a caller-supplied symbolic alpha formula causally with a strict no-lookahead
-    truncation guard. Reports cross-sectional Spearman rank IC, Newey-West HAC t-statistic,
-    top-minus-bottom quantile spread (bps/day), and daily rank turnover without exposing
-    any internal equations or issuing a local promotion verdict. Pro tool (1 credit on hosted).
+    """Evaluates a caller-supplied symbolic alpha formula causally with a no-lookahead guard.
+
+    Reports cross-sectional Spearman rank IC, Newey-West HAC t-statistic, top-minus-bottom
+    quantile spread (bps/day), and daily rank turnover without exposing internal equations
+    or issuing a local promotion verdict. Pro tool (1 credit on hosted).
     """
     return await gym_tools.evaluate_formula(
         formula=formula,
@@ -636,10 +638,11 @@ async def tournament_forward_league(
     include_weekly_commits: Annotated[bool, Field(
         description="Include the week-by-week Friday SHA-256 pre-commitment settlement rows.")] = True,
 ) -> TournamentForwardLeagueOut:
-    """Returns the settled 8-week SHA-256 pre-committed Forward League ledger (2026-09-14 to
-    2026-11-09) and anonymised live multi-sleeve benchmark summaries. Exposes only 12-char
-    genome hash prefixes, Friday commitment hashes, realized net-of-cost return deltas, and
-    defensive posture states — never genome vectors, symbols, or equations. Free on every plan.
+    """Returns the settled 8-week SHA-256 pre-committed Forward League ledger and benchmark summaries.
+
+    Exposes only 12-char genome hash prefixes, Friday commitment hashes, realized net-of-cost
+    return deltas, and defensive posture states — never genome vectors, symbols, or equations.
+    Free on every plan.
     """
     return await tournament_tools.forward_league(include_weekly_commits=include_weekly_commits)
 
