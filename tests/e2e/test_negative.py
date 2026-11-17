@@ -159,12 +159,22 @@ def test_bad_token_is_refused_and_never_serves_data(tmp_path):
     assert "total_rows" not in payload
 
 
-def test_missing_token_is_refused_and_never_serves_data(tmp_path):
+def test_missing_token_is_refused_on_hosted_tools_and_allows_offline_local(tmp_path):
     env = fixtures.base_env(tmp_path / "no-token", token="",
                             verify_url=fixtures.DEAD_VERIFY_URL)
-    payload = _one_call("data", env, "cache.stats", {})["payload"]
+    res = _one_call("data", env, "pit.analysis", {"symbols": ["AAPL"]})
+    assert res["is_error"] is True
+    payload = res["payload"]
     assert payload.get("access") == "REQUIRED"
-    assert "total_rows" not in payload
+    assert "underlyings" not in payload
+
+    # Local offline stdio tools run without any token and zero network calls
+    local_res = _one_call("warden", env, "warden.cost_check", {
+        "gross_edge_bps": 20.0, "spread_bps": 2.0,
+        "slippage_bps": 3.0, "adverse_selection_bps": 2.0,
+    })
+    assert local_res["is_error"] is False
+    assert local_res["payload"]["verdict"] == "SURVIVES_COSTS"
 
 
 def test_unreachable_verify_is_fail_closed(tmp_path):

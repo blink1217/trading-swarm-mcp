@@ -47,8 +47,8 @@ agent = create_react_agent(ChatOpenAI(model="gpt-4o"), tools)
 
 ```python
 client = MultiServerMCPClient({
-    "swarm-data": {
-        "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data",
+    "quant-swarm": {
+        "url": "https://mcp.1.21initiative.com/mcp",
         "transport": "streamable_http",
         "headers": {"Authorization": "Bearer <token>"},
     },

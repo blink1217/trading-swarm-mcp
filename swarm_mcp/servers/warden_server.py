@@ -46,8 +46,8 @@ class ValidateOrderOut(TypedDict, total=False):
     house_floors: dict
     provenance: str
     safety: str
-    fund_overrides: dict
-    rejection_quote: str
+    fund_overrides: dict | None
+    rejection_quote: str | None
     access: str
     error: str
     request_access_at: str
@@ -59,7 +59,7 @@ class AuditFeaturesOut(TypedDict, total=False):
     verdict: str
     features: list[dict]
     violations: list[str]
-    coverage: dict
+    coverage: dict | None
     banned_actuals_sources: list[str]
     provenance: str
     access: str
@@ -102,11 +102,11 @@ class ExplainSizingOut(TypedDict, total=False):
     verdict: str
     qty: int
     notional: float
-    trail_stop: float
+    trail_stop: float | None
     reasons: list[str]
     steps: list[dict]
     house_floors: dict
-    overrides_deviation: dict
+    overrides_deviation: dict | None
     provenance: str
     safety: str
     access: str
@@ -126,8 +126,8 @@ class PromotionVerdictOut(TypedDict, total=False):
     next_action: str
     credits_charged: int
     missing_inputs: list[str]
-    audit_request: dict
-    cloud_job: dict
+    audit_request: dict | None
+    cloud_job: dict | None
     regimes_required: list[str]
     safety: str
     access: str
@@ -149,7 +149,7 @@ class OptimizePortfolioOut(TypedDict, total=False):
     selected_risk_assets: list[str]
     filtered_out: list[dict]
     house_floors: dict
-    overrides_deviation: dict
+    overrides_deviation: dict | None
     provenance: str
     safety: str
     access: str
@@ -443,7 +443,7 @@ class PropChallengeCheckOut(TypedDict, total=False):
     consistency_ratio: float
     consistency_cap_pct: float
     floors: dict
-    proposed_trade: dict
+    proposed_trade: dict | None
     violations: list[str]
     simulation_handoff: dict
     provenance: str
@@ -632,6 +632,118 @@ class AuditGenericOut(TypedDict, total=False):
     error: str
     request_access_at: str
     how: str
+
+
+@mcp.tool(
+    name="audit.backtest",
+    title="Quant Swarm Audit — One-Shot Backtest Forensics",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_backtest(
+    returns_path: Annotated[str | None, Field(
+        description="Workspace-bounded path to CSV/Parquet/JSON strategy returns (stdio only).")] = None,
+    returns_csv: Annotated[str | None, Field(
+        description="Inline UTF-8 CSV string of strategy returns (ts,strategy_return; <=250 KB).")] = None,
+    returns_rows: Annotated[list[dict] | None, Field(
+        description="Inline list of strategy return rows [{ts, strategy_return}].")] = None,
+    trades_path: Annotated[str | None, Field(
+        description="Optional workspace-bounded path to trade records CSV/Parquet/JSON (stdio only).")] = None,
+    trades_csv: Annotated[str | None, Field(
+        description="Optional inline UTF-8 CSV string of trade records (<=250 KB).")] = None,
+    trades_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline trade records [{ts, symbol, pnl_bps, position_pct}].")] = None,
+    benchmark_path: Annotated[str | None, Field(
+        description="Optional workspace-bounded path to benchmark returns (stdio only).")] = None,
+    benchmark_csv: Annotated[str | None, Field(
+        description="Optional inline UTF-8 CSV string of benchmark returns (<=250 KB).")] = None,
+    benchmark_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline benchmark return rows [{ts, return}].")] = None,
+    cost_assumptions: Annotated[dict | None, Field(
+        description="Optional execution cost assumptions {spread_bps, slippage_bps, adverse_selection_bps, commission_bps}.")] = None,
+    features_manifest: Annotated[dict | None, Field(
+        description="Optional point-in-time feature manifest {as_of, features: [...]}.")] = None,
+    spread_bps: Annotated[float | None, Field(
+        description="Optional one-way spread override in bps.", ge=0.0)] = None,
+    slippage_bps: Annotated[float | None, Field(
+        description="Optional one-way slippage override in bps.", ge=0.0)] = None,
+    adverse_selection_bps: Annotated[float | None, Field(
+        description="Optional one-way adverse selection override in bps.", ge=0.0)] = None,
+    commission_bps: Annotated[float | None, Field(
+        description="Optional one-way commission override in bps.", ge=0.0)] = None,
+    num_trials: Annotated[int, Field(
+        description="Number of strategy/parameter trials tested for BH q-value and Deflated Sharpe adjustment.",
+        ge=1, le=100000)] = 1,
+    strategy_name: Annotated[str, Field(
+        description="Human-readable strategy identifier.")] = "candidate_strategy",
+) -> AuditGenericOut:
+    """Runs a complete zero-trust backtest forensic audit in a single call at 0 credits.
+
+    Evaluates lookahead leakage, Newey-West HAC t-stat, Benjamini-Hochberg q-value, Deflated
+    Sharpe, 1x/2x cost survival, drawdown tails, and top-5 trade concentration locally.
+    """
+    return await audit_tools.backtest(
+        returns_path=returns_path, returns_csv=returns_csv, returns_rows=returns_rows,
+        trades_path=trades_path, trades_csv=trades_csv, trades_rows=trades_rows,
+        benchmark_path=benchmark_path, benchmark_csv=benchmark_csv, benchmark_rows=benchmark_rows,
+        cost_assumptions=cost_assumptions, features_manifest=features_manifest,
+        spread_bps=spread_bps, slippage_bps=slippage_bps,
+        adverse_selection_bps=adverse_selection_bps, commission_bps=commission_bps,
+        num_trials=num_trials, strategy_name=strategy_name,
+    )
+
+
+@mcp.tool(
+    name="audit.backtest_inline",
+    title="Quant Swarm Audit — Inline Backtest Forensics (Remote Safe)",
+    annotations=annotations(read_only=True, idempotent=True, open_world=False),
+    structured_output=True,
+)
+async def audit_backtest_inline(
+    returns_csv: Annotated[str | None, Field(
+        description="Inline UTF-8 CSV string of strategy returns (columns: ts,strategy_return; max 250 KB).")] = None,
+    returns_rows: Annotated[list[dict] | None, Field(
+        description="Inline list of strategy return rows [{ts, strategy_return}].")] = None,
+    trades_csv: Annotated[str | None, Field(
+        description="Optional inline UTF-8 CSV string of trade records (ts,symbol,pnl_bps,position_pct; max 250 KB).")] = None,
+    trades_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline trade records [{ts, symbol, pnl_bps, position_pct}].")] = None,
+    benchmark_csv: Annotated[str | None, Field(
+        description="Optional inline UTF-8 CSV string of benchmark returns (max 250 KB).")] = None,
+    benchmark_rows: Annotated[list[dict] | None, Field(
+        description="Optional inline benchmark return rows [{ts, return}].")] = None,
+    cost_assumptions: Annotated[dict | None, Field(
+        description="Optional execution cost assumptions {spread_bps, slippage_bps, adverse_selection_bps, commission_bps}.")] = None,
+    features_manifest: Annotated[dict | None, Field(
+        description="Optional point-in-time feature manifest {as_of, features: [...]}.")] = None,
+    spread_bps: Annotated[float | None, Field(
+        description="Optional one-way spread override in bps.", ge=0.0)] = None,
+    slippage_bps: Annotated[float | None, Field(
+        description="Optional one-way slippage override in bps.", ge=0.0)] = None,
+    adverse_selection_bps: Annotated[float | None, Field(
+        description="Optional one-way adverse selection override in bps.", ge=0.0)] = None,
+    commission_bps: Annotated[float | None, Field(
+        description="Optional one-way commission override in bps.", ge=0.0)] = None,
+    num_trials: Annotated[int, Field(
+        description="Number of strategy/parameter trials tested for BH q-value and Deflated Sharpe adjustment.",
+        ge=1, le=100000)] = 1,
+    strategy_name: Annotated[str, Field(
+        description="Human-readable strategy identifier.")] = "candidate_strategy",
+) -> AuditGenericOut:
+    """Runs a one-shot backtest forensic audit over inline CSV or row arrays with zero server disk I/O.
+
+    Built for remote HTTP connectors (claude.ai, ChatGPT, web MCP): evaluates Newey-West HAC
+    significance, BH q-value, cost survival, concentration, and PIT leakage up to 250 KB.
+    """
+    return await audit_tools.backtest_inline(
+        returns_csv=returns_csv, returns_rows=returns_rows,
+        trades_csv=trades_csv, trades_rows=trades_rows,
+        benchmark_csv=benchmark_csv, benchmark_rows=benchmark_rows,
+        cost_assumptions=cost_assumptions, features_manifest=features_manifest,
+        spread_bps=spread_bps, slippage_bps=slippage_bps,
+        adverse_selection_bps=adverse_selection_bps, commission_bps=commission_bps,
+        num_trials=num_trials, strategy_name=strategy_name,
+    )
 
 
 @mcp.tool(

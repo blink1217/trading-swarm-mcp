@@ -61,17 +61,52 @@ def test_http_health_is_public():
         assert r.json()["status"] == "ok"
 
 
-def test_http_denies_without_token():
+def test_http_allows_unauthenticated_discovery_and_denies_tools_call():
+    """Directory crawlers (Lowdown, Smithery, Odel, Glama) list metadata and
+    tools without a token (200 OK), while tools/call requires auth (401)."""
+    headers = {"Accept": "application/json, text/event-stream"}
     with TestClient(http_server.build_app()) as c:
-        r = c.post("/mcp/data", json=INIT_PAYLOAD)
-        assert r.status_code == 401
+        for route in ("/mcp", "/mcp/data", "/mcp/warden", "/mcp/gym"):
+            init_resp = c.post(route, json=INIT_PAYLOAD, headers=headers)
+            assert init_resp.status_code == 200, f"{route} initialize failed: {init_resp.text}"
+            tools_resp = c.post(
+                route,
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+                headers=headers,
+            )
+            assert tools_resp.status_code == 200, f"{route} tools/list failed: {tools_resp.text}"
+            tools = _post_body(tools_resp)["result"]["tools"]
+            assert len(tools) > 0
+            # Remote HTTP must never advertise local filesystem *_path tools
+            for t in tools:
+                props = (t.get("inputSchema") or {}).get("properties") or {}
+                assert not any(k.endswith("_path") for k in props), (
+                    f"{route}:{t['name']} leaked filesystem path param on HTTP: {list(props)}"
+                )
+
+        # Unauthenticated tools/call MUST be denied with 401
+        call_resp = c.post("/mcp", json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "warden.cost_check", "arguments": {
+                "gross_edge_bps": 10.0, "spread_bps": 1.0,
+                "slippage_bps": 2.0, "adverse_selection_bps": 2.0,
+            }},
+        }, headers=headers)
+        assert call_resp.status_code == 401
 
 
 def test_http_denial_carries_resource_metadata_and_serves_it():
-    """RFC 9728 discovery: the 401 challenge points at the metadata, and the
-    metadata (both flavors) names the site as the authorization server."""
+    """RFC 9728 discovery: the 401 challenge on tools/call points at the metadata,
+    and the metadata (both flavors) names the site as the authorization server."""
     with TestClient(http_server.build_app()) as c:
-        r = c.post("/mcp/data", json=INIT_PAYLOAD)
+        r = c.post("/mcp/data", json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "pit.analysis", "arguments": {"symbols": ["AAPL"]}},
+        })
         assert r.status_code == 401
         challenge = r.headers.get("www-authenticate", "")
         assert challenge.startswith("Bearer resource_metadata=")
@@ -84,6 +119,19 @@ def test_http_denial_carries_resource_metadata_and_serves_it():
             assert doc["resource"].startswith("http")
             assert doc["authorization_servers"] == [access.SITE_URL.rstrip("/")]
             assert doc["scopes_supported"] == ["mcp:tools"]
+
+
+def test_http_requires_approval_secret_in_production_mode(monkeypatch):
+    monkeypatch.setenv("SWARM_MCP_TRANSPORT", "http")
+    monkeypatch.delenv("SWARM_APPROVAL_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="SWARM_APPROVAL_SECRET"):
+        http_server.build_app()
+    monkeypatch.setenv("SWARM_APPROVAL_SECRET", "short-secret")
+    with pytest.raises(RuntimeError, match="32 characters"):
+        http_server.build_app()
+    monkeypatch.setenv("SWARM_APPROVAL_SECRET", "x" * 40)
+    app = http_server.build_app()
+    assert app is not None
 
 
 def test_http_denies_bad_token(monkeypatch):

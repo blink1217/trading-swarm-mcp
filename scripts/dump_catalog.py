@@ -8,6 +8,7 @@ import datetime as dt
 import json
 import sys
 
+from swarm_mcp.servers.unified_server import mcp as core_mcp
 from swarm_mcp.servers.data_server import mcp as data_mcp
 from swarm_mcp.servers.warden_server import mcp as warden_mcp
 from swarm_mcp.servers.gym_server import mcp as gym_mcp
@@ -40,11 +41,18 @@ async def main() -> None:
                 for t in tools
             ],
         })
+    core_tools = await core_mcp.list_tools()
     doc = {
         "package": "quant-swarm",
         "version": version,
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "source": "list_tools() of the clean-installed release artifact",
+        "default_profile": {
+            "name": "quant-swarm",
+            "profile": "core",
+            "tool_count": len(core_tools),
+            "tools": [t.name for t in core_tools],
+        },
         "servers": servers,
     }
     with open(out_path, "w", encoding="utf-8") as fh:

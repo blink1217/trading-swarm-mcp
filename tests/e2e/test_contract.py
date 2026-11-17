@@ -26,6 +26,7 @@ WARDEN_TOOLS = {
     "warden.validate_genome", "warden.explain_sizing", "warden.promotion_verdict",
     "warden.optimize_portfolio", "warden.plan_rebalance",
     "warden.prop_challenge_check", "warden.defensive_posture",
+    "audit.backtest", "audit.backtest_inline",
     "audit.preflight", "audit.quote", "audit.run",
     "audit.status", "audit.report", "audit.compare",
 }
@@ -54,12 +55,12 @@ def _by_name(contracts, server) -> dict[str, dict]:
     return {t["name"]: t for t in contracts[server]}
 
 
-def test_contract_inventory_is_exactly_26_tools(contracts):
+def test_contract_inventory_is_expected_tools(contracts):
     assert set(_by_name(contracts, "data")) == DATA_TOOLS
     assert set(_by_name(contracts, "warden")) == WARDEN_TOOLS
     assert set(_by_name(contracts, "gym")) == GYM_TOOLS
     total = sum(len(v) for v in contracts.values())
-    assert total == 46, total
+    assert total == 48, total
 
 
 def test_contract_matches_golden_snapshot(contracts):

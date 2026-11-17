@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CURSOR_DIR = ROOT / ".cursor"
 
 SERVERS = {
+    "quant-swarm": "quant-swarm",
     "swarm-data": "swarm-data-mcp",
     "swarm-warden": "swarm-warden-mcp",
     "swarm-gym": "swarm-gym-mcp",

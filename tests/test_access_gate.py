@@ -5,25 +5,53 @@ import json
 
 from helpers import run_async
 from swarm_mcp import access
-from swarm_mcp.tools import data_tools, gym_tools, warden_tools
+from swarm_mcp.tools import audit_tools, data_tools, gym_tools, pit_tools, tournament_tools, warden_tools
 
 
-def test_no_token_returns_access_required_envelope(monkeypatch):
+def test_no_token_returns_access_required_on_hosted_tools(monkeypatch):
     monkeypatch.delenv("SWARM_MCP_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("SWARM_MCP_LOCAL_TOKEN", raising=False)
     access.reset_access_cache()
 
     for coro in (
-        data_tools.cache_stats(),
-        warden_tools.cost_check(gross_edge_bps=10.0, spread_bps=1.0,
-                                slippage_bps=3.0, adverse_selection_bps=8.0),
+        pit_tools.pit_analysis(symbols=["AAPL"]),
+        data_tools.build_features(symbol="AAPL", as_of="2026-09-01"),
         gym_tools.estimate_cloud_run(),
+        tournament_tools.leaderboard(),
     ):
         r = run_async(coro)
         assert r.get("access") == "REQUIRED"
         assert r["request_access_at"] == "https://1.21initiative.com/"
         assert "SWARM_MCP_ACCESS_TOKEN" in r["how"]
         assert "error" in r
+
+
+def test_no_token_allows_local_offline_tools_zero_network(monkeypatch):
+    monkeypatch.delenv("SWARM_MCP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("SWARM_MCP_LOCAL_TOKEN", raising=False)
+    access.reset_access_cache()
+
+    def forbid_network(*a, **k):
+        raise AssertionError("network call attempted during offline local stdio execution")
+
+    monkeypatch.setattr("httpx.post", forbid_network)
+
+    cost_res = run_async(warden_tools.cost_check(
+        gross_edge_bps=10.0, spread_bps=1.0, slippage_bps=3.0, adverse_selection_bps=8.0
+    ))
+    assert cost_res["verdict"] == "EDGE_CONSUMED_BY_COSTS"
+
+    feat_res = run_async(warden_tools.audit_features(manifest=[]))
+    assert feat_res["verdict"] == "CLEAN"
+
+    cache_res = run_async(data_tools.cache_stats())
+    assert "per_symbol" in cache_res
+
+    bt_res = run_async(audit_tools.backtest(
+        returns_csv="ts,strategy_return\n2026-06-01,0.01\n2026-06-02,-0.004\n2026-06-03,0.008\n"
+    ))
+    assert bt_res["status"] == "completed"
+    assert bt_res["credits_charged"] == 0
 
 
 def test_local_bootstrap_token_grants_access(monkeypatch):

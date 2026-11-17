@@ -45,22 +45,18 @@ def test_server_json_versions_match_pyproject():
 def test_server_json_identity():
     meta = _server_json()
     assert meta["name"] == "io.github.blink1217/quant-swarm"
-    for server in ("swarm-data-mcp", "swarm-warden-mcp", "swarm-gym-mcp"):
-        assert any(
-            server in [a["value"] for a in p["packageArguments"] if a["type"] == "positional"]
-            for p in meta["packages"]
-        ), f"{server} missing"
-        assert all(p["registryType"] == "pypi" for p in meta["packages"])
-        assert all(p["identifier"] == "quant-swarm" for p in meta["packages"])
-    for pkg in meta["packages"]:
-        args = pkg.get("runtimeArguments")
-        assert args, f"runtimeArguments missing for {pkg['identifier']}"
-        assert {"type": "named", "name": "--from", "value": "quant-swarm"} in args, (
-            f"runtime --from quant-swarm missing for {pkg['identifier']}")
+    assert len(meta["packages"]) == 1, "server.json must expose 1 unified PyPI stdio entry"
+    pkg = meta["packages"][0]
+    assert pkg["registryType"] == "pypi"
+    assert pkg["identifier"] == "quant-swarm"
+    pos_args = [a["value"] for a in pkg["packageArguments"] if a["type"] == "positional"]
+    assert pos_args == ["quant-swarm"]
+    args = pkg.get("runtimeArguments")
+    assert args, f"runtimeArguments missing for {pkg['identifier']}"
+    assert {"type": "named", "name": "--from", "value": "quant-swarm"} in args
     remotes = meta.get("remotes") or []
     assert remotes and remotes[0]["type"] == "streamable-http"
-    assert remotes[0]["url"].startswith("https://swarm-mcp-")
-    assert remotes[0]["url"].endswith("/mcp/data")
+    assert remotes[0]["url"] == "https://mcp.1.21initiative.com/mcp"
 
 
 def test_launcher_scripts_reference_pyproject_package_name():
@@ -88,7 +84,7 @@ def test_remote_base_url_is_single_sourced():
     from swarm_mcp.servers.http_server import DEFAULT_ALLOWED_HOSTS
 
     base = server_meta.REMOTE_BASE_URL
-    assert base.startswith("https://swarm-mcp-"), "canonical remote URL in server_meta"
+    assert base == "https://mcp.1.21initiative.com", "canonical remote URL in server_meta"
     assert urlparse(base).hostname in DEFAULT_ALLOWED_HOSTS, (
         "http_server's allowlist must include the canonical remote host")
     meta = _server_json()

@@ -260,6 +260,8 @@ def test_all_three_servers_register_expected_tools():
     gym_names = {t.name for t in run_async(gym_server.mcp.list_tools())}
 
     assert {
+        "audit.backtest",
+        "audit.backtest_inline",
         "audit.preflight",
         "audit.quote",
         "audit.run",
@@ -268,6 +270,6 @@ def test_all_three_servers_register_expected_tools():
         "audit.compare",
     } <= warden_names
     assert len(data_names) == 19
-    assert len(warden_names) == 16
+    assert len(warden_names) == 18
     assert len(gym_names) == 11
-    assert len(data_names | warden_names | gym_names) == 46
+    assert len(data_names | warden_names | gym_names) == 48

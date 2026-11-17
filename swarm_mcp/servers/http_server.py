@@ -41,22 +41,70 @@ from urllib.parse import parse_qs, urlparse
 from starlette.responses import JSONResponse
 
 from swarm_mcp import access, request_context, server_meta
-from swarm_mcp.servers import data_server, gym_server, warden_server
+from swarm_mcp.mcp_compat import MCPServer
+from swarm_mcp.servers import data_server, gym_server, unified_server, warden_server
+from swarm_mcp.tools import audit_tools
+
+# M-01 + v1.1.0 transport isolation: local-only tools (process-global switches,
+# local SQLite cache stats, and local-filesystem path audit.* tools) are omitted
+# from remote HTTP tools/list and hard-refused on remote HTTP tools/call.
+HOSTED_LOCAL_ONLY_TOOLS = frozenset({
+    "cache.offline",
+    "cache.stats",
+    "audit.backtest",
+    "audit.preflight",
+    "audit.quote",
+    "audit.run",
+    "audit.report",
+    "audit.compare",
+})
+
+UNAUTHENTICATED_DISCOVERY_METHODS = frozenset({
+    "initialize",
+    "notifications/initialized",
+    "notifications/cancelled",
+    "ping",
+    "tools/list",
+    "resources/list",
+    "prompts/list",
+})
+
+
+def _clone_remote_safe_server(source_mcp: MCPServer, omitted_names: frozenset[str]) -> MCPServer:
+    """Clone an MCPServer omitting local-only tools while preserving metadata, prompts, and resources."""
+    srv = MCPServer(
+        name=source_mcp.name,
+        title=getattr(source_mcp, "title", None) or source_mcp.name,
+        description=getattr(source_mcp, "description", None) or "",
+        instructions=getattr(source_mcp, "instructions", None) or "",
+        website_url=server_meta.HOME_URL,
+        icons=[{"src": server_meta.ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
+        version=server_meta.PACKAGE_VERSION,
+    )
+    spec_by_name = {spec[0]: spec for spec in unified_server._ALL_TOOL_SPECS}
+    source_names = [t.name for t in getattr(source_mcp, "_tool_manager").list_tools()]
+    for name in source_names:
+        if name in omitted_names:
+            continue
+        _, title, ro, idem, ow, fn = spec_by_name[name]
+        srv.tool(
+            name=name,
+            title=title,
+            annotations=server_meta.annotations(read_only=ro, idempotent=idem, open_world=ow),
+            structured_output=True,
+        )(fn)
+    unified_server._attach_prompts_and_resources(srv)
+    return srv
+
 
 SERVERS = {
-    "/mcp/data": data_server.mcp,
-    "/mcp/warden": warden_server.mcp,
+    "/mcp": unified_server.remote_mcp,
+    "/mcp/data": _clone_remote_safe_server(data_server.mcp, HOSTED_LOCAL_ONLY_TOOLS),
+    "/mcp/warden": _clone_remote_safe_server(warden_server.mcp, HOSTED_LOCAL_ONLY_TOOLS),
     "/mcp/gym": gym_server.mcp,
 }
 
-# M-01: local-only tools are refused on the hosted endpoint. cache.offline
-# used to be a FREE, process-global toggle — one free token could DoS every
-# tenant (and every paid tournament run) until it was flipped back; cache.stats
-# inventories a local cache that does not exist server-side (and used to leak
-# the server db_path). They stay available on the local stdio servers.
-HOSTED_LOCAL_ONLY_TOOLS = frozenset({"cache.offline", "cache.stats"})
-
-PUBLIC_PATHS = {"/", "/health"}
+PUBLIC_PATHS = {"/", "/health", "/healthz"}
 INTERNAL_PREFIX = "/internal/"
 
 PROTECTED_RESOURCE = ".well-known/oauth-protected-resource"
@@ -187,6 +235,34 @@ def _token_from_query(query_string: bytes) -> str | None:
     return None
 
 
+def _is_discovery_only_payload(body: bytes) -> bool:
+    """True when a JSON-RPC body contains exclusively read-only metadata discovery
+    methods (`initialize`, `ping`, `tools/list`, `resources/list`, `prompts/list`),
+    allowing directory crawlers to index tools without requiring an access token."""
+    if not body:
+        return False
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return False
+    messages = payload if isinstance(payload, list) else [payload]
+    if not messages:
+        return False
+    for msg in messages:
+        if not isinstance(msg, dict):
+            return False
+        if msg.get("method") not in UNAUTHENTICATED_DISCOVERY_METHODS:
+            return False
+    return True
+
+
+def _has_explicit_credential_attempt(auth_header: bytes, query_string: bytes) -> bool:
+    if auth_header.strip():
+        return True
+    params = parse_qs(query_string.decode("utf-8", "replace"))
+    return any(k in params for k in ("apiToken", "api_token", "config"))
+
+
 class BearerAuthMiddleware:
     """Validate the per-request token, parse its entitlement, and scope both
     to the request.
@@ -215,11 +291,25 @@ class BearerAuthMiddleware:
 
         headers = dict(scope.get("headers") or [])
         auth = headers.get(b"authorization", b"")
+        qs = scope.get("query_string", b"")
         token = None
         if auth.lower().startswith(b"bearer "):
             token = auth[7:].decode("utf-8", "replace").strip()
         if not token:
-            token = _token_from_query(scope.get("query_string", b""))
+            token = _token_from_query(qs)
+
+        has_cred_attempt = _has_explicit_credential_attempt(auth, qs)
+        body: bytes | None = None
+
+        # Unauthenticated metadata discovery (initialize, ping, tools/list,
+        # resources/list, prompts/list) passes through when no credential was
+        # presented so MCP directory crawlers index all tools cleanly.
+        if not has_cred_attempt and scope.get("method") == "POST" and path in SERVERS:
+            body = await _read_body(receive)
+            if _is_discovery_only_payload(body):
+                return await self.app(scope, _replay_receive(body), send)
+            return await self._deny(send, scope)
+
         # M-05: async verification (worker thread + negative cache) — the old
         # sync httpx.post here stalled the whole event loop per request.
         ent = await access.verify_entitlement_async(token) if token else None
@@ -227,7 +317,8 @@ class BearerAuthMiddleware:
             return await self._deny(send, scope)
 
         if scope.get("method") == "POST" and path in SERVERS:
-            body = await _read_body(receive)
+            if body is None:
+                body = await _read_body(receive)
             local_only = _local_only_tool_name(body)
             if local_only:
                 return await self._local_only_refused(send, local_only)
@@ -393,7 +484,9 @@ class BearerAuthMiddleware:
 # SWARM_MCP_ALLOWED_HOSTS EXTENDS this list (it never replaces it), and
 # SWARM_MCP_REMOTE_URL adds its host too.
 DEFAULT_ALLOWED_HOSTS = [
+    "mcp.1.21initiative.com",
     "1.21initiative.com",
+    server_meta.LEGACY_CLOUD_RUN_HOST,
     "localhost",
     "127.0.0.1",
     "testserver",
@@ -423,13 +516,21 @@ def _transport_security():
         enable_dns_rebinding_protection=True, allowed_hosts=hosts)
 
 
-def build_app() -> BearerAuthMiddleware:
-    """Compose the three streamable-HTTP apps behind the Bearer auth gate.
+def build_app(*, require_approval_secret: bool | None = None) -> BearerAuthMiddleware:
+    """Compose the streamable-HTTP apps behind the Bearer auth gate.
 
     Each child keeps its absolute path (no prefix stripping); the ASGI lifespan
     stream is fanned out to every child so their session managers start and
     stop correctly.
     """
+    enforce_secret = (
+        require_approval_secret
+        if require_approval_secret is not None
+        else (os.environ.get("SWARM_MCP_TRANSPORT", "").strip().lower() == "http")
+    )
+    if enforce_secret:
+        audit_tools.get_approval_secret(require_configured=True)
+
     transport_security = _transport_security()
 
     children = {}
@@ -530,7 +631,7 @@ def build_app() -> BearerAuthMiddleware:
             return await _internal_tournament_run(scope, receive, send)
         if path.startswith(INTERNAL_PREFIX):
             return await JSONResponse({"error": "not found"}, status_code=404)(scope, receive, send)
-        if path == "/health":
+        if path in ("/health", "/healthz"):
             return await JSONResponse({"status": "ok"})(scope, receive, send)
         if path in (f"/{PROTECTED_RESOURCE}", "/.well-known/oauth-authorization-server"):
             # both AS-metadata flavors: the site is the authorization server, this
@@ -564,6 +665,8 @@ app = build_app()
 def main() -> None:
     import uvicorn
 
+    os.environ.setdefault("SWARM_MCP_TRANSPORT", "http")
+    audit_tools.get_approval_secret(require_configured=True)
     port = int(os.environ.get("PORT", "8080"))
     # access_log=False: Smithery forwards the token as ?apiToken=/?config=,
     # and uvicorn's default access log line includes the query string — a live

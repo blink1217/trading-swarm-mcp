@@ -159,6 +159,8 @@ jobs:
             --region="$GCP_REGION" \
             --project="${{ secrets.GCP_PROJECT_ID }}" \
             --allow-unauthenticated \
+            --update-secrets="SWARM_APPROVAL_SECRET=swarm-approval-secret:latest" \
+            --update-env-vars="^;^SWARM_MCP_TRANSPORT=http;SWARM_MCP_REMOTE_URL=https://mcp.1.21initiative.com;SWARM_MCP_ALLOWED_HOSTS=mcp.1.21initiative.com,1.21initiative.com,localhost,swarm-mcp-503318750546.europe-west1.run.app,swarm-mcp-mqep5fwqtq-ew.a.run.app" \
             --min-instances=0 \
             --cpu-throttling \
             --timeout=60s \

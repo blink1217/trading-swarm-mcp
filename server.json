@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.blink1217/quant-swarm",
   "title": "quant-swarm",
-  "description": "Risk-first pre-trade checks, PIT data, leakage audits, and a Shadow Tournament vs a live champion.",
-  "version": "1.0.0",
+  "description": "Free offline backtest forensics (lookahead bias, Newey-West + BH t-stats, cost survival) and hosted Point-in-Time SEC/macro data.",
+  "version": "1.1.0",
   "websiteUrl": "https://1.21initiative.com/mcp/",
   "repository": {
     "url": "https://github.com/blink1217/trading-swarm-mcp",
@@ -14,7 +14,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -22,7 +22,7 @@
       "environmentVariables": [
         {
           "name": "SWARM_MCP_ACCESS_TOKEN",
-          "description": "Optional access token from https://1.21initiative.com/mcp/ (free plan issued instantly). Without one, tools still list; calls return an access-required envelope pointing at the signup page.",
+          "description": "Optional token from https://1.21initiative.com/mcp/ for hosted Point-in-Time (pit.*, market.*_pit) tools. Local backtest forensics (audit.backtest, warden.*, gym.*) run 100% offline for free with no token.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
@@ -38,74 +38,8 @@
       "packageArguments": [
         {
           "type": "positional",
-          "value": "swarm-data-mcp",
-          "description": "Launch the data server: point-in-time market data assembly and derived analytics"
-        }
-      ]
-    },
-    {
-      "registryType": "pypi",
-      "registryBaseUrl": "https://pypi.org",
-      "identifier": "quant-swarm",
-      "version": "1.0.0",
-      "runtimeHint": "uvx",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "SWARM_MCP_ACCESS_TOKEN",
-          "description": "Optional access token from https://1.21initiative.com/mcp/.",
-          "isRequired": false,
-          "isSecret": true,
-          "format": "string"
-        }
-      ],
-      "runtimeArguments": [
-        {
-          "type": "named",
-          "name": "--from",
-          "value": "quant-swarm"
-        }
-      ],
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "swarm-warden-mcp",
-          "description": "Launch the warden: pre-trade invariant and leakage checks"
-        }
-      ]
-    },
-    {
-      "registryType": "pypi",
-      "registryBaseUrl": "https://pypi.org",
-      "identifier": "quant-swarm",
-      "version": "1.0.0",
-      "runtimeHint": "uvx",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "SWARM_MCP_ACCESS_TOKEN",
-          "description": "Optional access token from https://1.21initiative.com/mcp/.",
-          "isRequired": false,
-          "isSecret": true,
-          "format": "string"
-        }
-      ],
-      "runtimeArguments": [
-        {
-          "type": "named",
-          "name": "--from",
-          "value": "quant-swarm"
-        }
-      ],
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "swarm-gym-mcp",
-          "description": "Launch the gym: regime-fragility probing, paired previews, and tournament.submit / tournament.verdict / tournament.leaderboard (Shadow Tournament vs the swarm's champion)"
+          "value": "quant-swarm",
+          "description": "Launch unified quant-swarm MCP server (12 core tools by default; pass --profile warden|data|gym|full for specialist suites)"
         }
       ]
     }
@@ -113,11 +47,11 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data",
+      "url": "https://mcp.1.21initiative.com/mcp",
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL).",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/> (metadata discovery is public; token required on tools/call).",
           "isRequired": false,
           "isSecret": true
         }
@@ -125,11 +59,11 @@
     },
     {
       "type": "streamable-http",
-      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/warden",
+      "url": "https://mcp.1.21initiative.com/mcp/warden",
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL).",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/>.",
           "isRequired": false,
           "isSecret": true
         }
@@ -137,11 +71,23 @@
     },
     {
       "type": "streamable-http",
-      "url": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/gym",
+      "url": "https://mcp.1.21initiative.com/mcp/data",
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <token from https://1.21initiative.com/mcp/> (or append ?apiToken=<token> to the URL). Hosted gym compute is metered in credits (1 per simulated episode).",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/>.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.1.21initiative.com/mcp/gym",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token from https://1.21initiative.com/mcp/>. Hosted gym compute is metered in credits (1 per simulated episode).",
           "isRequired": false,
           "isSecret": true
         }

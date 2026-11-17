@@ -1,5 +1,16 @@
 {
   "mcpServers": {
+    "quant-swarm": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "quant-swarm",
+        "quant-swarm"
+      ],
+      "env": {
+        "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>"
+      }
+    },
     "swarm-data": {
       "command": "uvx",
       "args": [

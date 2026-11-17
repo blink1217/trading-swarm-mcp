@@ -63,7 +63,7 @@ class BuildFeaturesOut(TypedDict, total=False):
     provenance: list[dict]
     violations: list[str]
     limits: dict
-    escalation: dict
+    escalation: dict | None
     access: str
     error: str
     request_access_at: str
@@ -107,7 +107,7 @@ class CacheWarmOut(TypedDict, total=False):
     symbols: dict
     immutability: str
     limits: dict
-    escalation: dict
+    escalation: dict | None
     access: str
     error: str
     request_access_at: str

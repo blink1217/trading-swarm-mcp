@@ -1,499 +1,96 @@
-# quant-swarm
+# `quant-swarm` — Zero-Trust Backtest Forensics & Point-in-Time Market Data (MCP)
 
-[![PyPI](https://img.shields.io/pypi/v/quant-swarm)](https://pypi.org/project/quant-swarm/)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/quant-swarm)](https://pypistats.org/packages/quant-swarm)
-[![Licence](https://img.shields.io/badge/licence-MIT%20%2B%20source--available-blue)](../../README.md)
-[![Smithery](https://smithery.ai/badge/quant-swarm)](https://smithery.ai/servers/blink-kt/quant-swarm)
-[![Official MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.blink1217%2Fquant--swarm-1d4ed8)](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.blink1217/quant-swarm)
-
-Risk-first pre-trade checks that gate live capital — point-in-time data, invariant and leakage audits, regime probes — plus the **Shadow Tournament**: score your strategy genome against a live, self-evolving trading swarm's champion on identical market paths.
-
-<!-- mcp-name: io.github.blink1217/quant-swarm -->
-
-## Built by a Principal Quantitative Technologist
-
-Authored by the Principal Quantitative Technologist at [The 1.21 Initiative](https://1.21initiative.com) — the same code path that gates live promotion and execution decisions in the trading swarm. Every tool exists because production trading systems fail in two repeatable ways: **lookahead leakage in research** and **an oversized position in production**. `quant-swarm` ships the checkers that prevent both, so you can audit your own work with the exact logic that guards deployed capital.
-
-## Your backtest is static. The swarm is not.
-
-Behind this package is a swarm that does not hand-tune strategies. A **champion** genome runs live; every cycle the swarm breeds **challengers** (tier-capped mutations), replays champion and challenger on the *identical* episode-seed matrix across five labelled market regimes (high-vol, drawdown, chop, melt-up, gap-heavy), and records the paired outcome in an **ELO ledger**. A surrogate prior pre-scores candidates so expensive replays are spent where they matter. Nothing is promoted on a single good backtest: promotion requires `MIN_EPISODES=20` paired episodes, a Wilcoxon-significant delta, a positive **worst-regime** margin (maximin, not mean), a **deflated-Sharpe** margin against the monotonic count of every trial ever attempted, and a **PBO** cap. This is the champion/challenger, self-play-style loop popularised by AlphaZero-style systems, applied honestly to markets — with the two things that do *not* transfer stated plainly: the market does not react to us, so there is no true self-play, and there is no learned dynamics model or tree search; selection is done by paired replay, ELO and statistical gates.
-
-Replay is only half of it. Every Sunday the swarm also runs a **forward league**: each league genome — the champion, the top-ELO challengers, contributed genomes, and a *planner* entrant whose weekend moves are chosen by a learned model — seals its positions for the coming week from Friday's causal features, and the SHA-256 commitment is stored before the week happens. The next cycle marks every sealed position against the realised closes (net of each genome's own cost model), ranks the field on the identical real week, and updates ELO on that. Sealed forecasts cannot be overfit to the week that follows; that is the swarm's ground truth, and it feeds a replay buffer where every position is decomposed into its component **moves** (screen, entry, size, weekend) so credit is assigned per move and regime, not to the strategy as a blob. **Forward-league status (as of 2026-11-09):** the initial 8-week live-paper collection window (`2026-09-14` → `2026-11-09`) has completed **Week 8 of 8** (`8` weeks settled; inspect the cryptographic Friday SHA-256 commitment ledger via `tournament.forward_league`).
-
-What that means for you: a local backtest tells you how a strategy did on one path. The Shadow Tournament tells you whether it beats an *evolving* champion on the same paths, in the regime that hurts it most, at a sample size that can actually have an opinion — and your result enters the swarm's ELO ledger. Opt in as a **contributor** and your genome becomes an external challenger in the swarm's next breeding cycle (at half price), scored in replay and, if it earns a league seat, on real weeks. That is the flywheel: every honest submission makes the champion harder to beat, and every user gets a harder benchmark.
-
-## Why risk-first
-
-Risk gates are not post-hoc reports — they are the pre-condition for every action. The package is organized around that constraint:
-
-- **Fail-closed by default.** Unknown features map to tier C, missing provenance returns `UNSCORABLE` (never neutral-filled), and unverifiable tokens are refused on the hosted path. See `warden.audit_features` and `features.build` provenance guards.
-- **Pinned, non-drifting invariants.** Order sizing floors (per-name 25%, gross 60%), fill model (spread + slippage + adverse selection, both legs, always against you), and hard-constraint checks are vendored at pinned commit SHAs (`.github/pins.json`, verified byte-for-byte by CI). A parity test pins the three copies of the floors (Python/MCP, C# live engine, Terraform) so they cannot drift.
-- **Point-in-time provenance.** SQLite WAL cache at `%LOCALAPPDATA%\1.21-initiative\swarm-mcp\cache.db` (`$XDG_CACHE_HOME/1.21-initiative/swarm-mcp` on POSIX): finalized sessions are never re-fetched, in-progress sessions refresh at most every 60 s, earnings/news are append-only on `fetched_at`, and `features.build` runs the no-lookahead guard on every row (each feature must equal a fresh causal recomputation at `as_of`).
-- **Pessimistic execution.** `warden.cost_check` and the simulator model the fill that hurts you; there is no optimistic fill path to inflate backtests.
-- **No order-placement code path.** No tool can place, cancel, or route an order — this repository cannot trade, only refuse unsafe trades.
-- **Statistically honest refusals.** Promotion verdicts are **never** issued locally. Statistically undecidable outputs return `INDETERMINATE_LOCAL`/`UNDERPOWERED`/`UNSCORABLE`, name the exact missing inputs (`MIN_EPISODES=20`, PBO, DSR, worst-regime margins), and hand off to the hosted Shadow Tournament (`tournament.submit`).
-
-- Local-first, BYO-key: your Alpaca/AltData keys are read from env only when operating in BYOK mode; otherwise data flows through the hosted relay.
-- **Explicit Per-Operation Data-Flow Matrix (no blanket claims):**
-  - **Strictly local stdio tools (`audit.preflight`, `audit.quote(mode="local")`, `audit.run(mode="local")`, `audit.status`, `audit.report`, `audit.compare`, `warden.*`, `gym.*` on local/cached bars, `market.*` with caller-supplied `bars`):** `0 bytes` of strategy returns, trades, orders, features, or bars leave your machine. Only `SWARM_MCP_ACCESS_TOKEN` (when set without `SWARM_MCP_LOCAL_TOKEN`) is verified once per 5 minutes against `POST /api/mcp/verify`.
-  - **Relay-backed data tools over stdio (`market.pulse`, `market.sentiment`, `market.regime`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`, `market.microstructure`, `volume.forecast`, `pit.analysis`, `cache.warm`):** send the requested `symbols`, `as_of` / `lookback_days`, and bearer token to `https://1.21initiative.com/api/mcp/*` (or Open-Meteo for `market.climate` coordinates).
-  - **Hosted Audit & Shadow Tournament submissions (`audit.run(mode="hosted")`, `tournament.submit`):** send only the explicitly quoted and approved payload. For `tournament.submit`, this is the `genome` parameter vector, its `genome_hash`, the `contribute` flag, and — on the strategy-contributor tier only — an author-written `disclosure` and/or `strategy_code` (treated as inert text, never executed, and deleted after static review).
-  - **Remote Streamable-HTTP endpoints (`https://swarm-mcp-503318750546.europe-west1.run.app/mcp/*`):** JSON-RPC tool arguments are transmitted over TLS to the hosted Cloud Run stateless container for execution.
-
-### Python vs. C# Evaluator Parity
-
-The live trading swarm's execution risk engine is written in C# (`services/risk/Program.cs`), while `quant-swarm` executes in Python (`swarm_mcp/vendored/alpha/order_checks.py`, `swarm_mcp/vendored/guardrails/objective.py`, and `swarm_mcp/tools/warden_tools.py`). Rather than running a local .NET runtime inside the Python wheel, the two implementations are locked together via two mechanisms enforced in CI:
-
-1. **Shared Pinned Thresholds (`tests/test_floors_parity.py`):** C# environment defaults, Terraform Cloud Run config (`cloud_run.tf`), vendored guardrails constants (`objective.py`), and `HOUSE_SIZING_FLOORS` in `warden_tools.py` are parsed and asserted equal (`MAX_POSITION_PCT = 0.25`, `MAX_GROSS_EXPOSURE_PCT = 0.60`, `RISK_PCT_PER_TRADE = 0.008`, `RISK_ATR_SIZING_MULT = 1.0`, `OVERNIGHT_GAP_ATR_MULT = 1.2`).
-2. **Numerical Step-by-Step Equivalence Fixtures (`tests/test_sizing_parity.py`, `tests/test_order_checks_parity.py`):** `warden.explain_sizing` and `warden.validate_order` are parity-tested against hand-computed C# risk-engine fixtures covering integer share floor rounding (`floor(equity * 0.008 / (atr * 1.0))`), 25% single-position cap trimming, overnight gap > 1.2x ATR halving, and 60% weekend gross-exposure headroom clamping.
-
-**One-click install on [Smithery](https://smithery.ai/servers/blink-kt/quant-swarm):**
-the listing is [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/quant-swarm) (package and Smithery slug are both `quant-swarm`); the Smithery stdio launcher starts `swarm-data-mcp`, and the hosted streamable-HTTP endpoints below serve all three servers. Configuration is optional — without a token the servers still start and list every tool; the first call points you at the free signup. Add a token any time to unlock the relay-backed and hosted tools.
+Audit trading backtests locally for **lookahead bias, Newey-West + Benjamini-Hochberg overlap-adjusted significance, outlier concentration, and realistic transaction-cost decay**—100% offline and free—and query **as-filed Point-in-Time SEC EDGAR & macro signals** with zero restatement leakage.
 
 ---
 
-## The servers
-
-| Server | Hook | Tools |
-| --- | --- | --- |
-| `swarm-warden-mcp` | **Quant Swarm Audit (`audit.*`)** guided backtest workflow plus pre-trade invariant + leakage gates (`warden.*`) | `audit.preflight`, `audit.quote`, `audit.run`, `audit.status`, `audit.report`, `audit.compare`, `warden.validate_order`, `warden.audit_features`, `warden.cost_check`, `warden.validate_genome`, `warden.explain_sizing`, `warden.promotion_verdict`, `warden.optimize_portfolio`, `warden.plan_rebalance`, `warden.prop_challenge_check`, `warden.defensive_posture` |
-| `swarm-data-mcp` | Derived-only market signals plus point-in-time feature building | `market.pulse`, `market.sentiment`, `market.climate`, `market.regime`, `market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`, `market.insider_institutional_pit`, `market.supply_chain_pit`, `pit.analysis`, `features.build`, `cache.warm`, `cache.stats`, `cache.offline` |
-| `swarm-gym-mcp` | Regime fragility locally, then the **Shadow Tournament** against the swarm's live champion | `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, `gym.estimate_cloud_run`, `gym.evaluate_graph`, `gym.prop_challenge_sim`, `gym.evaluate_formula`, `tournament.submit`, `tournament.verdict`, `tournament.leaderboard`, `tournament.forward_league` |
-
-### Flagship Guided Workflow: Quant Swarm Audit (`audit.*`)
-
-Instead of chaining low-level primitives manually, start every backtest evaluation with the 6-step **`audit.*`** workflow on `swarm-warden-mcp`:
-
-1. **`audit.preflight`** (local, 0 credits) — Pass paths or inline rows for your strategy returns, trade records, benchmark series, execution cost assumptions, and optional feature-provenance manifest (CSV, Parquet, or JSON). Validates timestamps, duplicates, and schema, and returns a **Coverage & Scope Matrix** separating *Available checks*, *NOT_TESTED checks* (e.g. why returns alone cannot prove absence of lookahead bias in strategy code), and an *Outbound data preview* (`0 bytes` in local mode).
-2. **`audit.quote`** (0 credits) — Takes `preflight_id` and returns a deterministic execution plan, runtime estimate, exact credit/GBP cost (`£0.00` for `mode="local"`, `20 credits` for `mode="hosted"`), and an HMAC-SHA256 `approval_token` bound to your input hash.
-3. **`audit.run`** — Executes the audit after verifying `approval_token`, enforcing `max_credits` spend cap, and deduplicating retries via `idempotency_key` (never double-bills or charges on preflight refusals).
-4. **`audit.status`** (0 credits) — Read-only polling of an audit `job_id`.
-5. **`audit.report`** (0 credits) — Exports the machine-readable JSON bundle, cryptographic reproducibility manifest, and shareable HTML + Markdown reports where every finding uses the 5-state diagnostic schema (`OBSERVED_PROBLEM`, `SENSITIVITY_WARNING`, `INSUFFICIENT_EVIDENCE`, `PASSED`, `NOT_TESTED`).
-6. **`audit.compare`** (0 credits) — Compares two completed audit bundles (before/after remediation or version A vs. version B) and verifies whether fixes resolved `OBSERVED_PROBLEM` findings without regressions.
-
-Raw bar/enrichment access (`get_bars` / `enrich_symbol`) is internal only and no longer
-registered as tools — those paths echo raw provider values, and the data policy is
-derived-only: ratios, percentile ranks, labels, buckets and counts. `market.pulse` and
-`market.sentiment` are the general-purpose replacements; both accept an optional `bars`
-argument so you can supply your own OHLCV rows for symbols we don't carry.
-
-### PIT significance, explained (`pit.analysis`)
-
-`pit.analysis` answers the question every alternative-data buyer should ask first: **is this
-signal real, and how do you know?** It reads the release-gated `pit_analysis/v2` store — the
-same artifact whose rows carry the significance output for the funnel — and, per underlying,
-explains every `(dataset|metric|horizon)` family with no guessing:
-
-- **rolling_ir** (52-week Spearman cross-sectional rank IC on a size/sector-neutralized metric
-  vs neutralized forward returns), **Newey-West two-sided p** (`t_hac`, lag `ceil(horizon/5)` —
-  1m/6m horizons overlap, so the naive `IR·√n` t is anti-conservative), **n_obs**, the
-  **research_only** coverage flag and any staleness caveat.
-- An explicit verdict per horizon: **SIGNIFICANT** (an L1 survivor of the *same* run: rolling
-  IR > 0 and Benjamini-Hochberg q ≤ 0.05), **NOT_SIGNIFICANT** (with the reason — negative IR,
-  or a nominal p that does not survive multiple-testing correction), **NOT_JUDGED** (below the
-  26-observation floor, stale release, or diagnostic-only raw level) or **UNVERIFIED** (no gate
-  artifact, gate from another run, or a failed placebo — a raw p-value is never upgraded on its
-  own).
-- Point-in-time: release points after `as_of` are ignored, and raw metric values are never
-  returned — derived statistics only.
-
-Free plans get a lite answer (one symbol per call, headline counts and the top families); Pro
-unlocks 10 symbols per call, every family, full per-horizon detail and historical `as_of`.
-The v2 methodology (neutralization + overlap-corrected inference + scale-free accounting
-variants + staleness caps + a shuffled-date placebo) is recorded in every run manifest, and
-v1 stores are refused rather than silently reused. Not investment advice.
-
-### Operating-area weather (`market.climate`)
-
-`market.climate` is area-specific weather research for weather-exposed underlyings. For
-each symbol it fetches the keyless Open-Meteo 14-day forecast **and the same 14 calendar
-days one year earlier** for every **operating area** where the product is made and/or sold
-(a shipped 10-K-style exposure-weighted registry of energy, agriculture, airline/travel,
-retail, utility and homebuilder footprints), then exposure-weights per-area temperature
-anomaly, HDD/CDD, precipitation/snow, wind and freeze/heat-day counts into symbol
-aggregates — per-area detail is preserved so a heat wave in one harvest region stays
-visible. The weather is tied to the underlying's actual geographies, never the listing
-exchange or HQ city: a London forecast is not substituted for a product made and sold in
-New York. For underlyings outside the shipped registry, pass `areas` (made/sold
-geographies) and `market.climate` researches exactly those. Free tool, no provider
-credentials; returns derived sums/means/ratios/counts/buckets only, never raw per-day
-series. Forecast values are current research context and are never valid for past decision
-dates.
-
-### The Shadow Tournament
-
-`gym.paired_preview` is honest about being underpowered: at most 8 seeds × 2 per regime on
-your cached window, every statistic labelled `UNDERPOWERED`, never a verdict. `tournament.submit`
-is how a genome leaves that ceiling:
-
-1. **Validate locally** — `warden.validate_genome` returns the `genome_hash`; nothing is sent.
-2. **Submit** — `tournament.submit(genome, contribute=false|true)`. The site charges credits
-   (200, or 100 with `contribute=true`) and dispatches the job to the hosted runner.
-   `contribute=true` is the **genome-contributor** tier (vector licensed as an external
-   challenger). Add `disclosure` and/or `strategy_code` to enter the **strategy-contributor**
-   tier: author-written decision logic and/or code for a static LLM review — the code is
-   never executed, and leaderboard attribution plus league-seat eligibility follow review.
-3. **Hosted replay on identical paths** — the runner replays *your genome and the swarm's
-   current champion* over the same 5 regimes × 4 per regime × 5 seeds = **100 paired episodes**
-   on the hosted `bars_1day` panel (above `MIN_EPISODES=20`), computes the Wilcoxon paired
-   p-value, bootstrap CI, per-regime deltas and the **worst-regime margin**, counts hard-constraint
-   and lookahead violations, and classifies the outcome: `CHALLENGER_BEATS_CHAMPION`,
-   `CHALLENGER_LOSES`, or `INCONCLUSIVE`.
-4. **ELO** — the outcome updates your genome's rating against the champion (K=16, start 1500) and
-   the champion's rating against the field. `tournament.leaderboard` (free) shows the anonymised
-   board: 12-char hash prefixes only.
-5. **Poll** — `tournament.verdict(job_id)`; no charge to poll. Runs take about two minutes.
-
-The outcome is a *tournament result*, not a promotion. The promotion gate — deflated-Sharpe
-margin, PBO cap, the monotonic trials ledger — runs inside the swarm's private registry on
-genomes that qualify. That boundary is deliberate (see **The IP boundary** below). Replay
-results are the swarm's fast signal; forward-league settlements on real weeks are its slow,
-unfakeable one — a contributed genome that beats the champion in replay is what earns a league
-seat, and only realised weeks can keep it there.
-
-**What is sent:** the genome parameter vector, its hash, and the `contribute` flag — plus, on the
-strategy-contributor tier only, a disclosure and/or `strategy_code` (code is never executed;
-the hosted reviewer reads it statically with an LLM and keeps only the structured explanation
-and a code hash). Never symbols, bars, features, orders, or credentials. **Retention:** with
-`contribute=false` the vector is deleted from the job record once scored — hash and outcome
-remain. With `contribute=true` (genome or strategy tier) you license the vector and outcome to
-the swarm's evolution loop, where it is registered as an external challenger
-(`origin=external_contribution`) and put through the same tier-capped tournament and promotion
-gates as the swarm's own mutants. That is why contributors pay half: your genome is the swarm's
-proposer diversity, and every accepted contribution makes the next champion harder to beat — for
-everyone. The strategy tier's disclosure is what additionally earns leaderboard attribution and
-a league seat after review — a contributed genome that beats the champion in replay earns the
-seat, and only realised forward-league weeks can keep it there.
-
-## Plans and the credit rate card
-
-Access is tokened through [https://1.21initiative.com/mcp/](https://1.21initiative.com/mcp/).
-**One credit is the unit for everything that costs us money** — a relay data call, one simulated
-episode of hosted compute, or a tournament run — so a pack buys a bounded amount of *all* of it and
-we never run hosted compute at a loss.
-
-| What | Credits | Notes |
-| --- | --- | --- |
-| Relay data call (`/data/bars`, `/data/enrich`, `/data/pit`) | 1 | any symbol count within your plan cap counts as one call |
-| Hosted single-shot Pro tool (`features.build`, `warden.optimize_portfolio`, `gym.label_regimes`, `gym.estimate_cloud_run`, `gym.prop_challenge_sim`) | 1 | charged only on the hosted endpoint |
-| Hosted gym episode (`gym.probe_fragility`, `gym.paired_preview`, `gym.evaluate_graph`) | 1 per episode | 5 regimes × per_regime × seeds (× 2 genomes for the paired preview); `gym.estimate_cloud_run` prices any geometry before you run it |
-| Hosted Quant Swarm Audit (`audit.run` with `mode="hosted"`) | 20 | requires pre-run `audit.quote` `approval_token`, `idempotency_key`, and `max_credits >= 20`; local mode (`mode="local"`) is **0 credits (£0.00)** |
-| Shadow Tournament (`tournament.submit`) | **200** — **100** with `contribute=true` | fixed price for the full 100-paired-episode geometry vs the champion |
-| `audit.*` (local mode), `warden.promotion_verdict` (local readiness check), `tournament.verdict`, `tournament.leaderboard`, all warden checkers, `cache.*`, local stdio runs of any tool | 0 | local execution is never metered — your CPU, your electricity |
-
-- **Free** (instant token at signup): full local **Quant Swarm Audit (`audit.*`)** workflow (`audit.preflight`, `audit.quote`, `audit.run(mode="local")`, `audit.status`, `audit.report`, `audit.compare`), all warden checkers (including `warden.promotion_verdict` readiness check and `warden.plan_rebalance`), the derived snapshots
-  `market.pulse` / `market.sentiment` / `market.climate` / `market.regime`,
-  `pit.analysis` **lite** (one symbol per call, headline counts + top families; Pro unlocks
-   10 symbols, every family, full per-horizon detail and historical `as_of`),
-   `cache.stats`, `cache.offline`, and `tournament.leaderboard` (10 symbols/call,
-   250 relay calls/month, 365-day backfill). No hosted compute,
-  no GCP spend on your behalf beyond the relay allowance.
-- **Pro** — one-time credit packs, self-serve: **10,000 credits for £19** or **100,000 for £149**,
-  valid 90 days, no subscription, no unlimited plan. Unlocks `features.build`, `cache.warm`, `warden.optimize_portfolio`, the Pro
-  derived tools (`market.microstructure`, `volume.forecast`, `market.screen`, `market.rank`, `market.flow`, `market.fundamentals_pit`, `market.macro_nowcast`, `market.transfer_entropy`; 50
-  symbols/call, full backfill), all gym tools, hosted `audit.run(mode="hosted")`, and `tournament.submit` /
-  `tournament.verdict`. A Starter pack is 50 tournaments — 100 as a contributor — or 500 hosted audits.
-- **Institutional** (custom-quoted): Strategy Validation Audit engagements, custom universes,
-  hosted league runs, SLA.
-
-A Pro token whose pool is empty or past its 90-day window verifies with `status: exhausted` /
-`expired` and the **free** feature set — Pro tools refuse until you buy again. Plan limits are
-enforced server-side (the relay, `/api/mcp/meter`, `/api/mcp/verify`, and the hosted
-streamable-HTTP endpoint return structured `402` refusals with an `upgrade_url`). This open-source
-client's plan check is **advisory**: a free token calling a Pro tool gets an `UPGRADE_REQUIRED`
-envelope — the tool still lists, and the attempt points at the upgrade page. No DRM; the free plan
-is deliberately the zero-cost surface.
-
-### Point-in-time data, for real
-
-LLM-driven research re-runs cells constantly; each re-run burns AltData (60 req/min) and
-Alpaca (200 req/min) budgets re-pulling identical history — and then silently builds
-features from data that did not exist at decision time. `swarm-data-mcp` fixes both:
-
-- SQLite (WAL) cache at `%LOCALAPPDATA%\1.21-initiative\swarm-mcp\cache.db`
-  (`$XDG_CACHE_HOME/1.21-initiative/swarm-mcp` on POSIX).
-- **Finalized sessions are never re-fetched** — zero-cost replays forever. The
-  in-progress session refreshes at most every 60 s; enrichment every 300 s.
-- Earnings/news are append-only on `fetched_at`: a later fetch can never rewrite an
-  earlier `as_of`.
-- Per-provider token buckets + `429` exponential backoff (`1s·2ⁿ`).
-- `features.build` runs the no-lookahead guard on every row (each feature must equal a
-  fresh causal recomputation at `as_of`) and the provenance guards on every field.
-  Tier-B/C fields without recorded point-in-time evidence come back `UNSCORABLE` —
-  never neutral-filled with `0.0`.
-
-Every response carries `coverage` (cache vs API, oldest/newest session per symbol) and
-`limits` (your local depth in weeks vs the tape-depth gates: 8 weeks for the tier-A
-fast path, 26 weeks for tape eligibility). Below the gates you get an `escalation`
-block naming the hosted `bars_1day` panel that satisfies them. Tape-tier replay is
-**roadmap, not available** — we will not imply otherwise.
-
-### The warden
-
-`warden.validate_order` is the same function that rejects live orders: per-name 25% of equity,
-gross cap 60%. Per-fund overrides are allowed, but the response always reports your
-deviation from the house floors. `warden.audit_features` flags banned actuals sources
-(`open-meteo.archive` and friends return *actuals*, not what the forecast said on a past
-Friday), features predating tape start, and unknown features fail closed to tier C.
-`warden.cost_check` converts a claimed gross edge into net-of-cost reality under the pessimistic
-fill model (spread + slippage + adverse selection, both legs, always against you).
-`warden.explain_sizing` is a step-by-step mirror of the C# live risk engine, and a parity test
-pins the floors against terraform and guardrails so the three copies cannot drift.
-
-### The gym
-
-`gym.probe_fragility` replays your genome over the deterministic tier-A simulator and reports
-per-regime net bps, the worst regime, turnover, and hard-constraint violations — never a
-promotion. Seeds are capped at 8 and `per_regime` at 2: **statistical honesty, not
-artificial scarcity**. Tier-B/C mutations against a champion raise the gym's
-`TierScoringRefusal` (UNSCORABLE) instead of silently neutral-filling features the price
-panel cannot provide. `gym.paired_preview` compares champion vs challenger on identical
-market paths with the promotion gate bypassed and every statistic labelled
-**UNDERPOWERED**, naming the exact seed count needed to clear `MIN_EPISODES=20` — and every
-undecidable result ends with a `cloud_job` block that is literally the `tournament.submit` call
-that resolves it.
-
----
-
-## Install
-
-Requires Python ≥ 3.11. Two ways to connect:
-
-- **Remote** — the hosted streamable-HTTP endpoints (same URLs as the registry entry):
-  `https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data`
-  (and `/mcp/warden`, `/mcp/gym`). Pass the token as
-  `Authorization: Bearer <token>` (or `?apiToken=<token>`). Claude Code:
-
-  ```bash
-  claude mcp add --transport http swarm-data https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data --header "Authorization: Bearer <token>"
-  ```
-
-  OAuth browser-consent for web connectors is not verified yet (see
-  `docs/DISTRIBUTION.md` OAuth gate) — use header auth until that check passes.
-- **stdio** — `uvx --from quant-swarm swarm-data-mcp` (and `swarm-warden-mcp`,
-  `swarm-gym-mcp`); set `SWARM_MCP_ACCESS_TOKEN` in the env. See the Cursor /
-  Claude Code blocks below.
-- **One kind of credential:** an access token (all three servers, optional at
-  connect time) issued at [https://1.21initiative.com/mcp/](https://1.21initiative.com/mcp/)
-  — request access there (that's also the Strategy Validation Audit booking flow),
-  then set `SWARM_MCP_ACCESS_TOKEN` in the server's `env`. Clients still list the tools without a
-  token; every call returns an `ACCESS_REQUIRED` envelope pointing back to the site.
-  The token is verified against the site, and that verification is the usage meter —
-  only the token itself is ever sent, never symbols, genomes, prices, or provider keys.
-
-### Agent snippet
-
-Agent snippet (paste into a system prompt when wiring an agent to these tools):
-
-```
-Use quant-swarm MCP tools for market data, pre-trade risk checks and strategy
-evidence. For alternative-data significance, call pit.analysis and quote its
-verdict sentences verbatim (SIGNIFICANT / NOT_SIGNIFICANT / NOT_JUDGED /
-UNVERIFIED); never upgrade a raw p-value to "significant"; its verdicts are
-cross-sectional, not a forecast for one symbol. Risk refusals are final.
-```
-
-- **Access token (all three servers, optional at connect time).** Covered above:
-  `SWARM_MCP_ACCESS_TOKEN` unlocks the relay-backed and hosted tools; without it
-  tools still list and calls return the `ACCESS_REQUIRED` envelope.
-
-The same token also feeds the **hosted data relay**: `swarm-data-mcp` serves bars and
-enrichment through `https://1.21initiative.com/api/mcp/...`, so **no Alpaca or AltData
-credentials are required** — the site holds the provider keys behind the relay and caches
-historical bars in GCS. The relay is fail-closed: a rejected or unverifiable token means a
-refused data fetch, never partial rows. The point-in-time cache semantics on the client
-side are unchanged — finalized sessions are immutable in local SQLite regardless of which
-data path filled them.
-
-### Official MCP Registry
-
-Registry name `io.github.blink1217/quant-swarm` (this `README.md` carries the
-`mcp-name` marker). Registry-aware clients get 3 stdio packages
-(`uvx --from quant-swarm swarm-{data,warden,gym}-mcp`) plus the 3 hosted
-streamable-HTTP remotes above. `SWARM_MCP_ACCESS_TOKEN` is optional at connect
-time — without one, tools still list and calls return the access-required
-envelope.
-
-### Smithery
-
-Install [`blink-kt/quant-swarm`](https://smithery.ai/servers/blink-kt/quant-swarm) from
-Smithery — one listing, one token, all three servers. Smithery forwards `apiToken` as the
-`SWARM_MCP_ACCESS_TOKEN` env var (stdio) or as `?apiToken=` on the hosted endpoints; the
-token is optional at connect time.
-
-### Cursor
-
-`Settings → MCP → Add server` (or `.cursor/mcp.json` — a checked-in example lives at
-[.cursor/mcp.json](.cursor/mcp.json)):
-
-```json
-{
-  "mcpServers": {
-    "swarm-data": {
-      "command": "uvx",
-      "args": ["--from", "quant-swarm", "swarm-data-mcp"],
-      "env": {
-        "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>"
-      }
-    },
-    "swarm-warden": {
-      "command": "uvx",
-      "args": ["--from", "quant-swarm", "swarm-warden-mcp"],
-      "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
-    },
-    "swarm-gym": {
-      "command": "uvx",
-      "args": ["--from", "quant-swarm", "swarm-gym-mcp"],
-      "env": { "SWARM_MCP_ACCESS_TOKEN": "<token from https://1.21initiative.com/>" }
-    }
-  }
-}
-```
-
-Prefer a deeplink? `scripts/make_deeplinks.py` prints `cursor://…/mcp/install` links for
-all three servers (base64 of the stdio config, so they cannot drift from the JSON above);
-the generated list is checked in at [.cursor/DEEPLINKS.md](.cursor/DEEPLINKS.md).
-
-### Claude Desktop
-
-`claude_desktop_config.json` — identical `mcpServers` block as above.
+## 30-Second Quickstart (No Account or API Key Required Locally)
 
 ### Claude Code
-
-stdio:
-
 ```bash
-claude mcp add swarm-data   --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from quant-swarm swarm-data-mcp
-claude mcp add swarm-warden --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from quant-swarm swarm-warden-mcp
-claude mcp add swarm-gym    --env SWARM_MCP_ACCESS_TOKEN=<token> -- uvx --from quant-swarm swarm-gym-mcp
+claude mcp add quant-swarm -- uvx quant-swarm
 ```
 
-remote (header auth):
-
-```bash
-claude mcp add --transport http swarm-data https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data --header "Authorization: Bearer <token>"
-```
-
-### Windsurf
-
-`~/.codeium/windsurf/mcp_config.json` — the same stdio JSON shape as the Cursor block
-above. For the hosted endpoints use the `serverUrl` form instead:
-
+### Cursor / Claude Desktop / Windsurf (`mcp.json`)
 ```json
 {
   "mcpServers": {
-    "swarm-data-remote": {
-      "serverUrl": "https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data"
+    "quant-swarm": {
+      "command": "uvx",
+      "args": ["quant-swarm"]
     }
   }
 }
 ```
 
-(The hosted endpoints accept the token as `Authorization: Bearer <token>` or as
-`?apiToken=<token>`.)
-
-The warden and gym are pure checkers and the data server fetches through the hosted
-relay, so **no server needs provider keys** — only the access token.
-
-**Local development:** operators of this repo can bootstrap offline by setting
-`SWARM_MCP_LOCAL_TOKEN` to the same value as `SWARM_MCP_ACCESS_TOKEN` (documented
-bypass; token verification against the site is skipped and the token gets the full
-Pro entitlement — it is a local override on your own machine).
-
-**Swarm operators (internal):** to fetch directly from the providers instead of the
-relay, set `SWARM_MCP_BYOK=1` plus `ALPACA_API_KEY`/`ALPACA_SECRET`/`ALTDATA_API_KEY`
-on `swarm-data-mcp`. Public users should leave `SWARM_MCP_BYOK` unset.
-
-**Hosting the remote endpoint yourself:** `swarm-mcp-http` validates the `Host` header
-(DNS-rebinding protection). The defaults allow `1.21initiative.com`, the project's Cloud
-Run hostname, the Smithery gateway, and localhost; `SWARM_MCP_ALLOWED_HOSTS`
-(comma-separated) **extends** the defaults — it never replaces them, so a custom domain
-cannot accidentally lock out the Cloud Run URL. `SWARM_MCP_REMOTE_URL` overrides the
-advertised endpoint base, and `SWARM_MCP_TOKEN_VERIFY_URL` overrides the verify endpoint.
-See the Dockerfile for the container form.
-
-The hosted endpoint meters compute (`swarm_mcp/metering.py`): before a Pro compute tool runs it
-charges `POST {SWARM_MCP_RELAY_URL}/meter` with the caller's token, and refuses (JSON-RPC `-32003`,
-HTTP 402/429/503) when the meter refuses or is unreachable — hosted compute is never served
-unmetered. The Shadow Tournament runner lives in the same service: the site dispatches jobs to
-`POST /internal/tournament/run` guarded by the shared secret `SWARM_MCP_INTERNAL_KEY`, the runner
-fills its panel through the relay with `SWARM_MCP_SERVICE_TOKEN` (an institutional token, so
-users are never billed for the runner'"'"'s own data), scores against `SWARM_MCP_CHAMPION_GENOME`
-(path to the registry's current champion — required via `SWARM_MCP_CHAMPION_GENOME`;
-no packaged fallback is shipped), and calls back `POST {relay}/tournament/complete`. `SWARM_MCP_TOURNAMENT_UNIVERSE` and
-`SWARM_MCP_TOURNAMENT_LOOKBACK_DAYS` shape the hosted panel. The runner scores in a background task
-after answering `202`, so the Cloud Run service must run with **CPU always allocated**
-(`--no-cpu-throttling`) and a request timeout of at least 300 s; with request-based CPU the task
-starves after the response and the job is refunded as failed.
+### Remote Streamable-HTTP (`claude.ai`, ChatGPT, Web MCP Connectors)
+```text
+https://mcp.1.21initiative.com/mcp
+```
+*(Metadata & `tools/list` require no auth; tool execution uses OAuth 2.1 PKCE or `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from [1.21initiative.com/mcp/](https://1.21initiative.com/mcp/).)*
 
 ---
 
-## The IP boundary (what ships, what doesn't)
+## First Prompt to Try
 
-This repository ships **checkers only**: order checks, provenance guards, the
-pessimistic fill model, the genome schema, provenance tiers, hard-constraint checking,
-gate thresholds, the tier-A gym simulator, and the regime labeller — vendored at pinned
-commit SHAs (`.github/pins.json`, verified by CI).
+> *"Run `audit.backtest` on `./returns.csv` and `./trades.csv` assuming 3 bps spread and 5 bps slippage across 25 parameter trials. Check whether net Sharpe survives 2x cost stress and Newey-West + Benjamini-Hochberg adjustment."*
 
-The **selection machinery stays server-side** and is not in this repo: objective scoring,
-deflated-Sharpe estimation, and the promotion-gate decision. Any request for a promotion
-verdict returns `INDETERMINATE_LOCAL` with the exact missing statistical inputs
-(`MIN_EPISODES=20`, PBO ≤ 0.30 via combinatorially-symmetric splits, DSR margin with the
-monotonic trials ledger, worst-regime margin across all 5 regimes × seeds), plus:
-
-- an `audit_request` block — genome hash + violation summary, **no proprietary payload**;
-- a `cloud_job` spec that is the `tournament.submit` call which resolves it.
-
-The Shadow Tournament runner in this repo computes **paired statistics and an outcome** on
-identical paths; it does not contain, and a CI test (`tests/test_ip_boundary.py`) forbids, the
-objective, the DSR estimator, or the promotion decision. Contributed genomes that beat the
-champion are handed to the swarm's private registry, where those gates run. The **Strategy
-Validation Audit** at [https://1.21initiative.com/](https://1.21initiative.com/) remains the
-route for multi-genome league runs, custom universes, and NDA'"'"'d live metrics.
-
-## Telemetry
-
-Off by default, opt-in only (`SWARM_MCP_TELEMETRY_OPT_IN=opt-in`), counters only
-(tool name, success flag, coarse duration). Never symbols, genomes, prices, or
-credentials. Institutional buyers read the source; silent phone-home destroys the wedge.
-Contributors additionally disclose telemetry scope in their submission (see the
-strategy-contributor tier above).
-
-The exceptions are by contract and explicit:
-
-- **Access-token verification.** When a token is set and no local bootstrap token matches,
-  the token is POSTed to the verify endpoint (default `https://1.21initiative.com/api/mcp/verify`,
-  override `SWARM_MCP_TOKEN_VERIFY_URL`), at most once per 5 minutes per process. Only the token
-  is sent; the gate fails closed if the endpoint is unreachable or rejects the token.
-- **Relay data calls** carry the token plus the symbols/days you asked for (that is the request).
-  Relay calls are metered server-side per call.
-- **`tournament.submit`** sends the genome vector, its hash and the `contribute` flag — the one
-  tool that ships a strategy artefact, and it says so in its output every time.
-
-## Development
-
-```powershell
-pip install -e ".[test]"
-py -3.11 -m pytest                          # full suite (see Step 2 count in docs/DISTRIBUTION.md)
-scripts\vendor.ps1                          # re-vendor the pinned checker subset
-py -3.11 scripts\check_pin.py               # vendored tree == pins.json
+**Sample Verdict Returned (`0 credits`, `0 bytes` sent off your machine):**
+```json
+{
+  "tool": "audit.backtest",
+  "overall_assessment": "PROBLEMS_OBSERVED",
+  "metrics": {
+    "sharpe_gross_annualized": 2.14,
+    "sharpe_net_annualized": 0.31,
+    "newey_west_t_stat": 1.18,
+    "bh_q_value": 0.42,
+    "breakeven_cost_multiplier": 1.12,
+    "top5_pnl_share_pct": 68.4
+  }
+}
 ```
 
-Vendoring uses the sibling checkouts of the private repos at the pinned SHAs
-(`-FromWorktree` bootstraps before the pin commit exists). CI mirrors the swarm's own
-`guardrails-invariants` gate: it checks out the pinned SHAs and verifies the committed
-vendored tree byte-for-byte (and the stripped subsets transform-for-transform), then runs
-the guardrails' own invariant suite at the pinned SHA.
+---
 
-## License
+## Default `core` Profile (12 High-Signal Tools, ~2.4k Schema Tokens)
 
-Wrapper code: MIT (see `LICENSE`). The vendored guardrails checker subset under
-`swarm_mcp/vendored/guardrails/` is distributed under the source-available terms in
-`swarm_mcp/vendored/guardrails/LICENSE.md`. The excluded selection machinery is not
-licensed.
+`uvx quant-swarm` loads a lean 12-tool core profile so your coding agent never suffers tool-catalog context bloat:
+
+| Surface | Tools Included in Default `core` Profile | Auth / Metering |
+| :--- | :--- | :--- |
+| **Free Offline Backtest & Risk Forensics** | `audit.backtest` *(or `audit.backtest_inline` on HTTP)*, `warden.audit_features`, `warden.cost_check`, `warden.validate_order`, `warden.prop_challenge_check`, `warden.defensive_posture`, `warden.explain_sizing`, `gym.probe_fragility` | **Free & 100% Offline** (`stdio` needs zero token and makes zero network calls) |
+| **Hosted Point-in-Time (`pit.*`) Data** | `pit.analysis`, `market.fundamentals_pit`, `market.insider_institutional_pit`, `market.regime` | **`SWARM_MCP_ACCESS_TOKEN`** ([free 250 calls/mo + 100 bonus Pro trial credits](https://1.21initiative.com/mcp/); one-time £19 / 10k or £149 / 100k credit packs, no subscription) |
+
+### Specialist Profiles (`--profile`)
+Need the full 48-tool specialist suites (step-by-step `audit.preflight`/`quote`/`run`/`compare`, portfolio optimization, symbolic alpha formula evaluation, or optional experimental Shadow Tournament benchmarking)?
+```bash
+uvx quant-swarm --profile full     # All 48 tools across Warden, Data & Gym
+uvx quant-swarm --profile warden   # Equivalent to swarm-warden-mcp (18 tools)
+uvx quant-swarm --profile data     # Equivalent to swarm-data-mcp (19 tools)
+uvx quant-swarm --profile gym      # Equivalent to swarm-gym-mcp (11 tools)
+```
+
+### Point-in-time data, for real
+Every hosted dataset (`market.fundamentals_pit`, `market.insider_institutional_pit`, `market.supply_chain_pit`, `market.macro_nowcast`) is indexed strictly by its public filing or release timestamp (`available_at <= as_of`)—never restated fiscal-period archive dates—and returns derived ratios, z-scores, and percentiles rather than raw vendor series.
+
+### PIT significance, explained (`pit.analysis`)
+`pit.analysis` evaluates cross-sectional Spearman rank IC per `(dataset | metric | horizon)` family with size/sector neutralization, Newey-West (Bartlett) overlap-adjusted t-statistics, Benjamini-Hochberg `q <= 0.05` multiple-testing control, staleness caps, and a shuffled-date placebo gate (`SIGNIFICANT`, `NOT_SIGNIFICANT`, `NOT_JUDGED`, or `UNVERIFIED`).
+
+### Plans
+- **Free Offline (`stdio`, no token):** Unlimited local `audit.backtest`, `warden.*`, `cache.*`, and inline-bars `gym.*` runs (`0 credits`).
+- **Free Hosted Token (`SWARM_MCP_ACCESS_TOKEN`):** 250 relay calls/month (10 symbols/call) + 100 bonus Pro trial credits on signup at [1.21initiative.com/mcp/](https://1.21initiative.com/mcp/).
+- **One-Time Credit Packs (No Subscription):** `10,000` credits (£19 / ~$24) or `100,000` credits (£149 / ~$189), valid 90 days (1 credit per relay call, single-shot Pro tool, or hosted gym episode).
 
 ---
 
-*The gym is the tier-A price subset. The tape_replay service does not exist publicly.
-Tier-B/C scoring is hosted-only. The Shadow Tournament returns paired outcomes, never
-promotions. Anything else would be fabricated evidence — and this repo refuses to fabricate.*
+## Security, Privacy & Agent Honesty Rules
+
+- **Strict Transport Isolation:** Local file-path auditing (`audit.backtest`, `audit.report`) exists **only** on `stdio` and is jailed to your active workspace (`SWARM_ALLOWED_WORKSPACE` or `cwd`). Remote HTTP (`https://mcp.1.21initiative.com/mcp`) accepts only bounded inline CSV/row payloads (`<= 250 KB`) with zero server disk I/O.
+- **Zero Order Execution:** Read-only diagnostic and research tools only—never places, modifies, or routes live orders. Diagnostic evidence only, not investment advice.
+- **Recommended Agent Rule:** When calling any `quant-swarm` tool, instruct your agent to **quote its verdict verbatim** and **never upgrade a raw p-value** into a significance claim when `bh_q_value > 0.05` or `INSUFFICIENT_EVIDENCE` is returned.
+
+## Documentation & Links
+- **Product & API Keys:** [https://1.21initiative.com/mcp/](https://1.21initiative.com/mcp/)
+- **Source & Issues:** [https://github.com/blink1217/trading-swarm-mcp](https://github.com/blink1217/trading-swarm-mcp)
+- **License:** MIT (`swarm_mcp` wrapper/tools) AND Source-Available (`swarm_mcp/vendored/guardrails/LICENSE.md`).

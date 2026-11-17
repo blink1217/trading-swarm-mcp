@@ -1,16 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2025-06-18/mcp.json",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "remote": {
-    "data": "https://1.21initiative.com/mcp/data",
-    "warden": "https://1.21initiative.com/mcp/warden",
-    "gym": "https://1.21initiative.com/mcp/gym"
+    "core": "https://mcp.1.21initiative.com/mcp",
+    "warden": "https://mcp.1.21initiative.com/mcp/warden",
+    "data": "https://mcp.1.21initiative.com/mcp/data",
+    "gym": "https://mcp.1.21initiative.com/mcp/gym"
   },
   "auth": {
     "kind": "http",
     "oauth": {
       "issuer": "https://1.21initiative.com",
-      "metadata": "https://1.21initiative.com/.well-known/oauth-authorization-server",
+      "metadata": "https://mcp.1.21initiative.com/.well-known/oauth-protected-resource",
       "scopes": [
         "mcp:tools"
       ]

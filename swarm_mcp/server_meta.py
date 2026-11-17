@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from mcp.types import ToolAnnotations
 
-PACKAGE_VERSION = "1.0.0"
+PACKAGE_VERSION = "1.1.0"
 SITE_URL = "https://1.21initiative.com/mcp/"
 HOME_URL = "https://1.21initiative.com/"
 ICON_URL = "https://1.21initiative.com/icons/icon-192.png"
@@ -16,7 +16,8 @@ ICON_URL = "https://1.21initiative.com/icons/icon-192.png"
 # the llama-index integration and this module must agree on this URL —
 # tests/test_registry_metadata.py enforces it. Deploy-time operators can
 # override at runtime via SWARM_MCP_REMOTE_URL without touching this constant.
-REMOTE_BASE_URL = "https://swarm-mcp-503318750546.europe-west1.run.app"
+REMOTE_BASE_URL = "https://mcp.1.21initiative.com"
+LEGACY_CLOUD_RUN_HOST = "swarm-mcp-503318750546.europe-west1.run.app"
 
 
 def annotations(

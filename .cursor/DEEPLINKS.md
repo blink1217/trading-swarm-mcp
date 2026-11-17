@@ -5,6 +5,8 @@ Each link installs one server with the placeholder token; set your real
 token in Cursor's MCP settings after installing (free at
 https://1.21initiative.com/mcp/).
 
+- **quant-swarm** (quant-swarm): [add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=quant-swarm&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJxdWFudC1zd2FybSIsInF1YW50LXN3YXJtIl0sImVudiI6eyJTV0FSTV9NQ1BfQUNDRVNTX1RPS0VOIjoiPHRva2VuIGZyb20gaHR0cHM6Ly8xLjIxaW5pdGlhdGl2ZS5jb20vPiJ9fQ%3D%3D)
+  `cursor://anysphere.cursor-deeplink/mcp/install?name=quant-swarm&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJxdWFudC1zd2FybSIsInF1YW50LXN3YXJtIl0sImVudiI6eyJTV0FSTV9NQ1BfQUNDRVNTX1RPS0VOIjoiPHRva2VuIGZyb20gaHR0cHM6Ly8xLjIxaW5pdGlhdGl2ZS5jb20vPiJ9fQ%3D%3D`
 - **swarm-data** (swarm-data-mcp): [add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=swarm-data&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJxdWFudC1zd2FybSIsInN3YXJtLWRhdGEtbWNwIl0sImVudiI6eyJTV0FSTV9NQ1BfQUNDRVNTX1RPS0VOIjoiPHRva2VuIGZyb20gaHR0cHM6Ly8xLjIxaW5pdGlhdGl2ZS5jb20vPiJ9fQ%3D%3D)
   `cursor://anysphere.cursor-deeplink/mcp/install?name=swarm-data&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJxdWFudC1zd2FybSIsInN3YXJtLWRhdGEtbWNwIl0sImVudiI6eyJTV0FSTV9NQ1BfQUNDRVNTX1RPS0VOIjoiPHRva2VuIGZyb20gaHR0cHM6Ly8xLjIxaW5pdGlhdGl2ZS5jb20vPiJ9fQ%3D%3D`
 - **swarm-warden** (swarm-warden-mcp): [add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=swarm-warden&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJxdWFudC1zd2FybSIsInN3YXJtLXdhcmRlbi1tY3AiXSwiZW52Ijp7IlNXQVJNX01DUF9BQ0NFU1NfVE9LRU4iOiI8dG9rZW4gZnJvbSBodHRwczovLzEuMjFpbml0aWF0aXZlLmNvbS8%2BIn19)

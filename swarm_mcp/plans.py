@@ -76,6 +76,8 @@ TOURNAMENT: dict = {
 CONTRIBUTE_DISCOUNT = 0.5
 
 FREE_TOOLS = frozenset({
+    "audit.backtest",
+    "audit.backtest_inline",
     "audit.preflight",
     "audit.quote",
     "audit.run",

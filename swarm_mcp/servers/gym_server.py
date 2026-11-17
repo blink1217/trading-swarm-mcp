@@ -115,10 +115,10 @@ class LabelRegimesOut(TypedDict, total=False):
     regime_counts: dict
     pool_size: int
     thin_pools: list[str]
-    thin_pool_warning: str
+    thin_pool_warning: str | None
     labels_are_causal: str
     depth: dict
-    escalation: dict
+    escalation: dict | None
     access: str
     error: str
     request_access_at: str
@@ -147,7 +147,7 @@ class ProbeFragilityOut(TypedDict, total=False):
     underpowered: bool
     power_note: str
     depth: dict
-    cloud_job: dict
+    cloud_job: dict | None
     fidelity_note: str
     access: str
     error: str
@@ -168,7 +168,7 @@ class PairedPreviewOut(TypedDict, total=False):
     gate_requirements: dict
     identical_paths: str
     depth: dict
-    cloud_job: dict
+    cloud_job: dict | None
     valid_genomes: bool
     errors: list[str]
     access: str
@@ -212,7 +212,7 @@ class EvaluateGraphOut(TypedDict, total=False):
     underpowered: bool
     power_note: str
     depth: dict
-    cloud_job: dict
+    cloud_job: dict | None
     access: str
     error: str
     request_access_at: str
@@ -615,8 +615,8 @@ class TournamentForwardLeagueOut(TypedDict, total=False):
     total_window_weeks: int
     champion_hash: str
     champion_cumulative_net_bps: float
-    leading_challenger_hash: str
-    leading_challenger_cumulative_net_bps: float
+    leading_challenger_hash: str | None
+    leading_challenger_cumulative_net_bps: float | None
     field_median_cumulative_net_bps: float
     live_benchmark_sleeves: list[dict]
     weekly_settlements: list[dict]

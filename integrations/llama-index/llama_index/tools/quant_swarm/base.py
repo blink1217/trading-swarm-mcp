@@ -19,6 +19,7 @@ import os
 PACKAGE = "quant-swarm"
 
 SERVERS = {
+    "quant-swarm": "quant-swarm",
     "swarm-data": "swarm-data-mcp",
     "swarm-warden": "swarm-warden-mcp",
     "swarm-gym": "swarm-gym-mcp",
@@ -29,7 +30,7 @@ SERVERS = {
 # SWARM_MCP_REMOTE_URL if the service moves behind a custom domain.
 REMOTE_BASE = os.environ.get(
     "SWARM_MCP_REMOTE_URL",
-    "https://swarm-mcp-503318750546.europe-west1.run.app",
+    "https://mcp.1.21initiative.com",
 ).rstrip("/")
 
 
@@ -54,6 +55,7 @@ def server_configs(access_token: str | None = None, package: str = PACKAGE) -> d
 def remote_urls() -> dict:
     """Hosted streamable-HTTP endpoints (bearer token or ``?apiToken=``)."""
     return {
+        "quant-swarm": f"{REMOTE_BASE}/mcp",
         "swarm-data": f"{REMOTE_BASE}/mcp/data",
         "swarm-warden": f"{REMOTE_BASE}/mcp/warden",
         "swarm-gym": f"{REMOTE_BASE}/mcp/gym",

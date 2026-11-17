@@ -156,9 +156,16 @@
        "type": "string"
       },
       "escalation": {
-       "additionalProperties": true,
-       "title": "Escalation",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Escalation"
       },
       "how": {
        "title": "How",
@@ -238,9 +245,16 @@
        "type": "string"
       },
       "escalation": {
-       "additionalProperties": true,
-       "title": "Escalation",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Escalation"
       },
       "feature_order": {
        "items": {
@@ -2389,9 +2403,16 @@
        "type": "string"
       },
       "cloud_job": {
-       "additionalProperties": true,
-       "title": "Cloud Job",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cloud Job"
       },
       "depth": {
        "additionalProperties": true,
@@ -2596,9 +2617,16 @@
        "type": "string"
       },
       "escalation": {
-       "additionalProperties": true,
-       "title": "Escalation",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Escalation"
       },
       "how": {
        "title": "How",
@@ -2629,8 +2657,15 @@
        "type": "string"
       },
       "thin_pool_warning": {
-       "title": "Thin Pool Warning",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Thin Pool Warning"
       },
       "thin_pools": {
        "items": {
@@ -2758,9 +2793,16 @@
        "type": "string"
       },
       "cloud_job": {
-       "additionalProperties": true,
-       "title": "Cloud Job",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cloud Job"
       },
       "depth": {
        "additionalProperties": true,
@@ -2952,9 +2994,16 @@
        "type": "string"
       },
       "cloud_job": {
-       "additionalProperties": true,
-       "title": "Cloud Job",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cloud Job"
       },
       "depth": {
        "additionalProperties": true,
@@ -3469,12 +3518,26 @@
        "type": "string"
       },
       "leading_challenger_cumulative_net_bps": {
-       "title": "Leading Challenger Cumulative Net Bps",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Leading Challenger Cumulative Net Bps"
       },
       "leading_challenger_hash": {
-       "title": "Leading Challenger Hash",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Leading Challenger Hash"
       },
       "live_benchmark_sleeves": {
        "items": {
@@ -3880,6 +3943,1035 @@
    }
   ],
   "warden": [
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "adverse_selection_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way adverse selection override in bps.",
+       "title": "Adverse Selection Bps"
+      },
+      "benchmark_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline UTF-8 CSV string of benchmark returns (<=250 KB).",
+       "title": "Benchmark Csv"
+      },
+      "benchmark_path": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional workspace-bounded path to benchmark returns (stdio only).",
+       "title": "Benchmark Path"
+      },
+      "benchmark_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline benchmark return rows [{ts, return}].",
+       "title": "Benchmark Rows"
+      },
+      "commission_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way commission override in bps.",
+       "title": "Commission Bps"
+      },
+      "cost_assumptions": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional execution cost assumptions {spread_bps, slippage_bps, adverse_selection_bps, commission_bps}.",
+       "title": "Cost Assumptions"
+      },
+      "features_manifest": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time feature manifest {as_of, features: [...]}.",
+       "title": "Features Manifest"
+      },
+      "num_trials": {
+       "default": 1,
+       "description": "Number of strategy/parameter trials tested for BH q-value and Deflated Sharpe adjustment.",
+       "maximum": 100000,
+       "minimum": 1,
+       "title": "Num Trials",
+       "type": "integer"
+      },
+      "returns_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Inline UTF-8 CSV string of strategy returns (ts,strategy_return; <=250 KB).",
+       "title": "Returns Csv"
+      },
+      "returns_path": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Workspace-bounded path to CSV/Parquet/JSON strategy returns (stdio only).",
+       "title": "Returns Path"
+      },
+      "returns_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Inline list of strategy return rows [{ts, strategy_return}].",
+       "title": "Returns Rows"
+      },
+      "slippage_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way slippage override in bps.",
+       "title": "Slippage Bps"
+      },
+      "spread_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way spread override in bps.",
+       "title": "Spread Bps"
+      },
+      "strategy_name": {
+       "default": "candidate_strategy",
+       "description": "Human-readable strategy identifier.",
+       "title": "Strategy Name",
+       "type": "string"
+      },
+      "trades_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline UTF-8 CSV string of trade records (<=250 KB).",
+       "title": "Trades Csv"
+      },
+      "trades_path": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional workspace-bounded path to trade records CSV/Parquet/JSON (stdio only).",
+       "title": "Trades Path"
+      },
+      "trades_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline trade records [{ts, symbol, pnl_bps, position_pct}].",
+       "title": "Trades Rows"
+      }
+     },
+     "title": "audit_backtestArguments",
+     "type": "object"
+    },
+    "name": "audit.backtest",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "approval_token": {
+       "title": "Approval Token",
+       "type": "string"
+      },
+      "artifact_hashes": {
+       "additionalProperties": true,
+       "title": "Artifact Hashes",
+       "type": "object"
+      },
+      "assessment_after": {
+       "title": "Assessment After",
+       "type": "string"
+      },
+      "assessment_before": {
+       "title": "Assessment Before",
+       "type": "string"
+      },
+      "cost_assumptions": {
+       "additionalProperties": true,
+       "title": "Cost Assumptions",
+       "type": "object"
+      },
+      "counts_by_category": {
+       "additionalProperties": true,
+       "title": "Counts By Category",
+       "type": "object"
+      },
+      "coverage_matrix": {
+       "additionalProperties": true,
+       "title": "Coverage Matrix",
+       "type": "object"
+      },
+      "credits_charged": {
+       "title": "Credits Charged",
+       "type": "integer"
+      },
+      "credits_cost": {
+       "title": "Credits Cost",
+       "type": "integer"
+      },
+      "eligible": {
+       "title": "Eligible",
+       "type": "boolean"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "estimated_runtime_seconds": {
+       "title": "Estimated Runtime Seconds",
+       "type": "number"
+      },
+      "execution_plan": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Execution Plan",
+       "type": "array"
+      },
+      "finding_transitions": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Finding Transitions",
+       "type": "array"
+      },
+      "findings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Findings",
+       "type": "array"
+      },
+      "gbp_cost": {
+       "additionalProperties": true,
+       "title": "Gbp Cost",
+       "type": "object"
+      },
+      "generated_at": {
+       "title": "Generated At",
+       "type": "string"
+      },
+      "has_benchmark": {
+       "title": "Has Benchmark",
+       "type": "boolean"
+      },
+      "has_features_manifest": {
+       "title": "Has Features Manifest",
+       "type": "boolean"
+      },
+      "headline_metrics": {
+       "additionalProperties": true,
+       "title": "Headline Metrics",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "html_report": {
+       "title": "Html Report",
+       "type": "string"
+      },
+      "idempotency_key": {
+       "title": "Idempotency Key",
+       "type": "string"
+      },
+      "idempotent_replay": {
+       "title": "Idempotent Replay",
+       "type": "boolean"
+      },
+      "input_sha256": {
+       "title": "Input Sha256",
+       "type": "string"
+      },
+      "input_sha256_a": {
+       "title": "Input Sha256 A",
+       "type": "string"
+      },
+      "input_sha256_b": {
+       "title": "Input Sha256 B",
+       "type": "string"
+      },
+      "job_id": {
+       "title": "Job Id",
+       "type": "string"
+      },
+      "job_id_a": {
+       "title": "Job Id A",
+       "type": "string"
+      },
+      "job_id_b": {
+       "title": "Job Id B",
+       "type": "string"
+      },
+      "markdown_report": {
+       "title": "Markdown Report",
+       "type": "string"
+      },
+      "max_credits": {
+       "title": "Max Credits",
+       "type": "integer"
+      },
+      "metrics": {
+       "additionalProperties": true,
+       "title": "Metrics",
+       "type": "object"
+      },
+      "metrics_diff": {
+       "additionalProperties": true,
+       "title": "Metrics Diff",
+       "type": "object"
+      },
+      "mode": {
+       "title": "Mode",
+       "type": "string"
+      },
+      "new_warnings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "New Warnings",
+       "type": "array"
+      },
+      "next_step": {
+       "title": "Next Step",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "not_tested_count": {
+       "title": "Not Tested Count",
+       "type": "integer"
+      },
+      "outbound_data_preview": {
+       "additionalProperties": true,
+       "title": "Outbound Data Preview",
+       "type": "object"
+      },
+      "overall_assessment": {
+       "title": "Overall Assessment",
+       "type": "string"
+      },
+      "package_version": {
+       "title": "Package Version",
+       "type": "string"
+      },
+      "preflight_id": {
+       "title": "Preflight Id",
+       "type": "string"
+      },
+      "random_seeds": {
+       "items": {
+        "type": "integer"
+       },
+       "title": "Random Seeds",
+       "type": "array"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "remediation_verdict": {
+       "title": "Remediation Verdict",
+       "type": "string"
+      },
+      "reproducibility_bundle": {
+       "additionalProperties": true,
+       "title": "Reproducibility Bundle",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "required_credits": {
+       "title": "Required Credits",
+       "type": "integer"
+      },
+      "resolved_findings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Resolved Findings",
+       "type": "array"
+      },
+      "returns_summary": {
+       "additionalProperties": true,
+       "title": "Returns Summary",
+       "type": "object"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "strategy_a": {
+       "title": "Strategy A",
+       "type": "string"
+      },
+      "strategy_b": {
+       "title": "Strategy B",
+       "type": "string"
+      },
+      "strategy_name": {
+       "title": "Strategy Name",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "trades_summary": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Trades Summary"
+      },
+      "validation_errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Validation Errors",
+       "type": "array"
+      },
+      "written_files": {
+       "additionalProperties": true,
+       "title": "Written Files",
+       "type": "object"
+      }
+     },
+     "title": "AuditGenericOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": false,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {
+      "adverse_selection_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way adverse selection override in bps.",
+       "title": "Adverse Selection Bps"
+      },
+      "benchmark_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline UTF-8 CSV string of benchmark returns (max 250 KB).",
+       "title": "Benchmark Csv"
+      },
+      "benchmark_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline benchmark return rows [{ts, return}].",
+       "title": "Benchmark Rows"
+      },
+      "commission_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way commission override in bps.",
+       "title": "Commission Bps"
+      },
+      "cost_assumptions": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional execution cost assumptions {spread_bps, slippage_bps, adverse_selection_bps, commission_bps}.",
+       "title": "Cost Assumptions"
+      },
+      "features_manifest": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional point-in-time feature manifest {as_of, features: [...]}.",
+       "title": "Features Manifest"
+      },
+      "num_trials": {
+       "default": 1,
+       "description": "Number of strategy/parameter trials tested for BH q-value and Deflated Sharpe adjustment.",
+       "maximum": 100000,
+       "minimum": 1,
+       "title": "Num Trials",
+       "type": "integer"
+      },
+      "returns_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Inline UTF-8 CSV string of strategy returns (columns: ts,strategy_return; max 250 KB).",
+       "title": "Returns Csv"
+      },
+      "returns_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Inline list of strategy return rows [{ts, strategy_return}].",
+       "title": "Returns Rows"
+      },
+      "slippage_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way slippage override in bps.",
+       "title": "Slippage Bps"
+      },
+      "spread_bps": {
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional one-way spread override in bps.",
+       "title": "Spread Bps"
+      },
+      "strategy_name": {
+       "default": "candidate_strategy",
+       "description": "Human-readable strategy identifier.",
+       "title": "Strategy Name",
+       "type": "string"
+      },
+      "trades_csv": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline UTF-8 CSV string of trade records (ts,symbol,pnl_bps,position_pct; max 250 KB).",
+       "title": "Trades Csv"
+      },
+      "trades_rows": {
+       "anyOf": [
+        {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional inline trade records [{ts, symbol, pnl_bps, position_pct}].",
+       "title": "Trades Rows"
+      }
+     },
+     "title": "audit_backtest_inlineArguments",
+     "type": "object"
+    },
+    "name": "audit.backtest_inline",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "title": "Access",
+       "type": "string"
+      },
+      "approval_token": {
+       "title": "Approval Token",
+       "type": "string"
+      },
+      "artifact_hashes": {
+       "additionalProperties": true,
+       "title": "Artifact Hashes",
+       "type": "object"
+      },
+      "assessment_after": {
+       "title": "Assessment After",
+       "type": "string"
+      },
+      "assessment_before": {
+       "title": "Assessment Before",
+       "type": "string"
+      },
+      "cost_assumptions": {
+       "additionalProperties": true,
+       "title": "Cost Assumptions",
+       "type": "object"
+      },
+      "counts_by_category": {
+       "additionalProperties": true,
+       "title": "Counts By Category",
+       "type": "object"
+      },
+      "coverage_matrix": {
+       "additionalProperties": true,
+       "title": "Coverage Matrix",
+       "type": "object"
+      },
+      "credits_charged": {
+       "title": "Credits Charged",
+       "type": "integer"
+      },
+      "credits_cost": {
+       "title": "Credits Cost",
+       "type": "integer"
+      },
+      "eligible": {
+       "title": "Eligible",
+       "type": "boolean"
+      },
+      "error": {
+       "title": "Error",
+       "type": "string"
+      },
+      "estimated_runtime_seconds": {
+       "title": "Estimated Runtime Seconds",
+       "type": "number"
+      },
+      "execution_plan": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Execution Plan",
+       "type": "array"
+      },
+      "finding_transitions": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Finding Transitions",
+       "type": "array"
+      },
+      "findings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Findings",
+       "type": "array"
+      },
+      "gbp_cost": {
+       "additionalProperties": true,
+       "title": "Gbp Cost",
+       "type": "object"
+      },
+      "generated_at": {
+       "title": "Generated At",
+       "type": "string"
+      },
+      "has_benchmark": {
+       "title": "Has Benchmark",
+       "type": "boolean"
+      },
+      "has_features_manifest": {
+       "title": "Has Features Manifest",
+       "type": "boolean"
+      },
+      "headline_metrics": {
+       "additionalProperties": true,
+       "title": "Headline Metrics",
+       "type": "object"
+      },
+      "how": {
+       "title": "How",
+       "type": "string"
+      },
+      "html_report": {
+       "title": "Html Report",
+       "type": "string"
+      },
+      "idempotency_key": {
+       "title": "Idempotency Key",
+       "type": "string"
+      },
+      "idempotent_replay": {
+       "title": "Idempotent Replay",
+       "type": "boolean"
+      },
+      "input_sha256": {
+       "title": "Input Sha256",
+       "type": "string"
+      },
+      "input_sha256_a": {
+       "title": "Input Sha256 A",
+       "type": "string"
+      },
+      "input_sha256_b": {
+       "title": "Input Sha256 B",
+       "type": "string"
+      },
+      "job_id": {
+       "title": "Job Id",
+       "type": "string"
+      },
+      "job_id_a": {
+       "title": "Job Id A",
+       "type": "string"
+      },
+      "job_id_b": {
+       "title": "Job Id B",
+       "type": "string"
+      },
+      "markdown_report": {
+       "title": "Markdown Report",
+       "type": "string"
+      },
+      "max_credits": {
+       "title": "Max Credits",
+       "type": "integer"
+      },
+      "metrics": {
+       "additionalProperties": true,
+       "title": "Metrics",
+       "type": "object"
+      },
+      "metrics_diff": {
+       "additionalProperties": true,
+       "title": "Metrics Diff",
+       "type": "object"
+      },
+      "mode": {
+       "title": "Mode",
+       "type": "string"
+      },
+      "new_warnings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "New Warnings",
+       "type": "array"
+      },
+      "next_step": {
+       "title": "Next Step",
+       "type": "string"
+      },
+      "not_investment_advice": {
+       "title": "Not Investment Advice",
+       "type": "boolean"
+      },
+      "not_tested_count": {
+       "title": "Not Tested Count",
+       "type": "integer"
+      },
+      "outbound_data_preview": {
+       "additionalProperties": true,
+       "title": "Outbound Data Preview",
+       "type": "object"
+      },
+      "overall_assessment": {
+       "title": "Overall Assessment",
+       "type": "string"
+      },
+      "package_version": {
+       "title": "Package Version",
+       "type": "string"
+      },
+      "preflight_id": {
+       "title": "Preflight Id",
+       "type": "string"
+      },
+      "random_seeds": {
+       "items": {
+        "type": "integer"
+       },
+       "title": "Random Seeds",
+       "type": "array"
+      },
+      "reason": {
+       "title": "Reason",
+       "type": "string"
+      },
+      "remediation_verdict": {
+       "title": "Remediation Verdict",
+       "type": "string"
+      },
+      "reproducibility_bundle": {
+       "additionalProperties": true,
+       "title": "Reproducibility Bundle",
+       "type": "object"
+      },
+      "request_access_at": {
+       "title": "Request Access At",
+       "type": "string"
+      },
+      "required_credits": {
+       "title": "Required Credits",
+       "type": "integer"
+      },
+      "resolved_findings": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Resolved Findings",
+       "type": "array"
+      },
+      "returns_summary": {
+       "additionalProperties": true,
+       "title": "Returns Summary",
+       "type": "object"
+      },
+      "status": {
+       "title": "Status",
+       "type": "string"
+      },
+      "strategy_a": {
+       "title": "Strategy A",
+       "type": "string"
+      },
+      "strategy_b": {
+       "title": "Strategy B",
+       "type": "string"
+      },
+      "strategy_name": {
+       "title": "Strategy Name",
+       "type": "string"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      },
+      "trades_summary": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Trades Summary"
+      },
+      "validation_errors": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Validation Errors",
+       "type": "array"
+      },
+      "written_files": {
+       "additionalProperties": true,
+       "title": "Written Files",
+       "type": "object"
+      }
+     },
+     "title": "AuditGenericOut",
+     "type": "object"
+    }
+   },
    {
     "annotations": {
      "destructiveHint": false,
@@ -6430,9 +7522,16 @@
        "type": "array"
       },
       "coverage": {
-       "additionalProperties": true,
-       "title": "Coverage",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Coverage"
       },
       "error": {
        "title": "Error",
@@ -6799,9 +7898,16 @@
        "type": "number"
       },
       "overrides_deviation": {
-       "additionalProperties": true,
-       "title": "Overrides Deviation",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Overrides Deviation"
       },
       "provenance": {
        "title": "Provenance",
@@ -6839,8 +7945,15 @@
        "type": "string"
       },
       "trail_stop": {
-       "title": "Trail Stop",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Trail Stop"
       },
       "verdict": {
        "title": "Verdict",
@@ -6985,9 +8098,16 @@
        "type": "string"
       },
       "overrides_deviation": {
-       "additionalProperties": true,
-       "title": "Overrides Deviation",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Overrides Deviation"
       },
       "provenance": {
        "title": "Provenance",
@@ -7261,14 +8381,28 @@
        "type": "string"
       },
       "audit_request": {
-       "additionalProperties": true,
-       "title": "Audit Request",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Audit Request"
       },
       "cloud_job": {
-       "additionalProperties": true,
-       "title": "Cloud Job",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cloud Job"
       },
       "credits_charged": {
        "title": "Credits Charged",
@@ -7507,9 +8641,16 @@
        "type": "number"
       },
       "proposed_trade": {
-       "additionalProperties": true,
-       "title": "Proposed Trade",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Proposed Trade"
       },
       "provenance": {
        "title": "Provenance",
@@ -7723,9 +8864,16 @@
        "type": "string"
       },
       "fund_overrides": {
-       "additionalProperties": true,
-       "title": "Fund Overrides",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Fund Overrides"
       },
       "house_floors": {
        "additionalProperties": true,
@@ -7749,8 +8897,15 @@
        "type": "string"
       },
       "rejection_quote": {
-       "title": "Rejection Quote",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Rejection Quote"
       },
       "request_access_at": {
        "title": "Request Access At",

@@ -27,12 +27,18 @@ import datetime as dt
 import hashlib
 import hmac
 import html
+import io
 import json
+import math
+import os
+import secrets
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy import stats as scipy_stats
 
 from swarm_mcp import vendor_path  # noqa: F401
 
@@ -89,7 +95,11 @@ HOSTED_AUDIT_CREDITS = 20
 MIN_DAILY_OBSERVATIONS = 60
 MIN_WEEKLY_BLOCKS = 20
 MIN_TRADE_OBSERVATIONS = 20
-_APPROVAL_SECRET = b"quant-swarm-audit-approval-v1"
+MAX_INLINE_CSV_BYTES = 250 * 1024  # 250 KB hard cap for remote/inline CSV payloads
+
+_EPHEMERAL_STDIO_SECRET: bytes | None = None
+_FORBIDDEN_SYSTEM_PREFIXES = ("/proc", "/sys", "/dev", "/etc", "/root", "/var/run")
+_FORBIDDEN_PATH_PARTS = frozenset({".ssh", ".aws", ".gnupg", ".kube", ".gcloud", ".git"})
 
 # Process-level stores for preflight manifests, jobs, and idempotency keys
 _PREFLIGHT_STORE: dict[str, dict[str, Any]] = {}
@@ -102,6 +112,79 @@ def reset_audit_stores() -> None:
     _PREFLIGHT_STORE.clear()
     _JOB_STORE.clear()
     _IDEMPOTENCY_STORE.clear()
+
+
+def get_approval_secret(*, require_configured: bool = False) -> bytes:
+    """Return the HMAC secret for approval tokens without any static secret in source.
+
+    * Remote HTTP mode (`SWARM_MCP_TRANSPORT=http` or request-scoped Bearer auth):
+      requires `SWARM_APPROVAL_SECRET` (>= 32 chars, injected from GCP Secret Manager)
+      and fails closed with RuntimeError if unset or too short.
+    * Local stdio mode: uses `SWARM_APPROVAL_SECRET` if set, otherwise generates a
+      random 256-bit secret per process startup via `secrets.token_bytes(32)`.
+    """
+    env_secret = os.environ.get("SWARM_APPROVAL_SECRET", "").strip()
+    is_http = (
+        require_configured
+        or os.environ.get("SWARM_MCP_TRANSPORT", "").strip().lower() == "http"
+        or request_context.is_hosted()
+    )
+    if env_secret:
+        if is_http and len(env_secret) < 32:
+            raise RuntimeError("SWARM_APPROVAL_SECRET must be at least 32 characters in HTTP mode.")
+        return env_secret.encode("utf-8")
+    if is_http:
+        raise RuntimeError(
+            "SWARM_APPROVAL_SECRET environment variable is required on remote HTTP transport."
+        )
+    global _EPHEMERAL_STDIO_SECRET
+    if _EPHEMERAL_STDIO_SECRET is None:
+        _EPHEMERAL_STDIO_SECRET = secrets.token_bytes(32)
+    return _EPHEMERAL_STDIO_SECRET
+
+
+def _is_remote_http_context() -> bool:
+    return (
+        os.environ.get("SWARM_MCP_TRANSPORT", "").strip().lower() == "http"
+        or request_context.is_hosted()
+    )
+
+
+def _resolve_safe_local_path(path_str: str, *, label: str, for_write: bool = False) -> Path:
+    """Canonicalize a local stdio path and jail it to the allowed workspace."""
+    if _is_remote_http_context():
+        raise PermissionError(
+            f"{label}: local filesystem paths are disabled on remote HTTP transport; "
+            "use `audit.backtest_inline` with inline CSV/rows instead."
+        )
+    if "\x00" in path_str:
+        raise ValueError(f"{label}: invalid path containing NUL byte")
+
+    resolved = Path(path_str).expanduser().resolve(strict=False)
+    posix_str = resolved.as_posix()
+    for prefix in _FORBIDDEN_SYSTEM_PREFIXES:
+        if posix_str == prefix or posix_str.startswith(prefix + "/"):
+            raise PermissionError(f"{label}: access to system path '{prefix}' is denied")
+
+    for part in resolved.parts:
+        low = part.lower()
+        if low in _FORBIDDEN_PATH_PARTS or low == ".env" or low.startswith(".env."):
+            raise PermissionError(f"{label}: access to sensitive path component '{part}' is denied")
+
+    explicit_ws = os.environ.get("SWARM_ALLOWED_WORKSPACE", "").strip()
+    if explicit_ws:
+        allowed_roots = [Path(explicit_ws).expanduser().resolve(strict=False)]
+    else:
+        allowed_roots = [Path.cwd().resolve(strict=False)]
+        if os.environ.get("SWARM_ALLOW_TMP_PATHS", "1").strip() != "0":
+            allowed_roots.append(Path(tempfile.gettempdir()).resolve(strict=False))
+
+    if not any(resolved.is_relative_to(root) for root in allowed_roots):
+        roots_desc = ", ".join(str(r) for r in allowed_roots)
+        raise PermissionError(
+            f"{label}: path must resolve within the allowed workspace ({roots_desc})"
+        )
+    return resolved
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -120,27 +203,67 @@ def _compute_approval_token(
     seeds: list[int],
 ) -> str:
     msg = f"{input_sha256}|{mode}|{int(credits_cost)}|{server_meta.PACKAGE_VERSION}|{','.join(map(str, seeds))}"
-    digest = hmac.new(_APPROVAL_SECRET, msg.encode("utf-8"), hashlib.sha256).hexdigest()
+    digest = hmac.new(get_approval_secret(), msg.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"aq1_{digest[:32]}"
 
 
-def _load_tabular(path_str: str | None, inline_rows: list[dict] | None, label: str) -> tuple[pd.DataFrame | None, str | None, list[str]]:
-    """Load CSV, Parquet, or JSON records from disk or inline rows and compute SHA-256."""
+def _load_inline_csv(csv_text: str | None, label: str) -> tuple[pd.DataFrame | None, str | None, list[str]]:
+    """Parse bounded UTF-8 CSV text (<= 250 KB) into a DataFrame with SHA-256 digest."""
+    if csv_text is None:
+        return None, None, []
+    if not isinstance(csv_text, str) or not csv_text.strip():
+        return pd.DataFrame(), _sha256_bytes(b""), [f"{label}: inline CSV payload is empty"]
+    raw_bytes = csv_text.encode("utf-8")
+    if len(raw_bytes) > MAX_INLINE_CSV_BYTES:
+        return None, None, [
+            f"{label}: inline CSV payload ({len(raw_bytes):,} bytes) exceeds the "
+            f"{MAX_INLINE_CSV_BYTES // 1024} KB remote payload limit"
+        ]
+    digest = _sha256_bytes(raw_bytes)
+    try:
+        df = pd.read_csv(io.StringIO(csv_text))
+    except Exception as exc:  # noqa: BLE001
+        return None, digest, [f"{label}: failed to parse inline CSV ({type(exc).__name__}: {exc})"]
+    if df.empty:
+        return df, digest, [f"{label}: inline CSV contains 0 rows"]
+    return df, digest, []
+
+
+def _load_tabular(
+    path_str: str | None,
+    inline_rows: list[dict] | None,
+    label: str,
+    inline_csv: str | None = None,
+) -> tuple[pd.DataFrame | None, str | None, list[str]]:
+    """Load CSV, Parquet, or JSON records from bounded local path, inline CSV, or inline rows."""
     errors: list[str] = []
+    if inline_csv is not None:
+        return _load_inline_csv(inline_csv, label)
+
     if inline_rows is not None:
         if not isinstance(inline_rows, list):
             return None, None, [f"{label}: inline rows must be a list of dicts"]
+        raw_json = json.dumps(inline_rows, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        if _is_remote_http_context() and len(raw_json) > MAX_INLINE_CSV_BYTES:
+            return None, None, [
+                f"{label}: inline rows payload ({len(raw_json):,} bytes) exceeds the "
+                f"{MAX_INLINE_CSV_BYTES // 1024} KB remote payload limit"
+            ]
         if len(inline_rows) == 0:
-            return pd.DataFrame(), _sha256_json([]), [f"{label}: inline rows list is empty"]
+            return pd.DataFrame(), _sha256_bytes(raw_json), [f"{label}: inline rows list is empty"]
         df = pd.DataFrame(inline_rows)
-        return df, _sha256_json(inline_rows), errors
+        return df, _sha256_bytes(raw_json), errors
 
     if not path_str:
         return None, None, errors
 
-    p = Path(path_str)
+    try:
+        p = _resolve_safe_local_path(path_str, label=label, for_write=False)
+    except (PermissionError, ValueError) as exc:
+        return None, None, [str(exc)]
+
     if not p.exists() or not p.is_file():
-        return None, None, [f"{label}: file not found at {path_str}"]
+        return None, None, [f"{label}: file not found at {p.name}"]
 
     raw_bytes = p.read_bytes()
     file_hash = _sha256_bytes(raw_bytes)
@@ -169,9 +292,12 @@ def _load_json_dict(path_str: str | None, inline_dict: dict | None, label: str) 
         return dict(inline_dict), _sha256_json(inline_dict), []
     if not path_str:
         return None, None, []
-    p = Path(path_str)
+    try:
+        p = _resolve_safe_local_path(path_str, label=label, for_write=False)
+    except (PermissionError, ValueError) as exc:
+        return None, None, [str(exc)]
     if not p.exists() or not p.is_file():
-        return None, None, [f"{label}: file not found at {path_str}"]
+        return None, None, [f"{label}: file not found at {p.name}"]
     raw_bytes = p.read_bytes()
     file_hash = _sha256_bytes(raw_bytes)
     try:
@@ -437,6 +563,9 @@ async def preflight(
     features_manifest_path: str | None = None,
     features_manifest: dict | None = None,
     strategy_name: str = "candidate_strategy",
+    returns_csv: str | None = None,
+    trades_csv: str | None = None,
+    benchmark_csv: str | None = None,
 ) -> dict:
     """Validate researcher artifacts locally (0 credits) and emit the Coverage & Scope Matrix."""
     redaction.reject_keylike_args({
@@ -452,17 +581,23 @@ async def preflight(
         errors: list[str] = []
         artifact_hashes: dict[str, str] = {}
 
-        ret_df, ret_hash, ret_load_err = _load_tabular(returns_path, returns_rows, "returns")
+        ret_df, ret_hash, ret_load_err = _load_tabular(
+            returns_path, returns_rows, "returns", inline_csv=returns_csv
+        )
         errors.extend(ret_load_err)
         if ret_hash:
             artifact_hashes["returns"] = ret_hash
 
-        trades_df, trades_hash, trades_load_err = _load_tabular(trades_path, trades_rows, "trades")
+        trades_df, trades_hash, trades_load_err = _load_tabular(
+            trades_path, trades_rows, "trades", inline_csv=trades_csv
+        )
         errors.extend(trades_load_err)
         if trades_hash:
             artifact_hashes["trades"] = trades_hash
 
-        bench_df, bench_hash, bench_load_err = _load_tabular(benchmark_path, benchmark_rows, "benchmark")
+        bench_df, bench_hash, bench_load_err = _load_tabular(
+            benchmark_path, benchmark_rows, "benchmark", inline_csv=benchmark_csv
+        )
         errors.extend(bench_load_err)
         if bench_hash:
             artifact_hashes["benchmark"] = bench_hash
@@ -694,7 +829,50 @@ async def quote(
     return await _run_audit_tool("audit.quote", _do, require_token=(str(mode or "local").strip().lower() == "hosted"))
 
 
-def _evaluate_findings(pf: dict[str, Any], seeds: list[int]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _newey_west_stats(rets: np.ndarray, num_trials: int = 1) -> tuple[float, float, float, float]:
+    """Compute Newey-West HAC t-statistic, two-sided p-value, BH q-value, and Deflated Sharpe."""
+    n = int(len(rets))
+    if n < 5:
+        return 0.0, 1.0, 1.0, 0.0
+    mu = float(np.mean(rets))
+    centered = rets - mu
+    max_lag = max(1, min(10, int(math.floor(4.0 * ((n / 100.0) ** (2.0 / 9.0))))))
+    gamma0 = float(np.dot(centered, centered)) / n
+    lrv = gamma0
+    for lag in range(1, max_lag + 1):
+        weight = 1.0 - lag / (max_lag + 1.0)
+        cov = float(np.dot(centered[lag:], centered[:-lag])) / n
+        lrv += 2.0 * weight * cov
+    lrv = max(lrv, 1e-18)
+    se_mean = math.sqrt(lrv / n)
+    t_hac = mu / se_mean if se_mean > 1e-12 else 0.0
+    p_two = float(2.0 * scipy_stats.norm.sf(abs(t_hac)))
+    trials = max(1, int(num_trials))
+    bh_q = min(1.0, p_two * trials)
+
+    sd = float(np.std(rets, ddof=1))
+    sr_daily = mu / sd if sd > 1e-12 else 0.0
+    skew = float(scipy_stats.skew(rets, bias=False)) if n >= 8 and sd > 1e-12 else 0.0
+    kurt = float(scipy_stats.kurtosis(rets, fisher=False, bias=False)) if n >= 8 and sd > 1e-12 else 3.0
+    if trials > 1:
+        euler_gamma = 0.5772156649
+        z1 = float(scipy_stats.norm.ppf(1.0 - 1.0 / trials))
+        z2 = float(scipy_stats.norm.ppf(1.0 - 1.0 / (trials * math.e)))
+        sr0_daily = ((1.0 - euler_gamma) * z1 + euler_gamma * z2) / math.sqrt(max(n - 1, 1))
+    else:
+        sr0_daily = 0.0
+    denom_sq = max(1.0 - skew * sr_daily + ((kurt - 1.0) / 4.0) * (sr_daily ** 2), 1e-9)
+    dsr_z = ((sr_daily - sr0_daily) * math.sqrt(max(n - 1, 1))) / math.sqrt(denom_sq)
+    dsr_prob = float(scipy_stats.norm.cdf(dsr_z))
+    return round(t_hac, 3), round(p_two, 6), round(bh_q, 6), round(dsr_prob, 4)
+
+
+def _evaluate_findings(
+    pf: dict[str, Any],
+    seeds: list[int],
+    *,
+    num_trials: int = 1,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run all diagnostic checks and produce structured findings + summary metrics."""
     internal = pf["_internal"]
     norm_ret: pd.DataFrame = internal["norm_ret"]
@@ -1197,6 +1375,7 @@ def _evaluate_findings(pf: dict[str, Any], seeds: list[int]) -> tuple[list[dict[
     else:
         overall = "PASSED_LOCAL_AUDIT"
 
+    nw_t, nw_p, bh_q, dsr_prob = _newey_west_stats(net_rets, num_trials=num_trials)
     metrics = {
         "n_observations": n_obs,
         "n_weekly_blocks": n_weeks,
@@ -1204,6 +1383,11 @@ def _evaluate_findings(pf: dict[str, Any], seeds: list[int]) -> tuple[list[dict[
         "sharpe_gross_annualized": round(sharpe_gross, 3),
         "sharpe_net_annualized": round(sharpe_net, 3),
         "sharpe_bootstrap_ci_90": [round(ci_lo, 3), round(ci_hi, 3)],
+        "newey_west_t_stat": nw_t,
+        "newey_west_p_value": nw_p,
+        "bh_q_value": bh_q,
+        "deflated_sharpe_prob": dsr_prob,
+        "num_trials_assumed": max(1, int(num_trials)),
         "gross_edge_bps_per_trade": round(gross_trade_bps, 2),
         "round_trip_cost_bps_1x": round(rt_cost_bps, 2),
         "net_edge_bps_per_trade_1x": round(net_trade_bps_1x, 2),
@@ -1722,17 +1906,17 @@ async def report(
         written_files: dict[str, str] = {}
 
         if output_html_path:
-            hp = Path(output_html_path)
+            hp = _resolve_safe_local_path(output_html_path, label="output_html_path", for_write=True)
             hp.parent.mkdir(parents=True, exist_ok=True)
             hp.write_text(html_report, encoding="utf-8")
             written_files["html"] = str(hp)
         if output_json_path:
-            jp = Path(output_json_path)
+            jp = _resolve_safe_local_path(output_json_path, label="output_json_path", for_write=True)
             jp.parent.mkdir(parents=True, exist_ok=True)
             jp.write_text(json.dumps(bundle, indent=2) + "\n", encoding="utf-8")
             written_files["json"] = str(jp)
         if output_markdown_path:
-            mp = Path(output_markdown_path)
+            mp = _resolve_safe_local_path(output_markdown_path, label="output_markdown_path", for_write=True)
             mp.parent.mkdir(parents=True, exist_ok=True)
             mp.write_text(md_report, encoding="utf-8")
             written_files["markdown"] = str(mp)
@@ -1857,7 +2041,7 @@ async def compare(
 
         if output_html_path:
             # Render combined before/after HTML comparison report
-            hp = Path(output_html_path)
+            hp = _resolve_safe_local_path(output_html_path, label="output_html_path", for_write=True)
             hp.parent.mkdir(parents=True, exist_ok=True)
             hp.write_text(_render_comparison_html(a, b, metrics_diff, transitions, resolved_findings, remediation_verdict), encoding="utf-8")
 
@@ -1962,3 +2146,234 @@ def _render_comparison_html(
     </section>
     """
     return b_html.replace("</header>", "</header>\n" + comp_section, 1)
+
+
+async def _execute_oneshot_backtest(
+    *,
+    tool_name: str,
+    returns_path: str | None = None,
+    returns_csv: str | None = None,
+    returns_rows: list[dict] | None = None,
+    trades_path: str | None = None,
+    trades_csv: str | None = None,
+    trades_rows: list[dict] | None = None,
+    benchmark_path: str | None = None,
+    benchmark_csv: str | None = None,
+    benchmark_rows: list[dict] | None = None,
+    cost_assumptions_path: str | None = None,
+    cost_assumptions: dict | None = None,
+    features_manifest_path: str | None = None,
+    features_manifest: dict | None = None,
+    spread_bps: float | None = None,
+    slippage_bps: float | None = None,
+    adverse_selection_bps: float | None = None,
+    commission_bps: float | None = None,
+    num_trials: int = 1,
+    random_seeds: list[int] | None = None,
+    strategy_name: str = "candidate_strategy",
+) -> dict:
+    inline_cost = dict(cost_assumptions or {})
+    if spread_bps is not None:
+        inline_cost["spread_bps"] = float(spread_bps)
+    if slippage_bps is not None:
+        inline_cost["slippage_bps"] = float(slippage_bps)
+    if adverse_selection_bps is not None:
+        inline_cost["adverse_selection_bps"] = float(adverse_selection_bps)
+    if commission_bps is not None:
+        inline_cost["commission_bps"] = float(commission_bps)
+
+    pf_res = await preflight(
+        returns_path=returns_path,
+        returns_rows=returns_rows,
+        returns_csv=returns_csv,
+        trades_path=trades_path,
+        trades_rows=trades_rows,
+        trades_csv=trades_csv,
+        benchmark_path=benchmark_path,
+        benchmark_rows=benchmark_rows,
+        benchmark_csv=benchmark_csv,
+        cost_assumptions_path=cost_assumptions_path,
+        cost_assumptions=inline_cost if inline_cost else None,
+        features_manifest_path=features_manifest_path,
+        features_manifest=features_manifest,
+        strategy_name=strategy_name,
+    )
+    if pf_res.get("error"):
+        return {**pf_res, "tool": tool_name}
+
+    pf = _PREFLIGHT_STORE.get(pf_res.get("preflight_id", ""))
+    if pf is None or not pf.get("eligible"):
+        val_errs = (pf or pf_res).get("validation_errors", [])
+        return {
+            "tool": tool_name,
+            "preflight_id": (pf or pf_res).get("preflight_id", ""),
+            "strategy_name": strategy_name,
+            "status": "PREFLIGHT_REFUSED",
+            "eligible": False,
+            "validation_errors": val_errs,
+            "credits_charged": 0,
+            "error": "Backtest audit refused: " + ("; ".join(val_errs) if val_errs else "invalid inputs"),
+        }
+
+    seeds = [int(s) for s in (random_seeds if random_seeds else [0, 1, 2, 3, 4])]
+    findings, metrics = _evaluate_findings(pf, seeds, num_trials=max(1, int(num_trials)))
+    created_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    job_hash = _sha256_json({
+        "input_sha256": pf["input_sha256"],
+        "seeds": seeds,
+        "num_trials": max(1, int(num_trials)),
+    })
+    job_id = f"audit_{job_hash[:16]}"
+    reproducibility_bundle = {
+        "job_id": job_id,
+        "preflight_id": pf["preflight_id"],
+        "strategy_name": pf["strategy_name"],
+        "input_sha256": pf["input_sha256"],
+        "artifact_hashes": pf["artifact_hashes"],
+        "cost_assumptions": pf["cost_assumptions"],
+        "mode": "local",
+        "package_version": server_meta.PACKAGE_VERSION,
+        "random_seeds": seeds,
+        "num_trials": max(1, int(num_trials)),
+        "generated_at": created_at,
+    }
+    bundle = {
+        "job_id": job_id,
+        "preflight_id": pf["preflight_id"],
+        "strategy_name": pf["strategy_name"],
+        "status": "completed",
+        "mode": "local",
+        "overall_assessment": metrics["overall_assessment"],
+        "metrics": metrics,
+        "findings": findings,
+        "coverage_matrix": pf["coverage_matrix"],
+        "reproducibility_bundle": reproducibility_bundle,
+        "credits_charged": 0,
+    }
+    _JOB_STORE[job_id] = bundle
+    md_report = _render_markdown_report(bundle)
+
+    return {
+        "tool": tool_name,
+        "job_id": job_id,
+        "preflight_id": pf["preflight_id"],
+        "strategy_name": pf["strategy_name"],
+        "status": "completed",
+        "overall_assessment": metrics["overall_assessment"],
+        "counts_by_category": metrics["counts_by_category"],
+        "metrics": metrics,
+        "findings": findings,
+        "coverage_matrix": pf["coverage_matrix"],
+        "reproducibility_bundle": reproducibility_bundle,
+        "markdown_report": md_report,
+        "credits_charged": 0,
+        "not_investment_advice": True,
+    }
+
+
+async def backtest(
+    returns_path: str | None = None,
+    returns_csv: str | None = None,
+    returns_rows: list[dict] | None = None,
+    trades_path: str | None = None,
+    trades_csv: str | None = None,
+    trades_rows: list[dict] | None = None,
+    benchmark_path: str | None = None,
+    benchmark_csv: str | None = None,
+    benchmark_rows: list[dict] | None = None,
+    cost_assumptions_path: str | None = None,
+    cost_assumptions: dict | None = None,
+    features_manifest_path: str | None = None,
+    features_manifest: dict | None = None,
+    spread_bps: float | None = None,
+    slippage_bps: float | None = None,
+    adverse_selection_bps: float | None = None,
+    commission_bps: float | None = None,
+    num_trials: int = 1,
+    random_seeds: list[int] | None = None,
+    strategy_name: str = "candidate_strategy",
+) -> dict:
+    """One-shot zero-trust backtest forensic audit (stdio: bounded workspace paths or inline CSV/rows)."""
+    redaction.reject_keylike_args({
+        "returns_path": returns_path,
+        "trades_path": trades_path,
+        "benchmark_path": benchmark_path,
+        "cost_assumptions_path": cost_assumptions_path,
+        "features_manifest_path": features_manifest_path,
+        "strategy_name": strategy_name,
+    })
+
+    async def _do():
+        return await _execute_oneshot_backtest(
+            tool_name="audit.backtest",
+            returns_path=returns_path,
+            returns_csv=returns_csv,
+            returns_rows=returns_rows,
+            trades_path=trades_path,
+            trades_csv=trades_csv,
+            trades_rows=trades_rows,
+            benchmark_path=benchmark_path,
+            benchmark_csv=benchmark_csv,
+            benchmark_rows=benchmark_rows,
+            cost_assumptions_path=cost_assumptions_path,
+            cost_assumptions=cost_assumptions,
+            features_manifest_path=features_manifest_path,
+            features_manifest=features_manifest,
+            spread_bps=spread_bps,
+            slippage_bps=slippage_bps,
+            adverse_selection_bps=adverse_selection_bps,
+            commission_bps=commission_bps,
+            num_trials=num_trials,
+            random_seeds=random_seeds,
+            strategy_name=strategy_name,
+        )
+
+    return await _run_audit_tool("audit.backtest", _do)
+
+
+async def backtest_inline(
+    returns_csv: str | None = None,
+    returns_rows: list[dict] | None = None,
+    trades_csv: str | None = None,
+    trades_rows: list[dict] | None = None,
+    benchmark_csv: str | None = None,
+    benchmark_rows: list[dict] | None = None,
+    cost_assumptions: dict | None = None,
+    features_manifest: dict | None = None,
+    spread_bps: float | None = None,
+    slippage_bps: float | None = None,
+    adverse_selection_bps: float | None = None,
+    commission_bps: float | None = None,
+    num_trials: int = 1,
+    random_seeds: list[int] | None = None,
+    strategy_name: str = "candidate_strategy",
+) -> dict:
+    """One-shot zero-trust backtest forensic audit over inline CSV (<=250 KB) or rows with zero filesystem I/O."""
+    redaction.reject_keylike_args({"strategy_name": strategy_name})
+
+    async def _do():
+        return await _execute_oneshot_backtest(
+            tool_name="audit.backtest_inline",
+            returns_path=None,
+            returns_csv=returns_csv,
+            returns_rows=returns_rows,
+            trades_path=None,
+            trades_csv=trades_csv,
+            trades_rows=trades_rows,
+            benchmark_path=None,
+            benchmark_csv=benchmark_csv,
+            benchmark_rows=benchmark_rows,
+            cost_assumptions_path=None,
+            cost_assumptions=cost_assumptions,
+            features_manifest_path=None,
+            features_manifest=features_manifest,
+            spread_bps=spread_bps,
+            slippage_bps=slippage_bps,
+            adverse_selection_bps=adverse_selection_bps,
+            commission_bps=commission_bps,
+            num_trials=num_trials,
+            random_seeds=random_seeds,
+            strategy_name=strategy_name,
+        )
+
+    return await _run_audit_tool("audit.backtest_inline", _do)

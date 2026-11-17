@@ -19,6 +19,8 @@
 const { spawn } = require('node:child_process');
 
 const SERVERS = {
+  core: 'quant-swarm',
+  'quant-swarm': 'quant-swarm',
   data: 'swarm-data-mcp',
   warden: 'swarm-warden-mcp',
   gym: 'swarm-gym-mcp',
@@ -26,16 +28,22 @@ const SERVERS = {
   'swarm-warden-mcp': 'swarm-warden-mcp',
   'swarm-gym-mcp': 'swarm-gym-mcp',
 };
-const REMOTE_PATHS = { data: '/mcp/data', warden: '/mcp/warden', gym: '/mcp/gym' };
+const REMOTE_PATHS = {
+  core: '/mcp',
+  'quant-swarm': '/mcp',
+  data: '/mcp/data',
+  warden: '/mcp/warden',
+  gym: '/mcp/gym',
+};
 const REMOTE_BASE =
-  process.env.SWARM_MCP_REMOTE_URL || 'https://swarm-mcp-503318750546.europe-west1.run.app';
+  process.env.SWARM_MCP_REMOTE_URL || 'https://mcp.1.21initiative.com';
 const USAGE = [
   'usage:',
-  '  quant-swarm-mcp <server>                     start a stdio server via uvx',
-  '  quant-swarm-mcp --remote <data|warden|gym>   connect to the hosted endpoint',
+  '  quant-swarm-mcp [core|warden|data|gym]          start a stdio server via uvx (default: core)',
+  '  quant-swarm-mcp --remote [core|warden|data|gym] connect to the hosted endpoint',
   '',
-  'servers: swarm-data-mcp | swarm-warden-mcp | swarm-gym-mcp (aliases: data | warden | gym)',
-  'token:   set SWARM_MCP_ACCESS_TOKEN (free at https://1.21initiative.com/mcp/)',
+  'servers: quant-swarm (core, 12 tools) | swarm-warden-mcp | swarm-data-mcp | swarm-gym-mcp',
+  'token:   optional locally; set SWARM_MCP_ACCESS_TOKEN for hosted PIT data (https://1.21initiative.com/mcp/)',
 ].join('\n');
 
 function fail(message) {
@@ -66,24 +74,22 @@ function runShell(command, args, onMissing) {
 }
 
 const argv = process.argv.slice(2);
-if (!argv.length || argv[0] === '--help' || argv[0] === '-h') {
+if (argv[0] === '--help' || argv[0] === '-h') {
   process.stdout.write(`${USAGE}\n`);
-  process.exit(argv.length ? 0 : 2);
+  process.exit(0);
 }
-// Only the documented selectors are accepted — no free-form argument
-// pass-through (the servers need none, and forwarding user text into a
-// shell was an injection vector).
-if (argv.length > 2 || (argv[0] === '--remote' && argv.length !== 2)) {
-  fail(`unexpected arguments: ${argv.slice(1).join(' ')}\n\n${USAGE}`);
+const effectiveArgv = argv.length ? argv : ['core'];
+if (effectiveArgv.length > 2 || (effectiveArgv[0] === '--remote' && effectiveArgv.length > 2)) {
+  fail(`unexpected arguments: ${effectiveArgv.slice(1).join(' ')}\n\n${USAGE}`);
 }
 
 const token = process.env.SWARM_MCP_ACCESS_TOKEN || '';
 
-if (argv[0] === '--remote') {
-  const which = argv[1] || '';
+if (effectiveArgv[0] === '--remote') {
+  const which = effectiveArgv[1] || 'core';
   const remotePath = REMOTE_PATHS[which];
   if (!remotePath) {
-    fail(`unknown remote server '${which}' — one of: data, warden, gym\n\n${USAGE}`);
+    fail(`unknown remote server '${which}' — one of: core, warden, data, gym\n\n${USAGE}`);
   }
   const args = ['-y', 'mcp-remote', `${REMOTE_BASE}${remotePath}`];
   if (token) args.push('--header', `Authorization: Bearer ${token}`);
@@ -92,10 +98,10 @@ if (argv[0] === '--remote') {
   return;
 }
 
-const server = SERVERS[argv[0]];
+const server = SERVERS[effectiveArgv[0]];
 if (!server) {
-  fail(`unknown server '${argv[0]}'\n\n${USAGE}`);
+  fail(`unknown server '${effectiveArgv[0]}'\n\n${USAGE}`);
 }
-runNoShell('uvx', ['--from', 'quant-swarm==1.0.0', server],
+runNoShell('uvx', ['--from', 'quant-swarm==1.1.0', server],
   'uv not found — install it from https://docs.astral.sh/uv/ (the servers ship as the ' +
-  'quant-swarm Python package); alternatively use: quant-swarm-mcp --remote data');
+  'quant-swarm Python package); alternatively use: quant-swarm-mcp --remote core');
