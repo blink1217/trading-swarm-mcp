@@ -1,7 +1,7 @@
 {
   "name": "quant-swarm-mcp",
   "mcpName": "io.github.blink1217/quant-swarm",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Node launcher for the quant-swarm MCP servers (swarm-data-mcp, swarm-warden-mcp, swarm-gym-mcp): pre-trade checkers that gate live capital. Shells to uvx for stdio, or npx mcp-remote for the hosted endpoints.",
   "license": "MIT",
   "author": "The 1.21 Initiative",
