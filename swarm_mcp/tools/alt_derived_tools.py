@@ -261,10 +261,14 @@ LATENT_REGIME_STATES = ("calm_trend", "volatile_bull", "choppy_correction", "cri
 
 
 def causal_regime_posteriors(close_series: pd.Series) -> tuple[dict[str, float], float]:
-    """Forward-only 4-state Gaussian regime filter over (return, realized_vol).
+    """Forward-only 4-state tempered Gaussian regime filter over (return, realized_vol).
 
-    Zero Viterbi smoothing lookahead: state probabilities at bar t depend strictly
-    on observations up to t.
+    Strictly causal (`forward_filter_v2`): zero `.bfill()` and zero full-window
+    normalization — expanding median/MAD/mean/std are computed strictly from
+    observations `[first_valid .. t]` inside the forward pass, so appending bars
+    after `t` never changes the posterior at `t`. Likelihood tempering (`T=2.5`)
+    prevents 0.999 saturation on moderate pullbacks, and `crisis_down` is gated
+    against calm-volatility minor dips (`rvol < 16%` and 90d drawdown `> -5%`).
     """
     c = close_series.dropna().to_numpy(dtype=float)
     if len(c) < 25:
@@ -274,54 +278,78 @@ def causal_regime_posteriors(close_series: pd.Series) -> tuple[dict[str, float],
     rets = np.diff(np.log(np.clip(c, 1e-8, None)))
     n = len(rets)
     win = min(20, max(5, n // 3))
-    rvol = pd.Series(rets).rolling(win, min_periods=5).std().bfill().to_numpy(dtype=float) * math.sqrt(252.0)
-    mom20 = pd.Series(rets).rolling(win, min_periods=5).sum().bfill().to_numpy(dtype=float)
-
-    # Standardize trailing features causally using expanding/trailing statistics
-    med_vol = float(np.median(rvol)) or 0.18
-    mad_vol = float(np.median(np.abs(rvol - med_vol))) or 0.05
-    std_mom = float(np.std(mom20)) or 0.05
+    first_valid = 4  # min_periods=5 -> index 4 is the first formed bar (zero bfill lookahead)
+    rvol = pd.Series(rets).rolling(win, min_periods=5).std().to_numpy(dtype=float) * math.sqrt(252.0)
+    mom20 = pd.Series(rets).rolling(win, min_periods=5).sum().to_numpy(dtype=float)
 
     # Canonical state centroids in (normalized_momentum, normalized_volatility) space:
     # 0: calm_trend        (+mom, -vol)
     # 1: volatile_bull     (+mom, +vol)
     # 2: choppy_correction (-mom, ~0 vol)
-    # 3: crisis_down       (--mom, ++vol)
+    # 3: crisis_down       (--mom, ++vol)  [deprecated key in v1.2.x; removed in v1.3.0]
     centroids = np.array([
         [0.8, -0.6],
         [0.6, 0.9],
         [-0.5, 0.1],
-        [-1.3, 1.6],
+        [-1.3, 1.5],
     ], dtype=float)
     scales = np.array([
-        [0.9, 0.8],
+        [1.1, 1.0],
+        [1.3, 1.3],
         [1.1, 1.1],
-        [0.9, 0.9],
-        [1.2, 1.3],
+        [1.4, 1.5],
     ], dtype=float)
+    temperature = 2.6
 
     trans = np.array([
-        [0.88, 0.05, 0.06, 0.01],
-        [0.08, 0.82, 0.07, 0.03],
-        [0.07, 0.06, 0.82, 0.05],
-        [0.02, 0.06, 0.10, 0.82],
+        [0.86, 0.06, 0.07, 0.01],
+        [0.08, 0.80, 0.08, 0.04],
+        [0.08, 0.07, 0.79, 0.06],
+        [0.03, 0.07, 0.12, 0.78],
     ], dtype=float)
 
     prob = np.array([0.35, 0.20, 0.30, 0.15], dtype=float)
-    start_idx = max(0, n - 60)
+    start_idx = max(first_valid, n - 60)
     for t in range(start_idx, n):
-        z_mom = float(np.clip(mom20[t] / std_mom, -4.0, 4.0))
+        if np.isnan(rvol[t]) or np.isnan(mom20[t]):
+            continue
+        hist_vol = rvol[first_valid : t + 1]
+        hist_vol = hist_vol[~np.isnan(hist_vol)]
+        hist_mom = mom20[first_valid : t + 1]
+        hist_mom = hist_mom[~np.isnan(hist_mom)]
+        if len(hist_vol) == 0 or len(hist_mom) == 0:
+            continue
+
+        med_vol = float(np.median(hist_vol)) or 0.18
+        mad_vol = max(float(np.median(np.abs(hist_vol - med_vol))), 0.035)
+        mean_mom = float(np.mean(hist_mom))
+        std_mom = max(float(np.std(hist_mom)), 0.035)
+
+        z_mom = float(np.clip((mom20[t] - mean_mom) / std_mom, -4.0, 4.0))
         z_vol = float(np.clip((rvol[t] - med_vol) / (1.4826 * mad_vol + 1e-6), -3.0, 5.0))
         obs = np.array([z_mom, z_vol], dtype=float)
 
+        c_sub = c[max(0, t + 2 - 90) : t + 2]
+        dd_90 = float(c_sub[-1] / max(float(np.max(c_sub)), 1e-8) - 1.0) if len(c_sub) > 0 else 0.0
+
         prior = trans.T @ prob
         diff = (obs - centroids) / scales
-        log_lik = -0.5 * np.sum(diff * diff, axis=1) - np.sum(np.log(scales), axis=1)
+        log_lik = (-0.5 * np.sum(diff * diff, axis=1) - np.sum(np.log(scales), axis=1)) / temperature
+        if float(rvol[t]) < 0.16 and dd_90 > -0.05:
+            log_lik[3] -= 2.5
         log_lik -= np.max(log_lik)
         lik = np.exp(log_lik)
         post = prior * lik
         total = float(np.sum(post))
         prob = post / total if total > 1e-12 else prior
+
+    # Prevent extreme numerical overconfidence unless trailing annualized vol exceeds 40%
+    last_rvol = float(rvol[-1]) if not np.isnan(rvol[-1]) else 0.18
+    if last_rvol <= 0.40 and float(np.max(prob)) >= 0.94:
+        uniform = np.full(4, 0.25, dtype=float)
+        alpha = (0.92 - 0.25) / max(float(np.max(prob)) - 0.25, 1e-6)
+        prob = uniform + alpha * (prob - uniform)
+        prob = prob / float(np.sum(prob))
 
     post_dict = {LATENT_REGIME_STATES[i]: round(float(prob[i]), 4) for i in range(4)}
     entropy = -sum(p * math.log(max(p, 1e-12)) for p in prob) / math.log(4.0)
