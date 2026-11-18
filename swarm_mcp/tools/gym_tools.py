@@ -83,6 +83,21 @@ def _regime_scores(episodes: list[dict]) -> dict[str, float]:
     return {r: (float(np.mean(v)) if v else 0.0) for r, v in by_regime.items()}
 
 
+def _regime_counts(episodes: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {r: 0 for r in REGIMES}
+    for ep in episodes:
+        r = ep.get("regime", "chop")
+        counts[r] = counts.get(r, 0) + 1
+    return counts
+
+
+def _regime_scores_nullable(episodes: list[dict]) -> dict[str, float | None]:
+    by_regime: dict[str, list[float]] = {r: [] for r in REGIMES}
+    for ep in episodes:
+        by_regime.setdefault(ep.get("regime", "chop"), []).append(ep["weekly_net_bps"])
+    return {r: (float(np.mean(v)) if v else None) for r, v in by_regime.items()}
+
+
 def _wilcoxon_paired(deltas: list[float]) -> float | None:
     if len(deltas) < 5:
         return None
@@ -126,22 +141,47 @@ def paired_stats(champ_run: dict, chal_run: dict) -> dict:
     champ_eps = {e["date"]: e for e in champ_run["episodes"]}
     chal_eps = {e["date"]: e for e in chal_run["episodes"]}
     common = sorted(set(champ_eps) & set(chal_eps))
+    champ_unique = [champ_eps[d] for d in common]
+    chal_unique = [chal_eps[d] for d in common]
+    champ_vals = [champ_eps[d]["weekly_net_bps"] for d in common]
+    chal_vals = [chal_eps[d]["weekly_net_bps"] for d in common]
     deltas = [chal_eps[d]["weekly_net_bps"] - champ_eps[d]["weekly_net_bps"] for d in common]
-    champ_regime = _regime_scores(champ_run["episodes"])
-    chal_regime = _regime_scores(chal_run["episodes"])
-    per_regime_delta = {r: chal_regime.get(r, 0.0) - champ_regime.get(r, 0.0) for r in REGIMES}
+    regime_counts = _regime_counts(champ_unique)
+    populated_regimes = sum(1 for c in regime_counts.values() if c > 0)
+    champ_regime = _regime_scores_nullable(champ_unique)
+    chal_regime = _regime_scores_nullable(chal_unique)
+    per_regime_delta: dict[str, float | None] = {
+        r: (
+            chal_regime[r] - champ_regime[r]
+            if regime_counts.get(r, 0) > 0 and chal_regime[r] is not None and champ_regime[r] is not None
+            else None
+        )
+        for r in REGIMES
+    }
+    populated_deltas = [v for v in per_regime_delta.values() if v is not None]
+    active_episodes = sum(
+        1
+        for d in common
+        if int(chal_eps[d].get("n_positions", 0) or 0) > 0 or bool(chal_eps[d].get("positions"))
+    )
     ci_lo, ci_hi = _bootstrap_ci(deltas)
     return {
         "n_paired_episodes": len(common),
+        "seed_draws_per_genome": len(champ_run["episodes"]),
         "deltas": deltas,
         "mean_delta_bps": float(np.mean(deltas)) if deltas else 0.0,
+        "mean_champion_bps": float(np.mean(champ_vals)) if champ_vals else 0.0,
+        "mean_challenger_bps": float(np.mean(chal_vals)) if chal_vals else 0.0,
+        "challenger_active_episodes": active_episodes,
         "paired_p_value": _wilcoxon_paired(deltas),
         "delta_ci_95": [ci_lo, ci_hi],
+        "per_regime_episode_counts": regime_counts,
+        "populated_regimes": populated_regimes,
         "per_regime_champion": champ_regime,
         "per_regime_challenger": chal_regime,
         "per_regime_delta_bps": per_regime_delta,
-        # maximin: the challenger's margin in its WORST regime relative to the champion
-        "worst_regime_margin_bps": float(min(per_regime_delta.values())) if per_regime_delta else 0.0,
+        # maximin: the challenger's margin in its WORST populated regime relative to the champion
+        "worst_regime_margin_bps": float(min(populated_deltas)) if populated_deltas else None,
     }
 
 
@@ -315,6 +355,9 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
         underpowered_label = (f"UNDERPOWERED — n={n_common} < MIN_EPISODES={MIN_EPISODES}; "
                               f"needs >= {seeds_needed} seeds x {per_regime}/regime on identical paths")
 
+        champ_pop = [v for v in champ_regime.values() if v is not None]
+        chal_pop = [v for v in chal_regime.values() if v is not None]
+
         return {
             "tool": "gym.paired_preview",
             "verdict": "UNDERPOWERED_PREVIEW — promotion is NEVER issued locally",
@@ -326,11 +369,16 @@ async def paired_preview(champion_genome: dict, challenger_genome: dict,
             "per_regime": per_regime,
             "statistics": {
                 "mean_delta_bps": {"value": stats["mean_delta_bps"], "power": underpowered_label},
+                "mean_champion_bps": {"value": stats["mean_champion_bps"], "power": underpowered_label},
+                "mean_challenger_bps": {"value": stats["mean_challenger_bps"], "power": underpowered_label},
+                "challenger_active_episodes": stats["challenger_active_episodes"],
                 "paired_p_value": {"value": stats["paired_p_value"], "power": underpowered_label},
                 "delta_ci_95": {"value": stats["delta_ci_95"], "power": underpowered_label},
-                "worst_regime_champion": {"value": min(champ_regime.values()), "power": underpowered_label},
-                "worst_regime_challenger": {"value": min(chal_regime.values()), "power": underpowered_label},
+                "worst_regime_champion": {"value": min(champ_pop) if champ_pop else None, "power": underpowered_label},
+                "worst_regime_challenger": {"value": min(chal_pop) if chal_pop else None, "power": underpowered_label},
                 "worst_regime_margin_bps": {"value": stats["worst_regime_margin_bps"], "power": underpowered_label},
+                "per_regime_episode_counts": stats["per_regime_episode_counts"],
+                "populated_regimes": stats["populated_regimes"],
                 "per_regime_champion": champ_regime,
                 "per_regime_challenger": chal_regime,
             },

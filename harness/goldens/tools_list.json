@@ -3664,46 +3664,203 @@
     "outputSchema": {
      "properties": {
       "access": {
-       "title": "Access",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Access"
       },
       "anonymised": {
        "title": "Anonymised",
        "type": "string"
       },
+      "baselines": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Baselines",
+       "type": "array"
+      },
+      "benchmark_status": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Benchmark Status"
+      },
       "challenger_wins": {
-       "title": "Challenger Wins",
-       "type": "integer"
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Challenger Wins"
+      },
+      "challengers": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Challengers",
+       "type": "array"
       },
       "champion_rating": {
-       "title": "Champion Rating",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Champion Rating"
+      },
+      "champion_rating_status": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Champion Rating Status"
       },
       "contributed_runs": {
-       "title": "Contributed Runs",
-       "type": "integer"
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Contributed Runs"
+      },
+      "cost_model": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cost Model"
       },
       "error": {
-       "title": "Error",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Error"
+      },
+      "evaluated_schema_version": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Evaluated Schema Version"
       },
       "geometry": {
-       "additionalProperties": true,
-       "title": "Geometry",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Geometry"
       },
       "how": {
-       "title": "How",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "How"
+      },
+      "last_run_age_days": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Last Run Age Days"
       },
       "pricing": {
-       "additionalProperties": true,
-       "title": "Pricing",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Pricing"
       },
       "request_access_at": {
-       "title": "Request Access At",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Request Access At"
+      },
+      "season_id": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Season Id"
+      },
+      "season_panel": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Season Panel"
       },
       "tool": {
        "title": "Tool",
@@ -3718,8 +3875,15 @@
        "type": "array"
       },
       "total_runs": {
-       "title": "Total Runs",
-       "type": "integer"
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Total Runs"
       },
       "updated_at": {
        "anyOf": [
@@ -3796,24 +3960,59 @@
     "outputSchema": {
      "properties": {
       "access": {
-       "title": "Access",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Access"
       },
       "analysis_contract": {
-       "title": "Analysis Contract",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Analysis Contract"
       },
       "contribute": {
-       "title": "Contribute",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Contribute"
       },
       "contribution": {
-       "title": "Contribution",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Contribution"
       },
       "credits_charged": {
-       "title": "Credits Charged",
-       "type": "integer"
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Credits Charged"
       },
       "disclosure_errors": {
        "items": {
@@ -3823,12 +4022,26 @@
        "type": "array"
       },
       "disclosure_status": {
-       "title": "Disclosure Status",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Disclosure Status"
       },
       "error": {
-       "title": "Error",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Error"
       },
       "errors": {
        "items": {
@@ -3838,46 +4051,116 @@
        "type": "array"
       },
       "genome_hash": {
-       "title": "Genome Hash",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Genome Hash"
       },
       "geometry": {
-       "additionalProperties": true,
-       "title": "Geometry",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Geometry"
       },
       "how": {
-       "title": "How",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "How"
       },
       "job_id": {
-       "title": "Job Id",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job Id"
       },
       "next": {
-       "title": "Next",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Next"
       },
       "note": {
-       "title": "Note",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Note"
       },
       "quota": {
-       "additionalProperties": true,
-       "title": "Quota",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Quota"
       },
       "request_access_at": {
-       "title": "Request Access At",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Request Access At"
       },
       "retention": {
-       "title": "Retention",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Retention"
       },
       "status": {
-       "title": "Status",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
       },
       "strategy_code_errors": {
        "items": {
@@ -3887,28 +4170,63 @@
        "type": "array"
       },
       "strategy_code_sent": {
-       "title": "Strategy Code Sent",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Strategy Code Sent"
       },
       "tool": {
        "title": "Tool",
        "type": "string"
       },
       "valid_disclosure": {
-       "title": "Valid Disclosure",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Valid Disclosure"
       },
       "valid_genome": {
-       "title": "Valid Genome",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Valid Genome"
       },
       "valid_strategy_code": {
-       "title": "Valid Strategy Code",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Valid Strategy Code"
       },
       "what_was_sent": {
-       "title": "What Was Sent",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "What Was Sent"
       }
      },
      "title": "TournamentSubmitOut",
@@ -3940,53 +4258,203 @@
     "outputSchema": {
      "properties": {
       "access": {
-       "title": "Access",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Access"
+      },
+      "benchmark_status": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Benchmark Status"
       },
       "contribute": {
-       "title": "Contribute",
-       "type": "boolean"
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Contribute"
+      },
+      "contribution": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Contribution"
+      },
+      "created_at": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Created At"
       },
       "credits_charged": {
-       "title": "Credits Charged",
-       "type": "integer"
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Credits Charged"
+      },
+      "disclosure_status": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Disclosure Status"
       },
       "error": {
-       "title": "Error",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Error"
       },
       "genome_hash": {
-       "title": "Genome Hash",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Genome Hash"
       },
       "how": {
-       "title": "How",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "How"
       },
       "job_id": {
-       "title": "Job Id",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job Id"
       },
       "next": {
-       "title": "Next",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Next"
+      },
+      "outcome_detail": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Outcome Detail"
       },
       "rating": {
-       "title": "Rating",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Rating"
       },
       "request_access_at": {
-       "title": "Request Access At",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Request Access At"
       },
       "result": {
-       "additionalProperties": true,
-       "title": "Result",
-       "type": "object"
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Result"
+      },
+      "scored_at": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Scored At"
       },
       "status": {
-       "title": "Status",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
       },
       "tool": {
        "title": "Tool",
@@ -3995,6 +4463,18 @@
       "verdict_semantics": {
        "title": "Verdict Semantics",
        "type": "string"
+      },
+      "verification_badge": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Verification Badge"
       }
      },
      "title": "TournamentVerdictOut",

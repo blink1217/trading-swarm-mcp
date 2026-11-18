@@ -132,5 +132,18 @@ def test_paired_stats_reports_worst_regime_margin():
     assert s["deltas"] == [2.0, -1.0]
     assert s["per_regime_delta_bps"]["chop"] == 2.0
     assert s["per_regime_delta_bps"]["melt_up"] == -1.0
+    assert s["per_regime_delta_bps"]["gap_heavy"] is None
+    assert s["per_regime_episode_counts"]["chop"] == 1
+    assert s["per_regime_episode_counts"]["gap_heavy"] == 0
+    assert s["populated_regimes"] == 2
     assert s["worst_regime_margin_bps"] == -1.0
     assert s["paired_p_value"] is None, "fewer than 5 deltas: no p-value, never a fake one"
+
+    # When all populated regimes have positive delta (> 0) and gap_heavy has 0 episodes,
+    # worst_regime_margin_bps must NOT be clamped to 0.0 by the empty regime.
+    chal_pos = {"episodes": [{"date": "2026-01-02", "regime": "chop", "weekly_net_bps": 3.0, "n_positions": 1},
+                             {"date": "2026-01-09", "regime": "melt_up", "weekly_net_bps": 9.0, "n_positions": 2}]}
+    s_pos = paired_stats(champ, chal_pos)
+    assert s_pos["per_regime_delta_bps"]["gap_heavy"] is None
+    assert s_pos["worst_regime_margin_bps"] == 2.0
+    assert s_pos["challenger_active_episodes"] == 2

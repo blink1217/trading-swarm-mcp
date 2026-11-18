@@ -206,8 +206,16 @@ def test_internal_route_disabled_without_key(monkeypatch):
 # --- runner ---------------------------------------------------------------------
 
 def test_classify_is_statistics_not_promotion():
-    beats = {"n_paired_episodes": 100, "paired_p_value": 0.01, "mean_delta_bps": 3.0,
-             "worst_regime_margin_bps": 0.5}
+    beats = {
+        "n_paired_episodes": 62,
+        "paired_p_value": 0.01,
+        "mean_delta_bps": 3.0,
+        "mean_champion_bps": 2.0,
+        "mean_challenger_bps": 5.0,
+        "challenger_active_episodes": 25,
+        "populated_regimes": 4,
+        "worst_regime_margin_bps": 0.5,
+    }
     assert tournament_runner.classify(beats, 0, 0) == tournament_runner.OUTCOME_BEATS
     assert tournament_runner.classify(beats, 1, 0) == tournament_runner.OUTCOME_LOSES, "any violation loses"
     assert tournament_runner.classify(beats, 0, 1) == tournament_runner.OUTCOME_LOSES
@@ -215,6 +223,18 @@ def test_classify_is_statistics_not_promotion():
     assert tournament_runner.classify({**beats, "n_paired_episodes": 19}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
     assert tournament_runner.classify({**beats, "paired_p_value": 0.2}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
     assert tournament_runner.classify({**beats, "mean_delta_bps": -3.0}, 0, 0) == tournament_runner.OUTCOME_LOSES
+    # Anti-triviality & populated-regime guards:
+    assert tournament_runner.classify({**beats, "populated_regimes": 2}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
+    assert tournament_runner.classify({**beats, "mean_challenger_bps": 0.0}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
+    assert tournament_runner.classify({**beats, "mean_challenger_bps": -1.5}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
+    assert tournament_runner.classify({**beats, "challenger_active_episodes": 9}, 0, 0) == tournament_runner.OUTCOME_INCONCLUSIVE
+    # Negative-expectancy champion explicitly surfaced in outcome_detail:
+    neg_champ = tournament_runner.classify_detailed(
+        {**beats, "mean_champion_bps": -7.2, "mean_challenger_bps": -2.0}, 0, 0
+    )
+    assert neg_champ["outcome"] == tournament_runner.OUTCOME_INCONCLUSIVE
+    assert neg_champ["benchmark_status"] == "champion_negative_expectancy"
+    assert "champion negative-expectancy" in neg_champ["outcome_detail"]
 
 
 def test_paired_outcome_runs_full_geometry_on_identical_paths():
@@ -273,7 +293,7 @@ def test_champion_loads_from_registry_path(monkeypatch):
     path = os.path.join(here, "swarm_mcp", "data", "champion_genome.json")
     monkeypatch.setenv("SWARM_MCP_CHAMPION_GENOME", path)
     champ = tournament_runner.load_champion()
-    assert champ["schema_version"] == 2 and "_note" not in champ
+    assert champ["schema_version"] == 4 and "_note" not in champ
     meta = tournament_runner.load_champion.last_loaded
     assert meta["champion_source"] == f"file:{path}"
 
@@ -388,6 +408,69 @@ def test_gym_server_registers_tournament_tools():
 
     names = {t.name for t in run_async(gym_server.mcp.list_tools())}
     assert {"tournament.submit", "tournament.verdict", "tournament.leaderboard"} <= names
+
+
+def test_mcp_verdict_and_leaderboard_structured_output_all_states(monkeypatch):
+    """Regression for 18 Nov live bug: MCP structured_output TypeAdapter must validate
+    tournament.verdict across queued, scored provisional (rating=None), scored rated,
+    and failed states, plus tournament.leaderboard with null champion_rating."""
+    from swarm_mcp.servers import gym_server
+
+    monkeypatch.setenv("SWARM_MCP_ACCESS_TOKEN", "121_" + "a" * 48)
+    job_id = "st_" + "f" * 24
+
+    states = [
+        # 1. queued (rating=None, result=None, error=None)
+        {"ok": True, "job_id": job_id, "status": "queued", "genome_hash": "ec7fcb8bfb7f",
+         "contribute": True, "contribution": "strategy", "disclosure_status": "accepted_for_review",
+         "credits_charged": 100, "created_at": "2026-11-18T18:29:00Z", "scored_at": None,
+         "rating": None, "result": None, "error": None},
+        # 2. scored provisional (rating=None, error=None)
+        {"ok": True, "job_id": job_id, "status": "scored", "genome_hash": "ec7fcb8bfb7f",
+         "contribute": True, "contribution": "strategy", "disclosure_status": "accepted_for_review",
+         "credits_charged": 100, "created_at": "2026-11-18T18:29:00Z", "scored_at": "2026-11-18T18:29:44Z",
+         "rating": None,
+         "result": {"outcome": "INCONCLUSIVE", "outcome_detail": "INCONCLUSIVE — champion negative-expectancy",
+                    "benchmark_status": "champion_negative_expectancy", "mean_delta_bps": 13.47},
+         "error": None},
+        # 3. scored rated (rating=1512.4, error=None)
+        {"ok": True, "job_id": job_id, "status": "scored", "genome_hash": "ec7fcb8bfb7f",
+         "contribute": False, "credits_charged": 200, "rating": 1512.4,
+         "result": {"outcome": "CHALLENGER_BEATS_CHAMPION", "outcome_detail": "CHALLENGER_BEATS_CHAMPION",
+                    "benchmark_status": "ok", "mean_delta_bps": 18.2},
+         "error": None},
+        # 4. failed (rating=None, result=None, error='runner_timeout')
+        {"ok": True, "job_id": job_id, "status": "failed", "genome_hash": "93617a8d3387",
+         "contribute": True, "credits_charged": 100, "rating": None, "result": None,
+         "error": "runner_timeout"},
+    ]
+    for state_body in states:
+        monkeypatch.setattr("httpx.AsyncClient", _FakeAsync(200, state_body))
+        res = run_async(gym_server.mcp.call_tool("tournament.verdict", {"job_id": job_id}))
+        # mcp.call_tool raises UnexpectedToolError if TypeAdapter validation fails
+        assert res is not None
+
+    monkeypatch.setattr("httpx.AsyncClient", _FakeAsync(200, {
+        "ok": True, "season_id": "2026-s2-house-v4",
+        "season_panel": {"start_session": "2024-02-02", "end_session": "2026-11-18", "symbols": 13},
+        "champion_rating": None, "champion_rating_status": "seed_unrated",
+        "benchmark_status": "champion_negative_expectancy",
+        "total_runs": 9, "contributed_runs": 2, "challenger_wins": 0,
+        "cost_model": "house_v4", "evaluated_schema_version": 4,
+        "top": [], "challengers": [], "baselines": [],
+    }))
+    lb_res = run_async(gym_server.mcp.call_tool("tournament.leaderboard", {}))
+    assert lb_res is not None
+
+
+def test_slice_panel_window_pins_sessions():
+    panel = gym_tools._panel_from_bars(synthetic_bars(SYMS, days=120, seed=7))
+    dates = sorted(panel["ts"].unique())
+    lo = str(dates[10].date())
+    hi = str(dates[-10].date())
+    sliced = tournament_runner.slice_panel_window(panel, {"start_session": lo, "end_session": hi})
+    assert str(sliced["ts"].min().date()) == lo
+    assert str(sliced["ts"].max().date()) == hi
 
 
 def _disclosure() -> dict:

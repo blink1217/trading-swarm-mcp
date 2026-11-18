@@ -804,6 +804,12 @@ def build_app(*, require_approval_secret: bool | None = None) -> BearerAuthMiddl
                 await _start_children()
                 await send({"type": "lifespan.startup.complete"})
             elif msg.get("type") == "lifespan.shutdown":
+                if background:
+                    done, pending = await asyncio.wait(list(background), timeout=8.0)
+                    for t in pending:
+                        t.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
                 await _stop_children()
                 await send({"type": "lifespan.shutdown.complete"})
                 break

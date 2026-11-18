@@ -3,9 +3,10 @@
 Flow: site charges credits and POSTs the job to ``/internal/tournament/run``
 (shared secret). This module replays the challenger AND the swarm's current
 champion over the identical episode-seed matrix on the hosted bars_1day panel
-(full geometry: 5 regimes x 4 per regime x 5 seeds = 100 paired episodes, above
-MIN_EPISODES=20), computes the paired statistics, classifies the OUTCOME, and
-calls the site back on ``/api/mcp/tournament/complete``.
+(200 simulated genome-episodes = 100 seed draws per genome across 5 regimes x
+4 per regime x 5 seeds, deduplicating to ~62 unique historical Friday paths
+above MIN_EPISODES=20), computes the paired statistics, classifies the OUTCOME,
+and calls the site back on ``/api/mcp/tournament/complete``.
 
 What this deliberately is NOT: the promotion gate. Deflated-Sharpe margins,
 the PBO cap and the monotonic trials ledger live in the swarm's private
@@ -31,11 +32,14 @@ Configuration (hosted service env):
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import functools
 import json
 import logging
 import os
 
 import httpx
+import pandas as pd
 
 from swarm_mcp import vendor_path  # noqa: F401
 
@@ -65,6 +69,11 @@ CALLBACK_TIMEOUT_S = 30.0
 OUTCOME_BEATS = "CHALLENGER_BEATS_CHAMPION"
 OUTCOME_LOSES = "CHALLENGER_LOSES"
 OUTCOME_INCONCLUSIVE = "INCONCLUSIVE"
+
+MIN_POPULATED_REGIMES = 3
+MIN_ACTIVE_EPISODES = 10
+
+_SCORER_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tournament-scorer")
 
 
 def internal_key() -> str:
@@ -104,26 +113,111 @@ def universe() -> list[str]:
     return list(DEFAULT_UNIVERSE)
 
 
-def classify(stats: dict, violations: int, lookahead: int) -> str:
-    """Paired outcome classification — statistics only, never a promotion.
+def classify_detailed(stats: dict, violations: int, lookahead: int) -> dict:
+    """Paired outcome classification + explicit benchmark & participation guards.
 
-    BEATS:   n >= MIN_EPISODES, Wilcoxon p <= PAIRED_P_VALUE_MAX, positive mean
-             delta, non-negative worst-regime margin, zero hard-constraint and
-             lookahead violations.
+    BEATS:   n >= MIN_EPISODES, populated_regimes >= MIN_POPULATED_REGIMES (3),
+             mean_challenger_bps > 0, challenger_active_episodes >= MIN_ACTIVE_EPISODES (10),
+             Wilcoxon p <= PAIRED_P_VALUE_MAX, positive mean delta, non-negative
+             worst populated regime margin, zero hard-constraint and lookahead violations.
     LOSES:   any violation, or a significant negative delta.
-    else:    INCONCLUSIVE (underpowered or not significant).
+    else:    INCONCLUSIVE (underpowered, not significant, or blocked by anti-triviality guard).
     """
+    mean_champ = stats.get("mean_champion_bps")
+    mean_chal = stats.get("mean_challenger_bps")
+    active_eps = stats.get("challenger_active_episodes")
+    pop_regimes = int(stats.get("populated_regimes", 5))
+    champ_neg = mean_champ is not None and float(mean_champ) < 0.0
+    benchmark_status = "champion_negative_expectancy" if champ_neg else "ok"
+    neg_suffix = (
+        f" — champion negative-expectancy (champion mean {float(mean_champ):.2f} bps/wk)"
+        if champ_neg
+        else ""
+    )
+
     if violations > 0 or lookahead > 0:
-        return OUTCOME_LOSES
+        return {
+            "outcome": OUTCOME_LOSES,
+            "outcome_detail": f"{OUTCOME_LOSES} (constraint/lookahead violation){neg_suffix}",
+            "benchmark_status": benchmark_status,
+        }
     n = stats["n_paired_episodes"]
     p = stats["paired_p_value"]
     if n < MIN_EPISODES or p is None:
-        return OUTCOME_INCONCLUSIVE
-    if p <= PAIRED_P_VALUE_MAX and stats["mean_delta_bps"] > 0 and stats["worst_regime_margin_bps"] >= 0:
-        return OUTCOME_BEATS
+        return {
+            "outcome": OUTCOME_INCONCLUSIVE,
+            "outcome_detail": f"{OUTCOME_INCONCLUSIVE} (underpowered n={n}){neg_suffix}",
+            "benchmark_status": benchmark_status,
+        }
+    worst_margin = stats.get("worst_regime_margin_bps")
     if p <= PAIRED_P_VALUE_MAX and stats["mean_delta_bps"] < 0:
-        return OUTCOME_LOSES
-    return OUTCOME_INCONCLUSIVE
+        return {
+            "outcome": OUTCOME_LOSES,
+            "outcome_detail": f"{OUTCOME_LOSES} (significant negative delta){neg_suffix}",
+            "benchmark_status": benchmark_status,
+        }
+    if (
+        p <= PAIRED_P_VALUE_MAX
+        and stats["mean_delta_bps"] > 0
+        and worst_margin is not None
+        and worst_margin >= 0
+    ):
+        if pop_regimes < MIN_POPULATED_REGIMES:
+            return {
+                "outcome": OUTCOME_INCONCLUSIVE,
+                "outcome_detail": (
+                    f"{OUTCOME_INCONCLUSIVE} (populated_regimes={pop_regimes} < {MIN_POPULATED_REGIMES})"
+                    f"{neg_suffix}"
+                ),
+                "benchmark_status": benchmark_status,
+            }
+        if mean_chal is not None and float(mean_chal) <= 0.0:
+            return {
+                "outcome": OUTCOME_INCONCLUSIVE,
+                "outcome_detail": (
+                    f"{OUTCOME_INCONCLUSIVE} (challenger mean {float(mean_chal):.2f} bps/wk <= 0; "
+                    f"trading less than a losing champion cannot win){neg_suffix}"
+                ),
+                "benchmark_status": benchmark_status,
+            }
+        if active_eps is not None and int(active_eps) < MIN_ACTIVE_EPISODES:
+            return {
+                "outcome": OUTCOME_INCONCLUSIVE,
+                "outcome_detail": (
+                    f"{OUTCOME_INCONCLUSIVE} (challenger_active_episodes={int(active_eps)} < "
+                    f"{MIN_ACTIVE_EPISODES} minimum active weeks){neg_suffix}"
+                ),
+                "benchmark_status": benchmark_status,
+            }
+        return {
+            "outcome": OUTCOME_BEATS,
+            "outcome_detail": f"{OUTCOME_BEATS}{neg_suffix}",
+            "benchmark_status": benchmark_status,
+        }
+    return {
+        "outcome": OUTCOME_INCONCLUSIVE,
+        "outcome_detail": f"{OUTCOME_INCONCLUSIVE}{neg_suffix}",
+        "benchmark_status": benchmark_status,
+    }
+
+
+def classify(stats: dict, violations: int, lookahead: int) -> str:
+    """Paired outcome classification — statistics only, never a promotion."""
+    return classify_detailed(stats, violations, lookahead)["outcome"]
+
+
+def slice_panel_window(panel: pd.DataFrame, panel_window: dict | None) -> pd.DataFrame:
+    """Pin the evaluation panel to an explicit season [start_session, end_session] window."""
+    if not isinstance(panel_window, dict):
+        return panel
+    out = panel
+    start_s = panel_window.get("start_session")
+    end_s = panel_window.get("end_session")
+    if start_s:
+        out = out[out["ts"] >= pd.Timestamp(str(start_s))]
+    if end_s:
+        out = out[out["ts"] <= pd.Timestamp(str(end_s))]
+    return out.reset_index(drop=True)
 
 
 async def _load_panel():
@@ -170,13 +264,22 @@ def paired_outcome(panel, champion: dict, challenger: dict, seeds: list[int], pe
     violations = hard_constraint_violations(chal_run["weekly_net_bps"], per_ep)
     lookahead = len(chal_run["lookahead_violations"])
     depth = gym_tools._depth_meta(panel)
+    verdict_info = classify_detailed(stats, len(violations), lookahead)
     return {
-        "outcome": classify(stats, len(violations), lookahead),
+        "outcome": verdict_info["outcome"],
+        "outcome_detail": verdict_info["outcome_detail"],
+        "benchmark_status": verdict_info["benchmark_status"],
         "n_paired_episodes": stats["n_paired_episodes"],
+        "seed_draws_per_genome": stats["seed_draws_per_genome"],
         "mean_delta_bps": stats["mean_delta_bps"],
+        "mean_champion_bps": stats["mean_champion_bps"],
+        "mean_challenger_bps": stats["mean_challenger_bps"],
+        "challenger_active_episodes": stats["challenger_active_episodes"],
         "paired_p_value": stats["paired_p_value"],
         "delta_ci_95": stats["delta_ci_95"],
         "worst_regime_margin_bps": stats["worst_regime_margin_bps"],
+        "populated_regimes": stats["populated_regimes"],
+        "per_regime_episode_counts": stats["per_regime_episode_counts"],
         "per_regime_delta_bps": stats["per_regime_delta_bps"],
         "per_regime_champion_bps": stats["per_regime_champion"],
         "per_regime_challenger_bps": stats["per_regime_challenger"],
@@ -199,12 +302,15 @@ def paired_outcome(panel, champion: dict, challenger: dict, seeds: list[int], pe
     }
 
 
-async def _callback(job_id: str, *, result: dict | None = None, error: str | None = None) -> None:
+async def _callback(job_id: str, *, result: dict | None = None, error: str | None = None,
+                    requeue: bool = False) -> None:
     payload: dict = {"job_id": job_id}
     if result is not None:
         payload["result"] = result
     if error is not None:
         payload["error"] = error
+    if requeue:
+        payload["requeue"] = True
     # The site's complete handler is idempotent for terminal job states, so a
     # retried callback can never double-refund or double-promote.
     last_status = None
@@ -253,10 +359,22 @@ async def run_job(job: dict) -> None:
             except gym_v4.NoScoredChangeError as e:
                 await _callback(job_id, error=str(e))
                 return
-        panel = await _load_panel()
+        panel = slice_panel_window(await _load_panel(), job.get("panel_window"))
+        if panel.empty:
+            raise RuntimeError("hosted panel empty after applying season panel_window")
+        loop = asyncio.get_running_loop()
+        bound_outcome = functools.partial(
+            paired_outcome,
+            panel,
+            champ_genome,
+            challenger,
+            seeds,
+            per_regime,
+            champion_eval=champ_norm,
+            challenger_eval=normalized,
+        )
         try:
-            result = paired_outcome(panel, champ_genome, challenger, seeds, per_regime,
-                                    champion_eval=champ_norm, challenger_eval=normalized)
+            result = await loop.run_in_executor(_SCORER_POOL, bound_outcome)
         except TierScoringRefusal as e:
             # Tier-B/C mutations cannot be scored on the tier-A panel: refuse
             # (credits are refunded by the site), never neutral-fill.
@@ -270,6 +388,13 @@ async def run_job(job: dict) -> None:
         log.info("tournament job %s scored: outcome=%s n=%s", job_id, result.get("outcome"),
                  result.get("n_paired_episodes"))
         await _callback(job_id, result=result)
+    except asyncio.CancelledError:
+        log.warning("tournament job %s interrupted by runner shutdown; requesting requeue", job_id)
+        try:
+            await asyncio.shield(_callback(job_id, error="runner_draining", requeue=True))
+        except Exception:  # noqa: BLE001
+            log.exception("tournament job %s: requeue callback failed", job_id)
+        raise
     except Exception as e:  # noqa: BLE001 — must always report back so credits refund
         log.exception("tournament job %s failed", job_id)
         try:
