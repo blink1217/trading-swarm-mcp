@@ -164,7 +164,7 @@ jobs:
             --remove-env-vars="SWARM_MCP_BYOK,ALPACA_FEED" \
             --update-env-vars="^;^SWARM_MCP_TRANSPORT=http;SWARM_MCP_REMOTE_URL=https://mcp.1.21initiative.com;SWARM_MCP_ALLOWED_HOSTS=mcp.1.21initiative.com,1.21initiative.com,localhost,swarm-mcp-503318750546.europe-west1.run.app,swarm-mcp-mqep5fwqtq-ew.a.run.app" \
             --min-instances=0 \
-            --cpu-throttling \
+            --no-cpu-throttling \
             --timeout=60s \
             --port=8080 \
             --quiet
