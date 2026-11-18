@@ -18,7 +18,9 @@ from swarm_mcp import vendor_path  # noqa: F401
 
 from genome_schema import genome_hash  # vendored guardrails
 
-SUPPORTED_SCHEMA_VERSIONS = (2, 3)
+SUPPORTED_SCHEMA_VERSIONS = (2, 3, 4)
+EVALUATED_SCHEMA_VERSION = 4
+HOUSE_COST_MODEL = "house_v4"
 
 
 def normalize(genome: dict) -> dict:

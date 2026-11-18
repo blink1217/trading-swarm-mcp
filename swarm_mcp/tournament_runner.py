@@ -42,10 +42,11 @@ from swarm_mcp import vendor_path  # noqa: F401
 from gates import MIN_EPISODES, PAIRED_P_VALUE_MAX  # vendored guardrails
 from genome_schema import genome_hash, validate_genome  # vendored guardrails
 from gym.regime import episode_pool, episode_seed_matrix, label_all_regimes  # vendored alpha
-from gym.simulator import TierScoringRefusal, evaluate_genome  # vendored alpha
+from gym.simulator import TierScoringRefusal  # vendored alpha
 from objective import hard_constraint_violations  # vendored guardrails
 
-from swarm_mcp import champion, genome_compat, plans, relay, request_context, server_meta
+from swarm_mcp import champion, genome_compat, gym_v4, plans, relay, request_context, server_meta
+from swarm_mcp.gym_v4 import evaluate_genome_v4 as evaluate_genome
 from swarm_mcp.cache import bars as cache_bars
 from swarm_mcp.cache.db import get_db
 from swarm_mcp.tools import gym_tools
@@ -246,6 +247,12 @@ async def run_job(job: dict) -> None:
         champ_norm, champ_errors = genome_compat.normalize_for_validation(champ_genome)
         if champ_errors or validate_genome(champ_norm):
             raise RuntimeError("champion genome invalid")
+        if not job.get("house_seed"):
+            try:
+                gym_v4.assert_has_scored_change(normalized, champ_norm)
+            except gym_v4.NoScoredChangeError as e:
+                await _callback(job_id, error=str(e))
+                return
         panel = await _load_panel()
         try:
             result = paired_outcome(panel, champ_genome, challenger, seeds, per_regime,
@@ -258,8 +265,8 @@ async def run_job(job: dict) -> None:
         loaded = load_champion.last_loaded or {}
         result["champion_id"] = loaded.get("genome_id")
         result["champion_source"] = loaded.get("champion_source")
-        result["cost_model"] = "house_v3"
-        result["evaluated_schema_version"] = 3
+        result["cost_model"] = gym_v4.HOUSE_COST_MODEL
+        result["evaluated_schema_version"] = gym_v4.EVALUATED_SCHEMA_VERSION
         log.info("tournament job %s scored: outcome=%s n=%s", job_id, result.get("outcome"),
                  result.get("n_paired_episodes"))
         await _callback(job_id, result=result)

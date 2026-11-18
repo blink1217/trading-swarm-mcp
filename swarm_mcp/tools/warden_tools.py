@@ -194,9 +194,9 @@ async def validate_genome_tool(genome: dict) -> dict:
             "errors": errors,
             "genome_hash": gh,
             "schema_version": genome.get("schema_version"),
-            "evaluated_schema_version": genome_compat.normalize(genome).get("schema_version")
+            "evaluated_schema_version": genome_compat.EVALUATED_SCHEMA_VERSION
             if errors == [] else None,
-            "schema_version_current": CURRENT_SCHEMA_VERSION,
+            "schema_version_current": genome_compat.EVALUATED_SCHEMA_VERSION,
             "note": ("genome_hash is the canonical SHA-256 identity used as challenger_id in the hosted "
                      "tournament and in audit requests — reproducible across key order"),
         }

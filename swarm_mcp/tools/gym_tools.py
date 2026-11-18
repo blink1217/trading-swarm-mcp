@@ -15,13 +15,14 @@ from swarm_mcp import vendor_path  # noqa: F401
 from gates import MAX_PBO, MIN_DSR_MARGIN, MIN_EPISODES, REGIMES  # vendored
 from genome_schema import genome_hash, validate_genome  # vendored
 
-from swarm_mcp import genome_compat
+from swarm_mcp import genome_compat, gym_v4
 from gym.regime import (  # vendored alpha
     episode_pool,
     episode_seed_matrix,
     label_all_regimes,
 )
-from gym.simulator import TierScoringRefusal, evaluate_genome  # vendored alpha
+from gym.simulator import TierScoringRefusal  # vendored alpha
+from swarm_mcp.gym_v4 import evaluate_genome_v4 as evaluate_genome
 from objective import hard_constraint_violations  # vendored guardrails
 
 from swarm_mcp import envelope, redaction
@@ -43,9 +44,7 @@ def _panel_from_bars(rows: list[dict]) -> pd.DataFrame:
     df["ts"] = pd.to_datetime(df["ts"], utc=True).dt.tz_localize(None).dt.normalize()
     df = df.drop_duplicates(subset=["symbol", "ts"], keep="last")
     df = df.sort_values(["symbol", "ts"]).reset_index(drop=True)
-    from gym.panel import prepare_panel  # vendored alpha
-
-    return prepare_panel(df)
+    return gym_v4.prepare_panel_v4(df)
 
 
 def _load_panel(symbols: list[str] | None, bars: list[dict] | None) -> pd.DataFrame:

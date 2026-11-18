@@ -64,23 +64,28 @@ def test_v2_genome_validates_and_hashes_unchanged():
     assert genome_hash(v2) == expected
 
 
-def test_v4_genome_rejected():
+def test_v5_genome_rejected():
     g = baseline()
-    g["schema_version"] = 4
+    g["schema_version"] = 5
     norm, errors = genome_compat.normalize_for_validation(g)
     assert norm is None and errors and "schema_version" in errors[0]
     with pytest.raises(ValueError):
         genome_compat.normalize(g)
 
 
-def test_warden_validates_v2_genome():
+def test_warden_validates_v2_and_v4_genome():
     r = run_async(warden_tools.validate_genome_tool(baseline()))
     assert r["valid"] is True, r["errors"]
-    assert r["evaluated_schema_version"] == 3
+    assert r["evaluated_schema_version"] == 4
     v4 = baseline()
     v4["schema_version"] = 4
     r4 = run_async(warden_tools.validate_genome_tool(v4))
-    assert r4["valid"] is False
+    assert r4["valid"] is True, r4["errors"]
+    assert r4["evaluated_schema_version"] == 4
+    v5 = baseline()
+    v5["schema_version"] = 5
+    r5 = run_async(warden_tools.validate_genome_tool(v5))
+    assert r5["valid"] is False
 
 
 def test_gym_tools_accept_v2():
@@ -170,7 +175,7 @@ def test_canonical_hash_is_number_form_independent():
     assert genome_hash(float_form) != expected, "the vendored python hash is NOT the wire canonical"
 
 
-def test_submit_local_validation_rejects_v4_before_sending(monkeypatch):
+def test_submit_local_validation_rejects_v5_before_sending(monkeypatch):
     import httpx
 
     def _boom(*a, **k):
@@ -178,7 +183,7 @@ def test_submit_local_validation_rejects_v4_before_sending(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", _boom)
     g = baseline()
-    g["schema_version"] = 4
+    g["schema_version"] = 5
     r = run_async(tournament_tools.submit(g))
     assert r["valid_genome"] is False and r["errors"]
 
@@ -205,4 +210,46 @@ def test_zero_cost_genes_cannot_change_outcome():
     from fill_model import house_round_trip_cost_bps  # vendored guardrails
 
     assert house_round_trip_cost_bps() == 24.0
+
+
+def test_hold_days_and_weekend_gate_change_weekly_net_bps_and_gene_coverage_is_complete():
+    from swarm_mcp import gym_v4
+    from gym.regime import episode_pool, episode_seed_matrix, label_all_regimes
+
+    # 1. Exhaustive schema gene partition check
+    leaves = gym_v4.schema_leaf_gene_paths()
+    covered = gym_v4.SCORED_TIER_A_GENES | gym_v4.TIER_GATED_GENES | gym_v4.UNSCORED_GENES
+    assert leaves == covered, f"Schema gene coverage drift: missing={leaves - covered}, extra={covered - leaves}"
+    assert (gym_v4.SCORED_TIER_A_GENES & gym_v4.UNSCORED_GENES) == set()
+
+    # 2. Changing risk.hold_days (2 -> 10) actively changes weekly_net_bps under house_v4
+    panel = gym_tools._panel_from_bars(synthetic_bars(SYMS, days=500, seed=17))
+    labels = label_all_regimes(panel)
+    pool = episode_pool(panel, labels, min_symbols=5)
+    matrix = episode_seed_matrix(pool, [0, 1], per_regime=2)
+
+    g_hold2 = genome_compat.normalize(baseline())
+    g_hold2["risk"]["hold_days"] = 2
+    g_hold10 = copy.deepcopy(g_hold2)
+    g_hold10["risk"]["hold_days"] = 10
+
+    r2 = gym_v4.evaluate_genome_v4(panel, matrix, g_hold2, [0, 1])
+    r10 = gym_v4.evaluate_genome_v4(panel, matrix, g_hold10, [0, 1], champion_genome=g_hold2)
+    assert r2["cost_model"] == "house_v4"
+    assert r2["evaluated_schema_version"] == 4
+    assert r2["weekly_net_bps"] != r10["weekly_net_bps"], "hold_days 2 vs 10 must alter weekly_net_bps"
+
+    # 3. Tightening weekend_gate.* actively changes weekly_net_bps
+    g_wg_strict = copy.deepcopy(g_hold2)
+    g_wg_strict["weekend_gate"]["max_atr_pct"] = 0.005
+    g_wg_strict["weekend_gate"]["trim_threshold"] = 0.70
+    g_wg_strict["weekend_gate"]["flatten_threshold"] = 0.45
+    r_wg = gym_v4.evaluate_genome_v4(panel, matrix, g_wg_strict, [0, 1], champion_genome=g_hold2)
+    assert r_wg["weekly_net_bps"] != r2["weekly_net_bps"], "weekend_gate.* must alter weekly_net_bps"
+
+    # 4. Unscored-only changes raise NoScoredChangeError
+    g_noop = _zero_cost_genes(g_hold2)
+    g_noop["risk"]["atr_period"] = 25
+    with pytest.raises(gym_v4.NoScoredChangeError):
+        gym_v4.assert_has_scored_change(g_noop, g_hold2)
 
