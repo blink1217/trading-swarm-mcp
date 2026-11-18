@@ -358,11 +358,28 @@ def test_tournament_verdict_and_leaderboard(monkeypatch):
     assert "NOT a promotion" in v["verdict_semantics"]
     assert fake.calls[0]["params"] == {"job_id": "st_" + "b" * 24}
 
-    fake2 = _FakeAsync(200, {"ok": True, "champion_rating": 1492.0, "total_runs": 2,
-                             "top": [{"genome": "abcdefabcdef", "rating": 1508.0}]})
+    fake2 = _FakeAsync(200, {
+        "ok": True,
+        "season_id": "2026-s2-house-v4",
+        "last_run_age_days": 0.12,
+        "cost_model": "house_v4",
+        "evaluated_schema_version": 4,
+        "champion_rating": 1500.0,
+        "total_runs": 2,
+        "top": [
+            {"genome": "abcdefabcdef", "rating": None, "rating_status": "provisional", "mean_delta_bps": 8.4, "house_seed": False},
+            {"genome": "111111111111", "rating": None, "rating_status": "provisional", "mean_delta_bps": 1.6, "house_seed": True},
+        ],
+        "challengers": [{"genome": "abcdefabcdef", "rating": None, "rating_status": "provisional", "mean_delta_bps": 8.4, "house_seed": False}],
+        "baselines": [{"genome": "111111111111", "rating": None, "rating_status": "provisional", "mean_delta_bps": 1.6, "house_seed": True}],
+    })
     monkeypatch.setattr("httpx.AsyncClient", fake2)
     lb = run_async(tournament_tools.leaderboard())
-    assert lb["champion_rating"] == 1492.0 and len(lb["top"]) == 1
+    assert lb["champion_rating"] == 1500.0 and len(lb["top"]) == 2
+    assert lb["season_id"] == "2026-s2-house-v4"
+    assert lb["cost_model"] == "house_v4" and lb["evaluated_schema_version"] == 4
+    assert lb["last_run_age_days"] == 0.12
+    assert len(lb["challengers"]) == 1 and len(lb["baselines"]) == 1
     assert lb["pricing"]["credits_full"] == 200
 
 

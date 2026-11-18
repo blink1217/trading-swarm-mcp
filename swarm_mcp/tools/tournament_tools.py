@@ -206,14 +206,25 @@ async def leaderboard() -> dict:
             except httpx.HTTPError as e:
                 raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
         body = _raise_for_refusal(r)
+        top_rows = body.get("top") or []
         return {
             "tool": "tournament.leaderboard",
+            "season_id": body.get("season_id"),
             "updated_at": body.get("updated_at"),
+            "last_run_age_days": body.get("last_run_age_days"),
             "champion_rating": body.get("champion_rating"),
             "total_runs": body.get("total_runs"),
             "contributed_runs": body.get("contributed_runs"),
             "challenger_wins": body.get("challenger_wins"),
-            "top": body.get("top") or [],
+            "cost_model": body.get("cost_model"),
+            "evaluated_schema_version": body.get("evaluated_schema_version"),
+            "top": top_rows,
+            "challengers": body.get("challengers") if body.get("challengers") is not None else [
+                x for x in top_rows if not x.get("house_seed")
+            ],
+            "baselines": body.get("baselines") if body.get("baselines") is not None else [
+                x for x in top_rows if x.get("house_seed")
+            ],
             "geometry": body.get("geometry"),
             "pricing": body.get("pricing") or {
                 "credits_full": plans.TOURNAMENT["credits_full"],
