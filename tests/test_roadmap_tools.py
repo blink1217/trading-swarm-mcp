@@ -406,12 +406,20 @@ def test_gym_evaluate_formula_and_pit_smart_money_and_forward_league(tmp_cache):
         "tailwind_expansion", "headwind_bottleneck", "neutral",
     )
 
-    # 3. Settled 8-week Forward League Ledger
+    # 3. Honest Forward League status (zero fabricated hashes or synthetic returns)
     fl = run_async(tournament_tools.forward_league(include_weekly_commits=True))
     assert fl["tool"] == "tournament.forward_league"
-    assert fl["status"] == "SETTLED_BATCH_01"
-    assert fl["settled_weeks"] == 8
-    assert len(fl["weekly_settlements"]) == 8
-    assert len(fl["live_benchmark_sleeves"]) == 3
+    assert fl["status"] == "NOT_STARTED"
+    assert fl["settled_weeks"] == 0
+    assert fl["weekly_settlements"] == []
+    assert fl["live_benchmark_sleeves"] == []
+    assert "launches when" in fl["note"]
+
+    import inspect
+    import re
+    src = inspect.getsource(tournament_tools.forward_league)
+    assert re.findall(r"\b[0-9a-f]{12,16}\b", src) == [], (
+        "forward_league source must never hard-code 12/16-char commitment or genome hashes"
+    )
 
 

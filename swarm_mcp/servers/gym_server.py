@@ -620,19 +620,20 @@ async def evaluate_formula(
 
 class TournamentForwardLeagueOut(TypedDict, total=False):
     tool: str
-    batch_id: str
+    batch_id: str | None
     status: str
-    window_start: str
-    window_end: str
+    window_start: str | None
+    window_end: str | None
     settled_weeks: int
     total_window_weeks: int
-    champion_hash: str
-    champion_cumulative_net_bps: float
+    champion_hash: str | None
+    champion_cumulative_net_bps: float | None
     leading_challenger_hash: str | None
     leading_challenger_cumulative_net_bps: float | None
-    field_median_cumulative_net_bps: float
+    field_median_cumulative_net_bps: float | None
     live_benchmark_sleeves: list[dict]
     weekly_settlements: list[dict]
+    note: str
     anonymised: str
     how_to_enter_next_batch: str
     access: str
@@ -643,19 +644,19 @@ class TournamentForwardLeagueOut(TypedDict, total=False):
 
 @mcp.tool(
     name="tournament.forward_league",
-    title="Forward League 8-Week Settlement & Benchmark Ledger",
+    title="Forward League Pre-Commitment Settlement Status & Ledger",
     annotations=annotations(read_only=True, idempotent=True, open_world=False),
     structured_output=True,
 )
 async def tournament_forward_league(
     include_weekly_commits: Annotated[bool, Field(
-        description="Include the week-by-week Friday SHA-256 pre-commitment settlement rows.")] = True,
+        description="Include week-by-week Friday SHA-256 pre-commitment settlement rows when available.")] = True,
 ) -> TournamentForwardLeagueOut:
-    """Returns the settled 8-week SHA-256 pre-committed Forward League ledger and benchmark summaries.
+    """Returns the Forward League SHA-256 pre-commitment settlement status and ledger.
 
-    Exposes only 12-char genome hash prefixes, Friday commitment hashes, realized net-of-cost
-    return deltas, and defensive posture states — never genome vectors, symbols, or equations.
-    Free on every plan.
+    Returns status="NOT_STARTED" with empty settlement lists until external challengers
+    are sealed into a weekly Friday commitment batch — never returns synthetic or
+    illustrative returns. Free on every plan.
     """
     return await tournament_tools.forward_league(include_weekly_commits=include_weekly_commits)
 

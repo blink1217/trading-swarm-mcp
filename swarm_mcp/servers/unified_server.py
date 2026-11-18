@@ -135,7 +135,7 @@ _ALL_TOOL_SPECS = [
     ("tournament.submit", "Shadow Tournament: Submit", False, False, True, gym_server.tournament_submit),
     ("tournament.verdict", "Shadow Tournament: Verdict", True, True, True, gym_server.tournament_verdict),
     ("tournament.leaderboard", "Shadow Tournament: Leaderboard", True, True, True, gym_server.tournament_leaderboard),
-    ("tournament.forward_league", "Forward League 8-Week Settlement & Benchmark Ledger", True, True, False, gym_server.tournament_forward_league),
+    ("tournament.forward_league", "Forward League Pre-Commitment Settlement Status & Ledger", True, True, False, gym_server.tournament_forward_league),
 ]
 
 REMOTE_OMITTED_TOOLS = frozenset({
