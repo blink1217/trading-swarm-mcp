@@ -122,14 +122,30 @@ async def fetch_bars(symbols: list[str], days: int, *,
     if not symbols:
         raise ValueError("no symbols given")
 
-    auth_token = token or _access_token()
+    headers: dict[str, str]
+    if token or request_context.current_token.get() or os.environ.get(access.ACCESS_TOKEN_ENV, "").strip():
+        auth_token = token or _access_token()
+        headers = {"Authorization": f"Bearer {auth_token}"}
+    elif request_context.internal_runner_fill.get():
+        internal_key = os.environ.get("SWARM_MCP_INTERNAL_KEY", "").strip()
+        if not internal_key:
+            raise RelayError(
+                "internal tournament panel fill requires SWARM_MCP_SERVICE_TOKEN or SWARM_MCP_INTERNAL_KEY")
+        headers = {
+            "X-Swarm-Internal-Key": internal_key,
+            "X-Swarm-Runner-Purpose": "tournament-panel",
+        }
+    else:
+        auth_token = _access_token()
+        headers = {"Authorization": f"Bearer {auth_token}"}
+
     async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
         try:
             r = await client.post(
                 f"{relay_base()}/data/bars",
                 json={"symbols": symbols, "days": int(days),
                       "timeframe": timeframe, "adjustment": adjustment},
-                headers={"Authorization": f"Bearer {auth_token}"},
+                headers=headers,
             )
         except httpx.HTTPError as e:
             raise RelayError(

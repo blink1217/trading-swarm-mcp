@@ -17,6 +17,12 @@ current_token: contextvars.ContextVar[str] = contextvars.ContextVar(
 current_entitlement: contextvars.ContextVar = contextvars.ContextVar(
     "swarm_mcp_request_entitlement", default=None)
 
+# Set strictly inside tournament_runner._load_panel() so internal tournament
+# panel fills can authenticate against the site relay via X-Swarm-Internal-Key
+# without needing SWARM_MCP_BYOK=1 or personal provider credentials on Cloud Run.
+internal_runner_fill: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "swarm_mcp_internal_runner_fill", default=False)
+
 
 def is_hosted() -> bool:
     """True when executing under the hosted streamable-HTTP middleware.

@@ -9,8 +9,13 @@ SECRET_ENV_VARS = ("ALPACA_API_KEY", "ALPACA_SECRET", "ALTDATA_API_KEY",
 
 _KEY_ARG_RE = re.compile(r"(api[_-]?key|apikey|secret|token|password|credential|auth)", re.I)
 _ALPACA_KEY_RE = re.compile(r"\bAK[A-Z0-9]{8,}\b")
+_PROVIDER_URL_RE = re.compile(
+    r"https?://(?:[a-z0-9-]+\.)*(?:alpaca\.markets|finnhub\.io|altdata\.io)[^\s'\"]*",
+    re.I,
+)
 
 REDACTED = "[REDACTED]"
+REDACTED_URL = "[REDACTED_UPSTREAM_URL]"
 
 
 def known_secret_values() -> set[str]:
@@ -34,7 +39,8 @@ def reject_keylike_args(args: dict) -> None:
 def redact_text(text: str) -> str:
     for v in known_secret_values():
         text = text.replace(v, REDACTED)
-    return _ALPACA_KEY_RE.sub(REDACTED, text)
+    text = _ALPACA_KEY_RE.sub(REDACTED, text)
+    return _PROVIDER_URL_RE.sub(REDACTED_URL, text)
 
 
 def redact(obj):
