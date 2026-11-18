@@ -38,7 +38,7 @@ except ImportError as e:  # pragma: no cover - httpx is a runtime dependency
 DEFAULT_HOSTED = "https://mcp.1.21initiative.com"
 DEFAULT_SITE = "https://1.21initiative.com"
 TIMEOUT_S = 20.0
-PROBE_VERSION = "1.1.1"
+PROBE_VERSION = "1.2.0"
 
 ALLOWED_PIT_STATUSES = {
     "SIGNIFICANT",

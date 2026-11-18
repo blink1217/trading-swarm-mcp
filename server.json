@@ -3,7 +3,7 @@
   "name": "io.github.blink1217/quant-swarm",
   "title": "quant-swarm",
   "description": "Free backtest forensics (lookahead bias, t-stats, cost survival) and hosted PIT SEC/macro data.",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "websiteUrl": "https://1.21initiative.com/mcp/",
   "repository": {
     "url": "https://github.com/blink1217/trading-swarm-mcp",
@@ -14,7 +14,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "quant-swarm",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
