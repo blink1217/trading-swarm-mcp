@@ -1,5 +1,7 @@
 # `quant-swarm` — Zero-Trust Backtest Forensics & Point-in-Time Market Data (MCP)
 
+<!-- mcp-name: io.github.blink1217/quant-swarm -->
+
 Audit trading backtests locally for **lookahead bias, Newey-West + Benjamini-Hochberg overlap-adjusted significance, outlier concentration, and realistic transaction-cost decay**—100% offline and free—and query **as-filed Point-in-Time SEC EDGAR & macro signals** with zero restatement leakage.
 
 ---
