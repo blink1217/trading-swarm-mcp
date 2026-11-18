@@ -165,16 +165,22 @@ async def verdict(job_id: str) -> dict:
                 raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
         body = _raise_for_refusal(r)
         gh_prefix = str(body.get("genome_hash") or job_id)[:12]
-        out = {
+        res_block = body.get("result")
+        out: dict = {
             "tool": "tournament.verdict",
             "job_id": body.get("job_id"),
             "status": body.get("status"),
             "genome_hash": body.get("genome_hash"),
             "contribute": body.get("contribute"),
+            "contribution": body.get("contribution"),
+            "disclosure_status": body.get("disclosure_status"),
             "credits_charged": body.get("credits_charged"),
+            "created_at": body.get("created_at"),
+            "scored_at": body.get("scored_at"),
             "rating": body.get("rating"),
-            "result": body.get("result"),
-            "error": body.get("error"),
+            "result": res_block,
+            "outcome_detail": res_block.get("outcome_detail") if isinstance(res_block, dict) else None,
+            "benchmark_status": res_block.get("benchmark_status") if isinstance(res_block, dict) else None,
             "verification_badge": {
                 "share_url": f"https://1.21initiative.com/mcp/verify/{gh_prefix}",
                 "badge_svg_url": f"https://1.21initiative.com/api/mcp/badge/{gh_prefix}.svg",
@@ -190,6 +196,8 @@ async def verdict(job_id: str) -> dict:
                 "cap, monotonic trials ledger) stays inside the swarm's registry — a "
                 "CHALLENGER_BEATS_CHAMPION outcome is what qualifies a genome for that gate"),
         }
+        if body.get("error") is not None:
+            out["error"] = body.get("error")
         if body.get("status") in ("queued", "running"):
             out["next"] = "still running — poll again shortly"
         return out
@@ -210,9 +218,12 @@ async def leaderboard() -> dict:
         return {
             "tool": "tournament.leaderboard",
             "season_id": body.get("season_id"),
+            "season_panel": body.get("season_panel"),
             "updated_at": body.get("updated_at"),
             "last_run_age_days": body.get("last_run_age_days"),
             "champion_rating": body.get("champion_rating"),
+            "champion_rating_status": body.get("champion_rating_status"),
+            "benchmark_status": body.get("benchmark_status"),
             "total_runs": body.get("total_runs"),
             "contributed_runs": body.get("contributed_runs"),
             "challenger_wins": body.get("challenger_wins"),

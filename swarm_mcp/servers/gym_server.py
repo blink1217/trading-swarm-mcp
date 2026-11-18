@@ -61,65 +61,81 @@ REMOTE_INSTRUCTIONS = (
 
 class TournamentSubmitOut(TypedDict, total=False):
     tool: str
-    status: str
-    job_id: str
-    genome_hash: str
-    contribute: bool
-    contribution: str
-    disclosure_status: str
-    strategy_code_sent: bool
-    analysis_contract: str
-    valid_disclosure: bool
+    status: str | None
+    job_id: str | None
+    genome_hash: str | None
+    contribute: bool | None
+    contribution: str | None
+    disclosure_status: str | None
+    strategy_code_sent: bool | None
+    analysis_contract: str | None
+    valid_disclosure: bool | None
     disclosure_errors: list[str]
-    valid_strategy_code: bool
+    valid_strategy_code: bool | None
     strategy_code_errors: list[str]
-    credits_charged: int
-    quota: dict
-    geometry: dict
-    what_was_sent: str
-    retention: str
-    next: str
-    valid_genome: bool
+    credits_charged: int | None
+    quota: dict | None
+    geometry: dict | None
+    what_was_sent: str | None
+    retention: str | None
+    next: str | None
+    valid_genome: bool | None
     errors: list[str]
-    note: str
-    access: str
-    error: str
-    request_access_at: str
-    how: str
+    note: str | None
+    access: str | None
+    error: str | None
+    request_access_at: str | None
+    how: str | None
 
 
 class TournamentVerdictOut(TypedDict, total=False):
     tool: str
-    job_id: str
-    status: str
-    genome_hash: str
-    contribute: bool
-    credits_charged: int
-    rating: float
-    result: dict
+    job_id: str | None
+    status: str | None
+    genome_hash: str | None
+    contribute: bool | None
+    contribution: str | None
+    disclosure_status: str | None
+    credits_charged: int | None
+    created_at: str | None
+    scored_at: str | None
+    rating: float | None
+    result: dict | None
+    outcome_detail: str | None
+    benchmark_status: str | None
+    verification_badge: dict | None
     verdict_semantics: str
-    next: str
-    access: str
-    error: str
-    request_access_at: str
-    how: str
+    next: str | None
+    access: str | None
+    error: str | None
+    request_access_at: str | None
+    how: str | None
 
 
 class TournamentLeaderboardOut(TypedDict, total=False):
     tool: str
+    season_id: str | None
+    season_panel: dict | None
     updated_at: str | None
-    champion_rating: float
-    total_runs: int
-    contributed_runs: int
-    challenger_wins: int
+    last_run_age_days: float | None
+    champion_rating: float | None
+    champion_rating_status: str | None
+    benchmark_status: str | None
+    total_runs: int | None
+    contributed_runs: int | None
+    challenger_wins: int | None
+    cost_model: str | None
+    evaluated_schema_version: int | None
     top: list[dict]
-    geometry: dict
-    pricing: dict
+    challengers: list[dict]
+    baselines: list[dict]
+    geometry: dict | None
+    pricing: dict | None
     anonymised: str
-    access: str
-    error: str
-    request_access_at: str
-    how: str
+    access: str | None
+    error: str | None
+    request_access_at: str | None
+    how: str | None
 
 
 class LabelRegimesOut(TypedDict, total=False):
@@ -514,8 +530,9 @@ async def tournament_submit(
                     "Requires contribute=true.")] = None,
 ) -> TournamentSubmitOut:
     """Submit a genome to the hosted Shadow Tournament. Charges credits (200, or 100 with
-    contribute=true), then replays the genome AND the swarm's current champion over the identical
-    100-episode seed matrix on the hosted bars_1day panel — the geometry a local run cannot reach.
+    contribute=true), then replays the genome AND the swarm's current champion over 200 simulated
+    genome-episodes (100 seed draws per genome across 5 regimes x 4 per regime x 5 seeds, yielding
+    ~62 unique paired historical Friday paths) on the pinned season bars_1day panel.
     Sends only the genome vector, its hash and the contribute flag, plus (strategy tier) a
     disclosure and/or strategy_code — never symbols, bars or credentials, and never executes code.
     Returns a job_id to poll with tournament.verdict.

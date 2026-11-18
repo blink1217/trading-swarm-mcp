@@ -135,6 +135,15 @@ def bump_all(new_ver: str) -> str:
         f'assert r["runner_version"] == "{new_ver}"',
     )
 
+    # 12. uv.lock (keep frozen Docker build in sync with pyproject.toml)
+    uv_lock = ROOT / "uv.lock"
+    if uv_lock.exists():
+        replace_in_file(
+            uv_lock,
+            r'(name\s*=\s*"quant-swarm"\nversion\s*=\s*)"[^"]+"',
+            rf'\g<1>"{new_ver}"',
+        )
+
     return old_ver
 
 

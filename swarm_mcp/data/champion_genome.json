@@ -1,18 +1,18 @@
 {
-  "_note": "Stale local copy — NOT packaged and NOT a fallback. Operators point SWARM_MCP_CHAMPION_GENOME at the registry's current champion; the hosted runner refuses to start without it.",
-  "schema_version": 2,
+  "_note": "Public schema_version=4 starter/decoy baseline template for local development and gym.paired_preview — NOT the hidden live champion (which lives in Firestore champion_genome/latest). Keep tier-B/C fields at these defaults so challengers validate and score cleanly on the tier-A panel.",
+  "schema_version": 4,
   "screen": {
     "data_tier": "A",
     "enable_momentum": true,
     "enable_mean_reversion": true,
-    "enable_episodic_pivot": true,
-    "momentum_quantile": 0.6,
-    "reversion_quantile": 0.7,
-    "vol_spike_ratio": 1.5,
+    "enable_episodic_pivot": false,
+    "momentum_quantile": 0.85,
+    "reversion_quantile": 0.85,
+    "vol_spike_ratio": 2.0,
     "breakout_dist_min": -0.02,
     "min_cross_section": 5
   },
-  "analyst": { "data_tier": "A", "lgbm_threshold": 0.45, "max_candidates": 50 },
+  "analyst": { "data_tier": "A", "lgbm_threshold": 0.55, "max_candidates": 20 },
   "risk": {
     "data_tier": "A",
     "atr_period": 14,
