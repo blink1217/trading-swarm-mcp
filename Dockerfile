@@ -1,9 +1,12 @@
 FROM python:3.12-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.6 /uv /usr/local/bin/uv
+
 WORKDIR /app
 COPY . .
 
-RUN pip install --no-cache-dir ".[remote]"
+RUN uv sync --frozen --no-dev --extra remote --no-cache
+ENV PATH="/app/.venv/bin:${PATH}"
 
 ENV PYTHONUNBUFFERED=1
 ENV SWARM_MCP_CACHE_DB=/tmp/swarm-mcp-cache/cache.db

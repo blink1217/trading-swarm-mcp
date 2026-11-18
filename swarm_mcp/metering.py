@@ -16,6 +16,7 @@ streamable-HTTP server (swarm_mcp.servers.http_server) calls ``charge``.
 from __future__ import annotations
 
 import math
+import os
 
 import httpx
 
@@ -87,6 +88,27 @@ RELAY_METERED_TOOLS = frozenset({
     "pit.analysis",
     "tournament.submit",
     "tournament.verdict",
+})
+
+
+# Hosted 0-credit tools (audit.backtest_inline, warden.*, leaderboard, forward_league):
+# free to call (0 credits charged, never deducting from 250/month Free relay quota),
+# while writing a per-token funnel metering record via /api/mcp/meter (units=0, record=True)
+# and enforcing a separate per-token rate limit.
+ZERO_CREDIT_HOSTED_TOOLS = frozenset({
+    "audit.backtest_inline",
+    "audit.status",
+    "warden.validate_order",
+    "warden.cost_check",
+    "warden.explain_sizing",
+    "warden.validate_genome",
+    "warden.audit_features",
+    "warden.plan_rebalance",
+    "warden.prop_challenge_check",
+    "warden.defensive_posture",
+    "warden.promotion_verdict",
+    "tournament.leaderboard",
+    "tournament.forward_league",
 })
 
 
@@ -184,6 +206,34 @@ def charge(token: str, tool: str, units: int) -> dict:
         upgrade_url=body.get("upgrade_url") if isinstance(body, dict) else None,
         quota=body.get("quota") if isinstance(body, dict) and isinstance(body.get("quota"), dict) else None,
     )
+
+
+def record_zero_credit(token: str, tool: str) -> None:
+    """Record a 0-credit per-token metering event on /api/mcp/meter (record=True).
+
+    Raises :class:`MeterRefused` if the site rate-limits the token (HTTP 429);
+    network failures on 0-credit telemetry are non-fatal so free tools remain
+    available in local/test harnesses that only mock /verify.
+    """
+    if not token or not tool:
+        return
+    local_tok = os.environ.get("SWARM_MCP_LOCAL_TOKEN", "").strip()
+    if local_tok and token == local_tok:
+        return
+    if not (token.startswith("121_") or token.startswith("121o_")) and not os.environ.get("SWARM_MCP_RELAY_URL", "").strip():
+        return
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        r = httpx.post(
+            meter_url(),
+            json={"tool": tool, "units": 0, "record": True},
+            headers=headers,
+            timeout=5.0,
+        )
+    except httpx.HTTPError:
+        return
+    if r.status_code == 429:
+        raise MeterRefused("zero-credit tool rate limited", status_code=429, reason="rate_limited")
 
 
 def seeds_for_budget(credits: int, per_regime: int, genomes: int = 1) -> int:

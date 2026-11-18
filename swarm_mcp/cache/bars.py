@@ -74,6 +74,8 @@ def api_keys() -> tuple[str, str]:
 
 
 def byok_enabled() -> bool:
+    if request_context.is_hosted() or os.environ.get("SWARM_MCP_TRANSPORT", "").strip().lower() == "http":
+        return False  # hosted traffic must always route through the metered relay
     return os.environ.get("SWARM_MCP_BYOK", "").strip() == "1"
 
 

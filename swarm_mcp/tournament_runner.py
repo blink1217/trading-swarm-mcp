@@ -133,9 +133,11 @@ async def _load_panel():
     lookback = int(os.environ.get(LOOKBACK_ENV, "").strip() or DEFAULT_LOOKBACK_DAYS)
     service_token = os.environ.get(SERVICE_TOKEN_ENV, "").strip()
     tok_ctx = request_context.current_token.set(service_token) if service_token else None
+    internal_ctx = request_context.internal_runner_fill.set(True)
     try:
         result = await cache_bars.get_bars_cached(db, syms, lookback)
     finally:
+        request_context.internal_runner_fill.reset(internal_ctx)
         if tok_ctx is not None:
             request_context.current_token.reset(tok_ctx)
     rows = result["rows"]

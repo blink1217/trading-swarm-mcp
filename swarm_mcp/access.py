@@ -139,7 +139,7 @@ async def verify_entitlement_async(token: str) -> Entitlement | None:
     now = time.monotonic()
     if _neg_cache.get(h, 0.0) > now:
         return None
-    ent = await asyncio.to_thread(_verify, token)
+    ent = await asyncio.to_thread(_verify, token, True)
     if ent is None:
         if len(_neg_cache) >= _MAX_NEG_CACHE:
             _neg_cache.clear()
@@ -198,7 +198,7 @@ def _parse_entitlement(payload: dict) -> Entitlement:
     )
 
 
-def _verify(token: str) -> Entitlement | None:
+def _verify(token: str, hosted_surface: bool = False) -> Entitlement | None:
     now = time.monotonic()
     entry = _cache.get(token)
     if entry is not None and now < entry[0]:
@@ -215,7 +215,15 @@ def _verify(token: str) -> Entitlement | None:
 
     verify_url = os.environ.get(VERIFY_URL_ENV, "").strip() or DEFAULT_VERIFY_URL
     try:
-        r = httpx.post(verify_url, json={"token": token}, timeout=10.0)
+        if hosted_surface:
+            r = httpx.post(
+                verify_url,
+                json={"token": token},
+                headers={"X-Swarm-Surface": "hosted"},
+                timeout=10.0,
+            )
+        else:
+            r = httpx.post(verify_url, json={"token": token}, timeout=10.0)
     except httpx.HTTPError:
         return None
     if r.status_code == 200:

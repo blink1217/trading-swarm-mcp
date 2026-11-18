@@ -8,6 +8,7 @@ import pytest
 import swarm_mcp.cache.bars as cache_bars
 import swarm_mcp.cache.enrich as cache_enrich
 import swarm_mcp.relay as relay
+from swarm_mcp import request_context
 from helpers import run_async
 
 
@@ -220,7 +221,9 @@ def test_fetch_enrichment_relay_roundtrip(monkeypatch):
 
 
 def test_bars_dispatch_byok_prefers_direct(monkeypatch):
+    """BYOK direct provider fetch works ONLY on local stdio (not hosted HTTP)."""
     monkeypatch.setenv("SWARM_MCP_BYOK", "1")
+    monkeypatch.delenv("SWARM_MCP_TRANSPORT", raising=False)
     monkeypatch.setenv("ALPACA_API_KEY", "AKFAKEKEY000000")
     monkeypatch.setenv("ALPACA_SECRET", "fake-secret")
     calls = []
@@ -238,6 +241,95 @@ def test_bars_dispatch_byok_prefers_direct(monkeypatch):
 
     run_async(cache_bars.fetch_daily_bars(client=None, symbols=["AAA"], days=30))
     assert calls == ["direct"]
+
+
+def test_hosted_ignores_byok_for_bars_and_enrichment(monkeypatch):
+    from swarm_mcp.cache import enrich as cache_enrich
+
+    monkeypatch.setenv("SWARM_MCP_BYOK", "1")
+    monkeypatch.setenv("ALPACA_API_KEY", "AKFAKEKEY000000")
+    monkeypatch.setenv("ALPACA_SECRET", "fake-secret")
+    monkeypatch.setenv("FINNHUB_API_KEY", "fake-finnhub")
+    calls = []
+
+    async def fake_direct(client, symbols, days, **kwargs):
+        calls.append("direct_bars")
+        return []
+
+    async def fake_relay(symbols, days, **kwargs):
+        calls.append("relay_bars")
+        return []
+
+    async def fake_enrich_direct(symbol):
+        calls.append("direct_enrich")
+        return {}
+
+    async def fake_enrich_relay(symbol):
+        calls.append("relay_enrich")
+        return {"symbol": symbol, "news_count_7d": 0, "day_change_bucket": "flat", "earnings_within_3d": False}
+
+    monkeypatch.setattr(cache_bars, "_fetch_daily_bars_direct", fake_direct)
+    monkeypatch.setattr(cache_bars.relay, "fetch_bars", fake_relay)
+    monkeypatch.setattr(cache_enrich, "_enrich_direct", fake_enrich_direct)
+    monkeypatch.setattr(cache_enrich.relay, "fetch_enrichment", fake_enrich_relay)
+
+    tok_ctx = request_context.current_token.set("121_hosted_user_tok")
+    try:
+        run_async(cache_bars.fetch_daily_bars(client=None, symbols=["QQQ"], days=30))
+        run_async(cache_enrich._fetch_enrichment("QQQ"))
+    finally:
+        request_context.current_token.reset(tok_ctx)
+
+    assert calls == ["relay_bars", "relay_enrich"]
+
+    # Even without current_token, SWARM_MCP_TRANSPORT=http forces relay
+    monkeypatch.setenv("SWARM_MCP_TRANSPORT", "http")
+    calls.clear()
+    run_async(cache_bars.fetch_daily_bars(client=None, symbols=["QQQ"], days=30))
+    run_async(cache_enrich._fetch_enrichment("QQQ"))
+    assert calls == ["relay_bars", "relay_enrich"]
+
+
+def test_http_server_warns_on_byok_and_redacts_provider_urls(monkeypatch, caplog):
+    import logging
+    from swarm_mcp import redaction
+    from swarm_mcp.servers import http_server
+
+    monkeypatch.setenv("SWARM_MCP_BYOK", "1")
+    with caplog.at_level(logging.ERROR, logger="swarm_mcp.http"):
+        http_server.build_app(require_approval_secret=False)
+    assert any("SWARM_MCP_BYOK=1 is ignored on the hosted transport" in r.message for r in caplog.records)
+
+    leaked = "HTTPStatusError: Client error '400 Bad Request' for url 'https://data.alpaca.markets/v2/stocks/bars?symbols=ZZ_Q&feed=iex'"
+    scrubbed = redaction.redact_text(leaked)
+    assert "alpaca.markets" not in scrubbed
+    assert "feed=iex" not in scrubbed
+    assert "[REDACTED_UPSTREAM_URL]" in scrubbed
+
+
+def test_internal_runner_panel_fill_uses_internal_key(monkeypatch):
+    monkeypatch.delenv("SWARM_MCP_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("SWARM_MCP_INTERNAL_KEY", "internal-secret-xyz")
+    captured = {}
+
+    def handler(url, json, headers):
+        captured["headers"] = headers
+        return FakeResponse(200, {
+            "ok": True,
+            "bars": {"SPY": [{"t": "2026-11-17T00:00:00Z", "o": 500, "h": 502, "l": 499, "c": 501, "v": 1000}]},
+        })
+
+    monkeypatch.setattr(relay.httpx, "AsyncClient", lambda **kw: FakeClient(handler))
+    ctx = request_context.internal_runner_fill.set(True)
+    try:
+        rows = run_async(relay.fetch_bars(["SPY"], 30))
+    finally:
+        request_context.internal_runner_fill.reset(ctx)
+    assert len(rows) == 1
+    assert captured["headers"] == {
+        "X-Swarm-Internal-Key": "internal-secret-xyz",
+        "X-Swarm-Runner-Purpose": "tournament-panel",
+    }
 
 
 def test_bars_dispatch_relay_by_default(monkeypatch):

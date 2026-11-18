@@ -37,6 +37,7 @@ from collections import OrderedDict, deque
 import hashlib
 import inspect
 import json
+import logging
 import math
 import os
 import threading
@@ -49,6 +50,8 @@ from swarm_mcp import access, request_context, server_meta
 from swarm_mcp.mcp_compat import MCPServer
 from swarm_mcp.servers import data_server, gym_server, unified_server, warden_server
 from swarm_mcp.tools import audit_tools
+
+log = logging.getLogger("swarm_mcp.http")
 
 # M-01 + v1.1.0 transport isolation: local-only tools (process-global switches,
 # local SQLite cache warm/stats, and local-filesystem path audit.* tools) are omitted
@@ -393,6 +396,7 @@ class BearerAuthMiddleware:
         self.app = app
         self._token_limiter = SlidingWindowRateLimiter()
         self._heavy_limiter = SlidingWindowRateLimiter()
+        self._zero_credit_limiter = SlidingWindowRateLimiter()
         self._discovery_limiter = SlidingWindowRateLimiter()
 
     async def __call__(self, scope, receive, send):
@@ -456,6 +460,7 @@ class BearerAuthMiddleware:
             # Per-token burst limits run BEFORE credit metering so a throttled
             # request never deducts hosted compute credits. Heavy-tool sub-limits
             # check first so a rejected heavy burst does not consume general RPM.
+            calls: list[tuple[str, dict]] = []
             if token and not _is_discovery_only_payload(body):
                 calls = _tool_calls(body)
                 tok_key = _token_bucket_key(token)
@@ -494,6 +499,23 @@ class BearerAuthMiddleware:
                     await asyncio.to_thread(metering.charge, token, metered_tool, units)
                 except metering.MeterRefused as e:
                     return await self._meter_refused(send, metered_tool, units, e)
+            elif token and calls:
+                from swarm_mcp import metering
+
+                zero_tools = [t_name for t_name, _ in calls if t_name in metering.ZERO_CREDIT_HOSTED_TOOLS]
+                if zero_tools:
+                    zero_rpm = _env_rpm("SWARM_MCP_ZERO_CREDIT_RPM", 60)
+                    ok_zero, retry_zero = self._zero_credit_limiter.check_and_consume(
+                        f"zero:{_token_bucket_key(token)}",
+                        limit=zero_rpm,
+                        weight=len(zero_tools),
+                    )
+                    if not ok_zero:
+                        return await self._rate_limited(send, "zero_credit_tools", zero_rpm, retry_zero)
+                    try:
+                        await asyncio.to_thread(metering.record_zero_credit, token, zero_tools[0])
+                    except metering.MeterRefused as e:
+                        return await self._meter_refused(send, zero_tools[0], 0, e)
             receive = _replay_receive(body)
 
         tok_ctx = request_context.current_token.set(token)
@@ -719,6 +741,10 @@ def build_app(*, require_approval_secret: bool | None = None) -> BearerAuthMiddl
     )
     if enforce_secret:
         audit_tools.get_approval_secret(require_configured=True)
+    if os.environ.get("SWARM_MCP_BYOK", "").strip() == "1":
+        log.error(
+            "SWARM_MCP_BYOK=1 is ignored on the hosted transport; all data goes through the metered relay"
+        )
 
     transport_security = _transport_security()
 
