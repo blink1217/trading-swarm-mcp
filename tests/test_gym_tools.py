@@ -2,6 +2,8 @@
 labels, determinism on identical paths."""
 from __future__ import annotations
 
+import datetime as dt
+
 from gates import REGIMES
 from genome_schema import genome_hash
 from helpers import run_async, synthetic_bars
@@ -15,7 +17,9 @@ SYMS = [f"S{i:02d}" for i in range(20)]
 
 
 def _rows(days=500, seed=9):
-    return synthetic_bars(SYMS, days=days, seed=seed)
+    # Pin the end date. synthetic_bars defaults to today, and a third regime
+    # appearing in the rolling window can push n_episodes to MIN_EPISODES=20.
+    return synthetic_bars(SYMS, days=days, seed=seed, end=dt.date(2026, 5, 29))
 
 
 def test_label_regimes_reports_counts_and_depth():
