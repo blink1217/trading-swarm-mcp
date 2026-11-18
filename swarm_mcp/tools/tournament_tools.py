@@ -26,6 +26,8 @@ after review. Read the Terms section "Shadow Tournament contributions" first.
 """
 from __future__ import annotations
 
+import os
+
 import httpx
 
 from swarm_mcp import vendor_path  # noqa: F401
@@ -223,145 +225,71 @@ async def leaderboard() -> dict:
 
 
 async def forward_league(include_weekly_commits: bool = True) -> dict:
-    """Return the settled 8-week SHA-256 Forward League ledger and anonymised sleeve benchmarks.
+    """Return the Forward League SHA-256 pre-commitment settlement status and ledger.
 
-    Exposes only cryptographic Friday commitment hashes, 12-char genome hash prefixes,
-    realized net-of-cost return deltas, and sleeve risk-posture states — never genome
-    parameters, tickers, positions, or internal formulas.
+    Never fabricates settlement rows, commitment hashes, or sleeve returns: until an
+    external challenger cohort is sealed and settled on the live board, returns
+    ``status="NOT_STARTED"`` with empty settlement lists.
     """
     redaction.reject_keylike_args({"include_weekly_commits": include_weekly_commits})
 
     async def _do():
-        weeks = [
-            {
-                "week": 1,
-                "friday_seal_date": "2026-09-18",
-                "settlement_date": "2026-09-25",
-                "commitment_sha256_prefix": "9f4a8c12e703b1d5",
-                "champion_net_bps": 42.6,
-                "top_challenger_hash": "a81c4f902e11",
-                "top_challenger_net_bps": 51.2,
-                "field_median_net_bps": 18.4,
-                "realized_regime": "melt_up",
-            },
-            {
-                "week": 2,
-                "friday_seal_date": "2026-09-25",
-                "settlement_date": "2026-10-02",
-                "commitment_sha256_prefix": "3c7d19b84a62f0e9",
-                "champion_net_bps": -14.8,
-                "top_challenger_hash": "7d20e319ab54",
-                "top_challenger_net_bps": -6.2,
-                "field_median_net_bps": -38.5,
-                "realized_regime": "chop",
-            },
-            {
-                "week": 3,
-                "friday_seal_date": "2026-10-02",
-                "settlement_date": "2026-10-09",
-                "commitment_sha256_prefix": "6e12a50f9c884b21",
-                "champion_net_bps": 64.1,
-                "top_challenger_hash": "a81c4f902e11",
-                "top_challenger_net_bps": 58.9,
-                "field_median_net_bps": 31.0,
-                "realized_regime": "melt_up",
-            },
-            {
-                "week": 4,
-                "friday_seal_date": "2026-10-09",
-                "settlement_date": "2026-10-16",
-                "commitment_sha256_prefix": "b5091d44e237c8a6",
-                "champion_net_bps": 19.3,
-                "top_challenger_hash": "c39f1180de42",
-                "top_challenger_net_bps": 28.7,
-                "field_median_net_bps": -9.4,
-                "realized_regime": "gap_heavy",
-            },
-            {
-                "week": 5,
-                "friday_seal_date": "2026-10-16",
-                "settlement_date": "2026-10-23",
-                "commitment_sha256_prefix": "d8843f017a9c5e32",
-                "champion_net_bps": -22.0,
-                "top_challenger_hash": "a81c4f902e11",
-                "top_challenger_net_bps": -11.5,
-                "field_median_net_bps": -64.2,
-                "realized_regime": "high_vol",
-            },
-            {
-                "week": 6,
-                "friday_seal_date": "2026-10-23",
-                "settlement_date": "2026-10-30",
-                "commitment_sha256_prefix": "1a7c9e205b44d6f8",
-                "champion_net_bps": 37.8,
-                "top_challenger_hash": "c39f1180de42",
-                "top_challenger_net_bps": 44.1,
-                "field_median_net_bps": 14.2,
-                "realized_regime": "chop",
-            },
-            {
-                "week": 7,
-                "friday_seal_date": "2026-10-30",
-                "settlement_date": "2026-11-06",
-                "commitment_sha256_prefix": "5f20b813c499e7a1",
-                "champion_net_bps": 28.4,
-                "top_challenger_hash": "a81c4f902e11",
-                "top_challenger_net_bps": 33.6,
-                "field_median_net_bps": 7.9,
-                "realized_regime": "drawdown",
-            },
-            {
-                "week": 8,
-                "friday_seal_date": "2026-11-02",
-                "settlement_date": "2026-11-09",
-                "commitment_sha256_prefix": "8c41d09fe362a7b4",
-                "champion_net_bps": 46.2,
-                "top_challenger_hash": "a81c4f902e11",
-                "top_challenger_net_bps": 49.8,
-                "field_median_net_bps": 21.5,
-                "realized_regime": "melt_up",
-            },
-        ]
-        sleeves = [
-            {
-                "sleeve_id": "eod_macro_sleeve",
-                "archetype": "Volatility-Targeted Cross-Asset Dual Momentum",
-                "rebalance_cadence": "15:45 ET Daily",
-                "posture": "Defensive",
-                "cumulative_8w_net_bps": 184.5,
-                "max_drawdown_pct": 2.15,
-            },
-            {
-                "sleeve_id": "prop_challenge_sleeve",
-                "archetype": "Multi-Asset Prop-Rule & Target-Lock Taper Engine",
-                "rebalance_cadence": "10:00 ET & 15:35 ET Daily",
-                "posture": "Normal",
-                "cumulative_8w_net_bps": 241.0,
-                "max_drawdown_pct": 1.68,
-            },
-            {
-                "sleeve_id": "defensive_discovery_sleeve",
-                "archetype": "Causal Cross-Sectional Ensemble with Stop-Heat Cap",
-                "rebalance_cadence": "10:05 ET Daily",
-                "posture": "Normal",
-                "cumulative_8w_net_bps": 201.6,
-                "max_drawdown_pct": 1.92,
-            },
-        ]
+        if os.environ.get("SWARM_MCP_FORWARD_LEAGUE_LIVE", "").strip() == "1":
+            async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
+                try:
+                    r = await client.get(
+                        f"{_base()}/tournament/forward-league",
+                        headers={"Authorization": f"Bearer {_token()}"},
+                        params={"include_weekly_commits": str(bool(include_weekly_commits)).lower()},
+                    )
+                    if r.status_code == 200:
+                        body = r.json()
+                        if isinstance(body, dict) and body.get("ok") is not False:
+                            out_live = {
+                                "tool": "tournament.forward_league",
+                                "batch_id": body.get("batch_id"),
+                                "status": body.get("status", "NOT_STARTED"),
+                                "settled_weeks": int(body.get("settled_weeks") or 0),
+                                "total_window_weeks": int(body.get("total_window_weeks") or 0),
+                                "champion_hash": body.get("champion_hash"),
+                                "champion_cumulative_net_bps": body.get("champion_cumulative_net_bps"),
+                                "leading_challenger_hash": body.get("leading_challenger_hash"),
+                                "leading_challenger_cumulative_net_bps": body.get("leading_challenger_cumulative_net_bps"),
+                                "field_median_cumulative_net_bps": body.get("field_median_cumulative_net_bps"),
+                                "live_benchmark_sleeves": body.get("live_benchmark_sleeves") or [],
+                                "note": body.get("note") or "",
+                                "anonymised": (
+                                    "12-char genome hash prefixes and SHA-256 Friday pre-commitment hashes only — "
+                                    "no genome parameter vectors, tickers, live orders, or proprietary equations are exposed."
+                                ),
+                                "how_to_enter_next_batch": (
+                                    "Call tournament.submit(genome=..., contribute=True) to enter your genome as an external "
+                                    "challenger (100 credits, 50% contributor discount)."
+                                ),
+                            }
+                            if include_weekly_commits:
+                                out_live["weekly_settlements"] = body.get("weekly_settlements") or []
+                            return out_live
+                except httpx.HTTPError:
+                    pass
+
         out: dict = {
             "tool": "tournament.forward_league",
-            "batch_id": "forward-league-2026-batch-01",
-            "status": "SETTLED_BATCH_01",
-            "window_start": "2026-09-14",
-            "window_end": "2026-11-09",
-            "settled_weeks": 8,
-            "total_window_weeks": 8,
-            "champion_hash": "0f91e4c28b30",
-            "champion_cumulative_net_bps": 201.6,
-            "leading_challenger_hash": "a81c4f902e11",
-            "leading_challenger_cumulative_net_bps": 248.6,
-            "field_median_cumulative_net_bps": -19.1,
-            "live_benchmark_sleeves": sleeves,
+            "batch_id": None,
+            "status": "NOT_STARTED",
+            "settled_weeks": 0,
+            "total_window_weeks": 0,
+            "champion_hash": None,
+            "champion_cumulative_net_bps": None,
+            "leading_challenger_hash": None,
+            "leading_challenger_cumulative_net_bps": None,
+            "field_median_cumulative_net_bps": None,
+            "live_benchmark_sleeves": [],
+            "note": (
+                "Forward League launches when external challengers are sealed into a weekly "
+                "Friday SHA-256 commitment cohort. Use tournament.leaderboard for current "
+                "paired replay standings."
+            ),
             "anonymised": (
                 "12-char genome hash prefixes and SHA-256 Friday pre-commitment hashes only — "
                 "no genome parameter vectors, tickers, live orders, or proprietary equations are exposed."
@@ -372,7 +300,7 @@ async def forward_league(include_weekly_commits: bool = True) -> dict:
             ),
         }
         if include_weekly_commits:
-            out["weekly_settlements"] = weeks
+            out["weekly_settlements"] = []
         return out
 
     return await run_tool("tournament.forward_league", _do)

@@ -3470,7 +3470,7 @@
      "properties": {
       "include_weekly_commits": {
        "default": true,
-       "description": "Include the week-by-week Friday SHA-256 pre-commitment settlement rows.",
+       "description": "Include week-by-week Friday SHA-256 pre-commitment settlement rows when available.",
        "title": "Include Weekly Commits",
        "type": "boolean"
       }
@@ -3490,24 +3490,52 @@
        "type": "string"
       },
       "batch_id": {
-       "title": "Batch Id",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Batch Id"
       },
       "champion_cumulative_net_bps": {
-       "title": "Champion Cumulative Net Bps",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Champion Cumulative Net Bps"
       },
       "champion_hash": {
-       "title": "Champion Hash",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Champion Hash"
       },
       "error": {
        "title": "Error",
        "type": "string"
       },
       "field_median_cumulative_net_bps": {
-       "title": "Field Median Cumulative Net Bps",
-       "type": "number"
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Field Median Cumulative Net Bps"
       },
       "how": {
        "title": "How",
@@ -3547,6 +3575,10 @@
        "title": "Live Benchmark Sleeves",
        "type": "array"
       },
+      "note": {
+       "title": "Note",
+       "type": "string"
+      },
       "request_access_at": {
        "title": "Request Access At",
        "type": "string"
@@ -3576,12 +3608,26 @@
        "type": "array"
       },
       "window_end": {
-       "title": "Window End",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window End"
       },
       "window_start": {
-       "title": "Window Start",
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window Start"
       }
      },
      "title": "TournamentForwardLeagueOut",
