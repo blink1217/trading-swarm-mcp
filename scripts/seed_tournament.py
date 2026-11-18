@@ -46,14 +46,17 @@ def base_genome() -> dict:
 
 def seed_genomes(base: dict) -> dict[str, dict]:
     def variant(screen: dict | None = None, analyst: dict | None = None,
-                risk: dict | None = None) -> dict:
+                risk: dict | None = None, weekend_gate: dict | None = None) -> dict:
         g = copy.deepcopy(base)
+        g["schema_version"] = 4
         if screen:
             g["screen"].update(screen)
         if analyst:
             g["analyst"].update(analyst)
         if risk:
             g["risk"].update(risk)
+        if weekend_gate:
+            g["weekend_gate"].update(weekend_gate)
         return g
 
     pivot_only_screen = {"enable_momentum": False, "enable_mean_reversion": False,
@@ -74,8 +77,9 @@ def seed_genomes(base: dict) -> dict[str, dict]:
                                                analyst={"lgbm_threshold": 0.75}),
         "hold_2d": variant(risk={"hold_days": 2}),
         "hold_10d": variant(risk={"hold_days": 10}),
-        "conservative_risk": variant(risk={"risk_pct_per_trade": 0.004,
-                                           "atr_sizing_mult": 0.75}),
+        "weekend_defensive": variant(weekend_gate={"max_atr_pct": 0.025,
+                                                   "trim_threshold": 0.55,
+                                                   "flatten_threshold": 0.30}),
     }
 
 
