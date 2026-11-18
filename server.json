@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.blink1217/quant-swarm",
   "title": "quant-swarm",
-  "description": "Free offline backtest forensics (lookahead bias, Newey-West + BH t-stats, cost survival) and hosted Point-in-Time SEC/macro data.",
+  "description": "Free backtest forensics (lookahead bias, t-stats, cost survival) and hosted PIT SEC/macro data.",
   "version": "1.1.1",
   "websiteUrl": "https://1.21initiative.com/mcp/",
   "repository": {
