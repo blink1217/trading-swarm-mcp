@@ -94,7 +94,11 @@ def test_remote_base_url_is_single_sourced():
         ROOT / "integrations" / "llama-index" / "llama_index" / "tools" / "quant_swarm" / "base.py",
         ROOT / "integrations" / "langchain" / "README.md",
         ROOT / "README.md",
+        ROOT / "SKILL.md",
     ]
     for path in files:
-        assert base in path.read_text(encoding="utf-8"), (
+        text = path.read_text(encoding="utf-8")
+        assert base in text, (
             f"{path.relative_to(ROOT)} must reference the canonical remote URL")
+        assert server_meta.LEGACY_CLOUD_RUN_HOST not in text, (
+            f"{path.relative_to(ROOT)} still references legacy Cloud Run host")

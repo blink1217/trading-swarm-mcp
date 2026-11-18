@@ -98,8 +98,9 @@ def test_http_allows_unauthenticated_discovery_and_denies_tools_call():
 
 
 def test_http_denial_carries_resource_metadata_and_serves_it():
-    """RFC 9728 discovery: the 401 challenge on tools/call points at the metadata,
-    and the metadata (both flavors) names the site as the authorization server."""
+    """RFC 9728 + RFC 8414 discovery: 401 points to https://1.21initiative.com/mcp/,
+    /.well-known/oauth-protected-resource serves RFC 9728 protected-resource metadata,
+    and /.well-known/oauth-authorization-server serves RFC 8414 AS metadata."""
     with TestClient(http_server.build_app()) as c:
         r = c.post("/mcp/data", json={
             "jsonrpc": "2.0",
@@ -108,17 +109,35 @@ def test_http_denial_carries_resource_metadata_and_serves_it():
             "params": {"name": "pit.analysis", "arguments": {"symbols": ["AAPL"]}},
         })
         assert r.status_code == 401
+        assert r.json()["error"]["message"].endswith("https://1.21initiative.com/mcp/")
         challenge = r.headers.get("www-authenticate", "")
         assert challenge.startswith("Bearer resource_metadata=")
         assert "oauth-protected-resource" in challenge
-        for flavor in ("/.well-known/oauth-protected-resource",
-                       "/.well-known/oauth-authorization-server"):
-            m = c.get(flavor)
-            assert m.status_code == 200
-            doc = m.json()
-            assert doc["resource"].startswith("http")
-            assert doc["authorization_servers"] == [access.SITE_URL.rstrip("/")]
-            assert doc["scopes_supported"] == ["mcp:tools"]
+
+        pr = c.get("/.well-known/oauth-protected-resource")
+        assert pr.status_code == 200
+        pr_doc = pr.json()
+        assert pr_doc["resource"].startswith("http")
+        assert pr_doc["resource_documentation"] == "https://1.21initiative.com/mcp/"
+        assert pr_doc["authorization_servers"] == ["https://1.21initiative.com"]
+        assert pr_doc["scopes_supported"] == ["mcp:tools"]
+
+        # RFC 9728 §3.1 path-appended protected-resource lookup also resolves cleanly
+        pr_sub = c.get("/.well-known/oauth-protected-resource/mcp/data")
+        assert pr_sub.status_code == 200
+        assert pr_sub.json()["authorization_servers"] == ["https://1.21initiative.com"]
+
+        as_resp = c.get("/.well-known/oauth-authorization-server")
+        assert as_resp.status_code == 200
+        as_doc = as_resp.json()
+        assert "resource" not in as_doc
+        assert as_doc["issuer"] == "https://1.21initiative.com"
+        assert as_doc["authorization_endpoint"] == "https://1.21initiative.com/api/mcp/oauth/authorize"
+        assert as_doc["token_endpoint"] == "https://1.21initiative.com/api/mcp/oauth/token"
+        assert as_doc["revocation_endpoint"] == "https://1.21initiative.com/api/mcp/oauth/revoke"
+        assert as_doc["registration_endpoint"] == "https://1.21initiative.com/api/mcp/oauth/register"
+        assert as_doc["code_challenge_methods_supported"] == ["S256"]
+        assert as_doc["scopes_supported"] == ["mcp:tools"]
 
 
 def test_http_requires_approval_secret_in_production_mode(monkeypatch):
@@ -276,7 +295,7 @@ def test_http_mcp_handshake_with_token(monkeypatch):
         }, headers=session_headers)
         tools_body = _post_body(tools)
         names = [t["name"] for t in tools_body["result"]["tools"]]
-        assert "cache.warm" in names and "features.build" in names
+        assert "cache.warm" not in names and "features.build" in names
 
 
 def test_http_three_servers_mounted(monkeypatch):
@@ -390,4 +409,105 @@ def test_http_batch_with_gated_call_is_refused(monkeypatch):
         ], headers=headers)
         assert r.status_code == 402
         assert r.json()["error"]["data"]["tool"] == "warden.optimize_portfolio"
+
+
+def test_http_catalogs_instructions_prompts_and_urls_are_consistent():
+    """Verify hosted catalogs (12/16/12/11), remote-safe instructions, server-scoped
+    prompts, and unified https://1.21initiative.com/mcp/ URLs across all 4 endpoints."""
+    headers = {"Accept": "application/json, text/event-stream"}
+    expected_counts = {"/mcp": 12, "/mcp/data": 16, "/mcp/warden": 12, "/mcp/gym": 11}
+    expected_prompts = {
+        "/mcp": {"pre_trade_check", "explain_pit_significance"},
+        "/mcp/data": {"explain_pit_significance", "regime_check"},
+        "/mcp/warden": {"pre_trade_check", "audit_my_strategy"},
+        "/mcp/gym": {"stress_test_genome"},
+    }
+    with TestClient(http_server.build_app()) as c:
+        root_doc = c.get("/").json()
+        assert root_doc["request_access_at"] == "https://1.21initiative.com/mcp/"
+
+        for route, want_count in expected_counts.items():
+            init_body = _post_body(c.post(route, json=INIT_PAYLOAD, headers=headers))["result"]
+            assert init_body["serverInfo"].get("websiteUrl") == "https://1.21initiative.com/mcp/"
+            instr = init_body.get("instructions") or ""
+            # Hosted instructions must not steer callers into calling stripped tools on HTTP
+            if route == "/mcp":
+                assert instr.startswith("Use `audit.backtest_inline`")
+            if route == "/mcp/warden":
+                assert instr.startswith("Run remote-safe one-shot backtest forensics with `audit.backtest_inline`")
+
+            tools = _post_body(c.post(route, json={
+                "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {},
+            }, headers=headers))["result"]["tools"]
+            tool_names = {t["name"] for t in tools}
+            assert len(tool_names) == want_count, f"{route}: got {len(tool_names)} tools: {sorted(tool_names)}"
+            assert not (tool_names & http_server.HOSTED_LOCAL_ONLY_TOOLS)
+
+            prompts = _post_body(c.post(route, json={
+                "jsonrpc": "2.0", "id": 3, "method": "prompts/list", "params": {},
+            }, headers=headers))["result"]["prompts"]
+            prompt_names = {p["name"] for p in prompts}
+            assert prompt_names == expected_prompts[route], f"{route} prompts: {prompt_names}"
+
+
+def test_http_refuses_cache_warm_and_enforces_per_token_rate_limits(monkeypatch):
+    """cache.warm is local-only on HTTP, and burst loops hit HTTP 429 + Retry-After
+    before deducting any compute credits."""
+    _site_verify(monkeypatch, {"ok": True, "plan": "pro", "status": "active"})
+    monkeypatch.setenv("SWARM_MCP_TOKEN_RPM", "3")
+    monkeypatch.setenv("SWARM_MCP_HEAVY_RPM", "2")
+
+    charged: list[tuple[str, int]] = []
+    monkeypatch.setattr("swarm_mcp.metering.charge", lambda tok, tool, units: charged.append((tool, units)))
+
+    with TestClient(http_server.build_app()) as c:
+        headers = {"Authorization": "Bearer pro-burst-token",
+                   "Accept": "application/json, text/event-stream"}
+
+        # 1. cache.warm is hard-refused as local-only on HTTP
+        warm = c.post("/mcp/data", json={
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "cache.warm", "arguments": {"universe": ["AAPL"], "years": 1}},
+        }, headers=headers)
+        assert warm.status_code == 200
+        assert warm.json()["error"]["code"] == -32004
+        assert warm.json()["error"]["data"]["tool"] == "cache.warm"
+
+        # 2. Heavy tool burst limit (2/min) trips on the 3rd market.climate call before metering
+        for i in range(2):
+            ok = c.post("/mcp/data", json={
+                "jsonrpc": "2.0", "id": 10 + i, "method": "tools/call",
+                "params": {"name": "market.climate", "arguments": {"symbols": ["UNKNOWN_TICKER"]}},
+            }, headers=headers)
+            assert ok.status_code == 200
+
+        throttled_heavy = c.post("/mcp/gym", json={
+            "jsonrpc": "2.0", "id": 12, "method": "tools/call",
+            "params": {"name": "gym.estimate_cloud_run", "arguments": {}},
+        }, headers=headers)
+        assert throttled_heavy.status_code == 429
+        assert int(throttled_heavy.headers["retry-after"]) >= 1
+        err_heavy = throttled_heavy.json()["error"]
+        assert err_heavy["code"] == -32005
+        assert err_heavy["data"]["scope"] == "heavy_tools"
+        assert charged == [], "throttled calls must never deduct compute credits"
+
+        # 3. General token RPM (3/min) trips on a 4th cheap call for that token, while another token is unaffected
+        ok3 = _tools_call(c, headers, "warden.cost_check",
+                          {"gross_edge_bps": 10.0, "spread_bps": 1.0,
+                           "slippage_bps": 2.0, "adverse_selection_bps": 1.0})
+        assert ok3.status_code == 200
+        throttled_tok = _tools_call(c, headers, "warden.cost_check",
+                                    {"gross_edge_bps": 10.0, "spread_bps": 1.0,
+                                     "slippage_bps": 2.0, "adverse_selection_bps": 1.0})
+        assert throttled_tok.status_code == 429
+        assert throttled_tok.json()["error"]["data"]["scope"] == "token_requests"
+
+        other_headers = {"Authorization": "Bearer second-independent-token",
+                         "Accept": "application/json, text/event-stream"}
+        ok_other = _tools_call(c, other_headers, "warden.cost_check",
+                               {"gross_edge_bps": 10.0, "spread_bps": 1.0,
+                                "slippage_bps": 2.0, "adverse_selection_bps": 1.0})
+        assert ok_other.status_code == 200
+
 

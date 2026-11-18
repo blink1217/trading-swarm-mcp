@@ -35,7 +35,7 @@ INSTRUCTIONS = (
     "the in-progress session refreshes at most every 60s, enrichment every 300s. "
     "Every response carries coverage, limits (vs the tape-depth gates), and an escalation block "
     "when local depth is insufficient. Data is served through the 1.21 Initiative hosted relay "
-    "(https://1.21initiative.com/) — no Alpaca or AltData credentials are required; only "
+    "(https://1.21initiative.com/mcp/) — no Alpaca or AltData credentials are required; only "
     "SWARM_MCP_ACCESS_TOKEN. Provider credentials are never accepted as tool arguments. "
     "market.pulse and market.sentiment are the recommended general-purpose tools: they return only "
     "derived ratios, percentiles, and labels and never echo raw provider values back to the caller. "
@@ -50,6 +50,20 @@ INSTRUCTIONS = (
     "(get_bars/enrich_symbol) is internal only and not "
     "exposed as tools, because those paths echo raw provider values; use features.build for the "
     "provenance-guarded feature vector. This server never places, cancels, or routes orders."
+)
+
+
+REMOTE_INSTRUCTIONS = (
+    "Point-in-time market data assembly served via the 1.21 Initiative hosted relay "
+    "(https://1.21initiative.com/mcp/) using your Bearer token (`SWARM_MCP_ACCESS_TOKEN`). "
+    "Provider credentials are never accepted as tool arguments, and local-disk cache "
+    "management tools (`cache.warm`, `cache.stats`, `cache.offline`) exist only on local `stdio`. "
+    "market.pulse and market.sentiment return derived ratios, percentiles, and labels (and accept "
+    "optional inline `bars` rows). market.climate returns operating-area weather research for "
+    "weather-exposed underlyings. pit.analysis reports per-family cross-sectional Spearman IC, "
+    "Newey-West t-stats, and Benjamini-Hochberg q-values (`SIGNIFICANT`, `NOT_SIGNIFICANT`, "
+    "`NOT_JUDGED`, `UNVERIFIED`). Use features.build for provenance-guarded feature vectors. "
+    "This server never places, cancels, or routes orders."
 )
 
 
@@ -139,7 +153,7 @@ mcp = MCPServer(
     title=SERVER_TITLE,
     description=SERVER_DESCRIPTION,
     instructions=INSTRUCTIONS,
-    website_url=HOME_URL,
+    website_url=SITE_URL,
     icons=[{"src": ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
     version=PACKAGE_VERSION,
 )

@@ -29,7 +29,7 @@ claude mcp add quant-swarm -- uvx quant-swarm
 ```text
 https://mcp.1.21initiative.com/mcp
 ```
-*(Metadata & `tools/list` require no auth; tool execution uses OAuth 2.1 PKCE or `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from [1.21initiative.com/mcp/](https://1.21initiative.com/mcp/).)*
+*(Metadata & `tools/list` require no auth; tool execution uses OAuth 2.1 PKCE or `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from [1.21initiative.com/mcp/](https://1.21initiative.com/mcp/). Specialist HTTP endpoints: `/mcp` [12 core tools], `/mcp/data` [16 tools], `/mcp/warden` [12 tools], `/mcp/gym` [11 tools] — local-disk `cache.*` and local-filesystem `audit.*` path tools are intentionally omitted on HTTP.)*
 
 ---
 
@@ -65,12 +65,12 @@ https://mcp.1.21initiative.com/mcp
 | **Hosted Point-in-Time (`pit.*`) Data** | `pit.analysis`, `market.fundamentals_pit`, `market.insider_institutional_pit`, `market.regime` | **`SWARM_MCP_ACCESS_TOKEN`** ([free 250 calls/mo + 100 bonus Pro trial credits](https://1.21initiative.com/mcp/); one-time £19 / 10k or £149 / 100k credit packs, no subscription) |
 
 ### Specialist Profiles (`--profile`)
-Need the full 48-tool specialist suites (step-by-step `audit.preflight`/`quote`/`run`/`compare`, portfolio optimization, symbolic alpha formula evaluation, or optional experimental Shadow Tournament benchmarking)?
+Need the full 48-tool local `stdio` specialist suites (step-by-step `audit.preflight`/`quote`/`run`/`compare`, local SQLite cache management, portfolio optimization, symbolic alpha formula evaluation, or optional experimental Shadow Tournament benchmarking)?
 ```bash
-uvx quant-swarm --profile full     # All 48 tools across Warden, Data & Gym
-uvx quant-swarm --profile warden   # Equivalent to swarm-warden-mcp (18 tools)
-uvx quant-swarm --profile data     # Equivalent to swarm-data-mcp (19 tools)
-uvx quant-swarm --profile gym      # Equivalent to swarm-gym-mcp (11 tools)
+uvx quant-swarm --profile full     # All 48 local stdio tools across Warden, Data & Gym (39 on remote HTTP)
+uvx quant-swarm --profile warden   # Equivalent to swarm-warden-mcp (18 stdio tools; 12 on /mcp/warden HTTP)
+uvx quant-swarm --profile data     # Equivalent to swarm-data-mcp (19 stdio tools; 16 on /mcp/data HTTP)
+uvx quant-swarm --profile gym      # Equivalent to swarm-gym-mcp (11 tools on both stdio and /mcp/gym HTTP)
 ```
 
 ### Point-in-time data, for real
@@ -88,7 +88,7 @@ Every hosted dataset (`market.fundamentals_pit`, `market.insider_institutional_p
 
 ## Security, Privacy & Agent Honesty Rules
 
-- **Strict Transport Isolation:** Local file-path auditing (`audit.backtest`, `audit.report`) exists **only** on `stdio` and is jailed to your active workspace (`SWARM_ALLOWED_WORKSPACE` or `cwd`). Remote HTTP (`https://mcp.1.21initiative.com/mcp`) accepts only bounded inline CSV/row payloads (`<= 250 KB`) with zero server disk I/O.
+- **Strict Transport Isolation:** Local file-path auditing (`audit.backtest`, `audit.preflight`, `audit.quote`, `audit.run`, `audit.report`, `audit.compare`) and local SQLite cache controls (`cache.warm`, `cache.stats`, `cache.offline`) exist **only** on `stdio` and are jailed to your active workspace (`SWARM_ALLOWED_WORKSPACE` or `cwd`). Remote HTTP (`https://mcp.1.21initiative.com/mcp`) accepts only bounded inline CSV/row payloads (`<= 250 KB`) with zero server disk I/O and enforces per-token burst rate limits.
 - **Zero Order Execution:** Read-only diagnostic and research tools only—never places, modifies, or routes live orders. Diagnostic evidence only, not investment advice.
 - **Recommended Agent Rule:** When calling any `quant-swarm` tool, instruct your agent to **quote its verdict verbatim** and **never upgrade a raw p-value** into a significance claim when `bh_q_value > 0.05` or `INSUFFICIENT_EVIDENCE` is returned.
 

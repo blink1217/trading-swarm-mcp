@@ -37,6 +37,20 @@ INSTRUCTIONS = (
 )
 
 
+REMOTE_INSTRUCTIONS = (
+    "Run remote-safe one-shot backtest forensics with `audit.backtest_inline` (inline CSV/row "
+    "payloads <= 250 KB, 0 compute credits) and poll jobs with `audit.status`; step-by-step "
+    "local-filesystem tools (`audit.backtest`, `audit.preflight`, `audit.quote`, `audit.run`, "
+    "`audit.report`, `audit.compare`) run exclusively on local `stdio` (`uvx quant-swarm --profile warden`). "
+    "For pre-trade and schema point checks, use `warden.validate_order`, `warden.cost_check`, "
+    "`warden.explain_sizing`, `warden.audit_features`, `warden.validate_genome`, "
+    "`warden.prop_challenge_check`, `warden.defensive_posture`, `warden.plan_rebalance`, "
+    "`warden.optimize_portfolio`, and `warden.promotion_verdict` (readiness check). "
+    "Requires `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from https://1.21initiative.com/mcp/. "
+    "This server never places, cancels, or routes orders."
+)
+
+
 class ValidateOrderOut(TypedDict, total=False):
     tool: str
     verdict: str
@@ -182,7 +196,7 @@ mcp = MCPServer(
     title=SERVER_TITLE,
     description=SERVER_DESCRIPTION,
     instructions=INSTRUCTIONS,
-    website_url=HOME_URL,
+    website_url=SITE_URL,
     icons=[{"src": ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
     version=PACKAGE_VERSION,
 )

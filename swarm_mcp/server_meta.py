@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 PACKAGE_VERSION = "1.1.1"
 SITE_URL = "https://1.21initiative.com/mcp/"
 HOME_URL = "https://1.21initiative.com/"
+OAUTH_ISSUER = "https://1.21initiative.com"
 ICON_URL = "https://1.21initiative.com/icons/icon-192.png"
 
 # Canonical hosted streamable-HTTP endpoint. server.json, the npm launcher,

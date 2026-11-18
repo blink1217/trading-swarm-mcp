@@ -19,9 +19,9 @@ import os
 from swarm_mcp import server_prompts
 from swarm_mcp.mcp_compat import MCPServer
 from swarm_mcp.server_meta import (
-    HOME_URL,
     ICON_URL,
     PACKAGE_VERSION,
+    SITE_URL,
     annotations,
 )
 from swarm_mcp.servers import data_server, gym_server, warden_server
@@ -32,12 +32,24 @@ SERVER_DESCRIPTION = (
     "significance, cost survival, trade concentration) and Point-in-Time SEC/macro data."
 )
 INSTRUCTIONS = (
-    "Use `audit.backtest` (or `audit.backtest_inline` on remote HTTP) for one-shot backtest "
-    "forensics at 0 credits with zero account required locally. Use `warden.*` for pre-trade "
-    "position, cost, prop-challenge, and feature-leakage guardrails, and `gym.probe_fragility` "
-    "for multi-regime stress testing. Hosted Point-in-Time tools (`pit.analysis`, "
-    "`market.fundamentals_pit`, `market.insider_institutional_pit`) require `SWARM_MCP_ACCESS_TOKEN` "
-    "from https://1.21initiative.com/mcp/. Never places or routes live orders."
+    "Use `audit.backtest` for one-shot backtest forensics at 0 credits with zero account "
+    "required locally. Use `warden.*` for pre-trade position, cost, prop-challenge, and "
+    "feature-leakage guardrails, and `gym.probe_fragility` for multi-regime stress testing. "
+    "Hosted Point-in-Time tools (`pit.analysis`, `market.fundamentals_pit`, "
+    "`market.insider_institutional_pit`) require `SWARM_MCP_ACCESS_TOKEN` from "
+    "https://1.21initiative.com/mcp/. Never places or routes live orders."
+)
+
+REMOTE_INSTRUCTIONS = (
+    "Use `audit.backtest_inline` for one-shot backtest forensics on inline CSV/row payloads "
+    "(<= 250 KB, 0 compute credits); local file-path auditing (`audit.backtest`, `audit.preflight`, "
+    "`audit.quote`, `audit.run`, `audit.report`, `audit.compare`) lives on local `stdio` "
+    "(`uvx quant-swarm`). Use `warden.*` for pre-trade position, cost, prop-challenge, and "
+    "feature-leakage guardrails, `gym.probe_fragility` (with inline `bars`) for multi-regime "
+    "stress testing, and `pit.analysis`, `market.fundamentals_pit`, "
+    "`market.insider_institutional_pit`, and `market.regime` for Point-in-Time market signals. "
+    "Requires `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from "
+    "https://1.21initiative.com/mcp/. Never places or routes live orders."
 )
 
 CORE_STDIO_TOOL_NAMES = (
@@ -127,6 +139,7 @@ _ALL_TOOL_SPECS = [
 ]
 
 REMOTE_OMITTED_TOOLS = frozenset({
+    "cache.warm",
     "cache.offline",
     "cache.stats",
     "audit.backtest",
@@ -138,23 +151,52 @@ REMOTE_OMITTED_TOOLS = frozenset({
 })
 
 
-def _attach_prompts_and_resources(srv: MCPServer) -> None:
-    srv.prompt(
-        name="pre_trade_check",
-        title="Pre-Trade Check",
-        description="The full pre-trade gate sequence (validate_order, cost_check, explain_sizing) with every verdict quoted verbatim; refusals are never softened.",
-    )(server_prompts.pre_trade_check)
-    srv.prompt(
-        name="explain_pit_significance",
-        title="Explain PIT Significance",
-        description="Explained PIT-correlation significance for one underlying: quotes every (dataset|metric|horizon) verdict verbatim.",
-    )(server_prompts.explain_pit_significance)
+def attach_server_prompts_and_resources(srv: MCPServer, server_key: str = "unified") -> None:
+    """Attach only the prompts and resources whose backing tools exist on `server_key`."""
+    if server_key in ("warden", "unified"):
+        srv.prompt(
+            name="pre_trade_check",
+            title="Pre-Trade Check",
+            description="The full pre-trade gate sequence (validate_order, cost_check, explain_sizing) with every verdict quoted verbatim; refusals are never softened.",
+        )(server_prompts.pre_trade_check)
+    if server_key == "warden":
+        srv.prompt(
+            name="audit_my_strategy",
+            title="Audit My Strategy",
+            description="Genome audit: validate_genome plus audit_features findings quoted exactly, then the tournament path a promotion claim actually requires.",
+        )(server_prompts.audit_my_strategy)
+    if server_key in ("data", "unified"):
+        srv.prompt(
+            name="explain_pit_significance",
+            title="Explain PIT Significance",
+            description="Explained PIT-correlation significance for one underlying: quotes every (dataset|metric|horizon) verdict verbatim.",
+        )(server_prompts.explain_pit_significance)
+    if server_key == "data":
+        srv.prompt(
+            name="regime_check",
+            title="Regime Check",
+            description="The current market-regime label and derived snapshot for one underlying, with the warden checks to run before any order.",
+        )(server_prompts.regime_check)
+    if server_key == "gym":
+        srv.prompt(
+            name="stress_test_genome",
+            title="Stress Test Genome",
+            description="Regime labels (with UNDERPOWERED flags) + fragility probe + a costed hand-off to tournament.submit; never submits automatically and never elevates gym output to a promotion verdict.",
+        )(server_prompts.stress_test_genome)
+
     srv.resource(
         "swarm://docs/methodology",
         name="Methodology",
         description="How the PIT significance verdicts are computed (neutralization, Newey-West inference, scale-free variants, staleness, placebo).",
         mime_type="text/markdown",
     )(functools.partial(server_prompts._read_doc, "methodology.md"))
+    if server_key in ("data", "unified"):
+        srv.resource(
+            "swarm://docs/pit-datasets",
+            name="PIT datasets",
+            description="Which point-in-time dataset families are searched, and the known-at rule that makes each one point-in-time.",
+            mime_type="text/markdown",
+        )(functools.partial(server_prompts._read_doc, "pit-datasets.md"))
     srv.resource(
         "swarm://docs/verdicts",
         name="Verdict semantics",
@@ -167,6 +209,10 @@ def _attach_prompts_and_resources(srv: MCPServer) -> None:
         description="Free/Pro plan limits and the credit rate card.",
         mime_type="text/markdown",
     )(functools.partial(server_prompts._read_doc, "plans.md"))
+
+
+def _attach_prompts_and_resources(srv: MCPServer) -> None:
+    attach_server_prompts_and_resources(srv, "unified")
 
 
 def build_unified_server(profile: str = "core", *, remote_http: bool = False) -> MCPServer:
@@ -184,8 +230,8 @@ def build_unified_server(profile: str = "core", *, remote_http: bool = False) ->
         name="quant-swarm",
         title=SERVER_TITLE,
         description=SERVER_DESCRIPTION,
-        instructions=INSTRUCTIONS,
-        website_url=HOME_URL,
+        instructions=REMOTE_INSTRUCTIONS if remote_http else INSTRUCTIONS,
+        website_url=SITE_URL,
         icons=[{"src": ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
         version=PACKAGE_VERSION,
     )
@@ -213,7 +259,10 @@ def build_unified_server(profile: str = "core", *, remote_http: bool = False) ->
             structured_output=True,
         )(fn)
 
-    _attach_prompts_and_resources(srv)
+    attach_server_prompts_and_resources(
+        srv,
+        "unified" if norm in ("core", "full") else norm,
+    )
     return srv
 
 

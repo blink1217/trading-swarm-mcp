@@ -35,7 +35,7 @@ try:
 except ImportError as e:  # pragma: no cover - httpx is a runtime dependency
     raise SystemExit("monitoring prober needs httpx: pip install httpx") from e
 
-DEFAULT_HOSTED = "https://swarm-mcp-503318750546.europe-west1.run.app"
+DEFAULT_HOSTED = "https://mcp.1.21initiative.com"
 DEFAULT_SITE = "https://1.21initiative.com"
 TIMEOUT_S = 20.0
 PROBE_VERSION = "1.1.1"
@@ -47,7 +47,14 @@ ALLOWED_PIT_STATUSES = {
     "INSUFFICIENT_OBSERVATIONS",
     "UNVERIFIED",
 }
-EXPECTED_TOOL_COUNTS = {"swarm-data": 17, "swarm-warden": 8, "swarm-gym": 8}
+EXPECTED_TOOL_COUNTS = {
+    "swarm-data": 16,
+    "swarm-warden": 12,
+    "swarm-gym": 11,
+    "data": 16,
+    "warden": 12,
+    "gym": 11,
+}
 ALLOWED_LABEL_KEYS = ("service", "env", "endpoint", "ok")
 
 

@@ -34,7 +34,7 @@ Three MCP servers from the pinned `quant-swarm` release (stdio + hosted remote):
 
 ## Setup
 
-- Registry: `io.github.blink1217/quant-swarm` (3 uvx packages + 3 hosted remotes).
-- Remote: `claude mcp add --transport http swarm-data https://swarm-mcp-503318750546.europe-west1.run.app/mcp/data --header "Authorization: Bearer <token>"` (+ `/mcp/warden`, `/mcp/gym`). OAuth connectors unverified — use header auth.
-- stdio: `uvx --from quant-swarm swarm-data-mcp` etc., with `SWARM_MCP_ACCESS_TOKEN` in the env.
+- Registry: `io.github.blink1217/quant-swarm` (unified `quant-swarm` PyPI package + hosted Streamable HTTP remotes).
+- Remote: `claude mcp add --transport http quant-swarm https://mcp.1.21initiative.com/mcp --header "Authorization: Bearer <token>"` (specialist subpaths: `/mcp/data` [16 tools], `/mcp/warden` [12 tools], `/mcp/gym` [11 tools]). Supports OAuth 2.1 PKCE or `Authorization: Bearer` header auth.
+- stdio: `uvx quant-swarm` (or `uvx --from quant-swarm swarm-data-mcp` / `swarm-warden-mcp` / `swarm-gym-mcp`), with `SWARM_MCP_ACCESS_TOKEN` set for hosted PIT/relay tools.
 - Free token at <https://1.21initiative.com/mcp/>. Pro details: `swarm://docs/plans` or the README.

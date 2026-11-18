@@ -1,4 +1,4 @@
-"""Access gate: every tool call requires a token issued via https://1.21initiative.com/.
+"""Access gate: every tool call requires a token issued via https://1.21initiative.com/mcp/.
 
 The token is the GTM gate. Prospects request access at the site (which captures
 their contact details); the site issues a token and meters its usage. The server
@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 
 from swarm_mcp import request_context
 
-SITE_URL = "https://1.21initiative.com/"
+SITE_URL = "https://1.21initiative.com/mcp/"
 ACCESS_TOKEN_ENV = "SWARM_MCP_ACCESS_TOKEN"
 VERIFY_URL_ENV = "SWARM_MCP_TOKEN_VERIFY_URL"
 DEFAULT_VERIFY_URL = "https://1.21initiative.com/api/mcp/verify"

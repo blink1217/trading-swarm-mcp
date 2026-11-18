@@ -79,7 +79,7 @@ def audit_request_block(genome_hash: str, violation_summary: list[str]) -> dict:
         "genome_hash": genome_hash,
         "violation_summary": violation_summary,
         "note": ("hash + violation summary only — no proprietary payload is included; "
-                 "to proceed, request access at https://1.21initiative.com/ — the audit "
+                 "to proceed, request access at https://1.21initiative.com/mcp/ — the audit "
                  "booking flow captures contact details and is how hosted keys are issued and metered"),
     }
 

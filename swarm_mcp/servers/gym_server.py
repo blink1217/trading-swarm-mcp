@@ -46,6 +46,19 @@ INSTRUCTIONS = (
 )
 
 
+REMOTE_INSTRUCTIONS = (
+    "Regime-fragility probing on the swarm's deterministic tier-A replay gym over remote HTTP. "
+    "Pass inline `bars` rows to `gym.label_regimes`, `gym.probe_fragility`, `gym.paired_preview`, "
+    "`gym.evaluate_graph`, and `gym.evaluate_formula` (local SQLite cache warming lives on `stdio` only). "
+    "Every statistic is labelled with its power (`UNDERPOWERED` when below minimum episodes), "
+    "tier-B/C mutations refuse to score, and promotion verdicts are NEVER issued directly by gym probes. "
+    "Call `gym.estimate_cloud_run` to price a full 200-episode paired Shadow Tournament, `tournament.submit` "
+    "to dispatch it (`contribute=true` halves credit cost), `tournament.verdict` to poll results, and "
+    "`tournament.leaderboard` / `tournament.forward_league` to inspect standings. "
+    "Requires `Authorization: Bearer <SWARM_MCP_ACCESS_TOKEN>` from https://1.21initiative.com/mcp/."
+)
+
+
 class TournamentSubmitOut(TypedDict, total=False):
     tool: str
     status: str
@@ -224,7 +237,7 @@ mcp = MCPServer(
     title=SERVER_TITLE,
     description=SERVER_DESCRIPTION,
     instructions=INSTRUCTIONS,
-    website_url=HOME_URL,
+    website_url=SITE_URL,
     icons=[{"src": ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
     version=PACKAGE_VERSION,
 )

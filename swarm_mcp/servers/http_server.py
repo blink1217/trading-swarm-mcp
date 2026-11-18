@@ -6,7 +6,7 @@ Exposes the three swarm MCP servers over Streamable HTTP for remote agents:
   /mcp/gym     -> swarm-gym-mcp    (regime fragility probing)
 
 Every request must carry `Authorization: Bearer <site token>` (issued at
-https://1.21initiative.com/). The middleware validates it against the site's
+https://1.21initiative.com/mcp/). The middleware validates it against the site's
 verify endpoint (300s in-process cache), parses the enriched entitlement
 (plan/status/features/quota), and scopes both to the request so the hosted data
 relay meters per-prospect. Fail closed: no token or a rejected token gets a 401
@@ -33,9 +33,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+from collections import OrderedDict, deque
+import hashlib
 import inspect
 import json
+import math
 import os
+import threading
+import time
 from urllib.parse import parse_qs, urlparse
 
 from starlette.responses import JSONResponse
@@ -46,9 +51,10 @@ from swarm_mcp.servers import data_server, gym_server, unified_server, warden_se
 from swarm_mcp.tools import audit_tools
 
 # M-01 + v1.1.0 transport isolation: local-only tools (process-global switches,
-# local SQLite cache stats, and local-filesystem path audit.* tools) are omitted
+# local SQLite cache warm/stats, and local-filesystem path audit.* tools) are omitted
 # from remote HTTP tools/list and hard-refused on remote HTTP tools/call.
 HOSTED_LOCAL_ONLY_TOOLS = frozenset({
+    "cache.warm",
     "cache.offline",
     "cache.stats",
     "audit.backtest",
@@ -58,6 +64,19 @@ HOSTED_LOCAL_ONLY_TOOLS = frozenset({
     "audit.report",
     "audit.compare",
 })
+
+HEAVY_TOOL_PREFIXES = ("market.", "gym.")
+HEAVY_EXACT_TOOLS = frozenset({
+    "pit.analysis",
+    "features.build",
+    "volume.forecast",
+    "tournament.submit",
+})
+
+DEFAULT_TOKEN_RPM = 60
+DEFAULT_HEAVY_RPM = 20
+DEFAULT_DISCOVERY_RPM = 120
+RATE_WINDOW_S = 60.0
 
 UNAUTHENTICATED_DISCOVERY_METHODS = frozenset({
     "initialize",
@@ -70,14 +89,94 @@ UNAUTHENTICATED_DISCOVERY_METHODS = frozenset({
 })
 
 
-def _clone_remote_safe_server(source_mcp: MCPServer, omitted_names: frozenset[str]) -> MCPServer:
-    """Clone an MCPServer omitting local-only tools while preserving metadata, prompts, and resources."""
+def _is_heavy_tool(name: str) -> bool:
+    return name in HEAVY_EXACT_TOOLS or name.startswith(HEAVY_TOOL_PREFIXES)
+
+
+class SlidingWindowRateLimiter:
+    """Bounded in-process sliding-window rate limiter (keyed by hashed token or client IP)."""
+
+    def __init__(self, *, window_s: float = RATE_WINDOW_S, max_keys: int = 4096) -> None:
+        self._window_s = window_s
+        self._max_keys = max_keys
+        self._buckets: OrderedDict[str, deque[float]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def check_and_consume(
+        self,
+        key: str,
+        *,
+        limit: int,
+        weight: int = 1,
+        now: float | None = None,
+    ) -> tuple[bool, int]:
+        """Return `(allowed, retry_after_seconds)`. `limit <= 0` disables enforcement."""
+        if limit <= 0 or weight <= 0:
+            return True, 0
+        ts = time.monotonic() if now is None else now
+        cutoff = ts - self._window_s
+        with self._lock:
+            dq = self._buckets.get(key)
+            if dq is not None:
+                while dq and dq[0] <= cutoff:
+                    dq.popleft()
+                self._buckets.move_to_end(key)
+            else:
+                if len(self._buckets) >= self._max_keys:
+                    self._buckets.popitem(last=False)
+                dq = deque()
+                self._buckets[key] = dq
+
+            if len(dq) + weight > limit:
+                oldest = dq[0] if dq else ts
+                retry_s = max(1, int(math.ceil((oldest + self._window_s) - ts)))
+                return False, retry_s
+
+            for _ in range(weight):
+                dq.append(ts)
+            return True, 0
+
+
+def _env_rpm(var_name: str, default: int) -> int:
+    raw = os.environ.get(var_name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _token_bucket_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+
+
+def _client_ip_key(scope: dict, headers: dict[bytes, bytes]) -> str:
+    xff = headers.get(b"x-forwarded-for", b"").decode("utf-8", "replace").strip()
+    if xff:
+        first_ip = xff.split(",")[0].strip()
+        if first_ip:
+            return first_ip[:64]
+    client = scope.get("client")
+    if isinstance(client, (list, tuple)) and client:
+        return str(client[0])[:64]
+    return "unknown"
+
+
+def _clone_remote_safe_server(
+    source_mcp: MCPServer,
+    omitted_names: frozenset[str],
+    *,
+    server_key: str,
+    remote_instructions: str,
+) -> MCPServer:
+    """Clone an MCPServer omitting local-only tools while attaching server-scoped prompts, resources, and remote instructions."""
     srv = MCPServer(
         name=source_mcp.name,
         title=getattr(source_mcp, "title", None) or source_mcp.name,
         description=getattr(source_mcp, "description", None) or "",
-        instructions=getattr(source_mcp, "instructions", None) or "",
-        website_url=server_meta.HOME_URL,
+        instructions=remote_instructions,
+        website_url=server_meta.SITE_URL,
         icons=[{"src": server_meta.ICON_URL, "mimeType": "image/png", "sizes": ["192x192"]}],
         version=server_meta.PACKAGE_VERSION,
     )
@@ -93,15 +192,30 @@ def _clone_remote_safe_server(source_mcp: MCPServer, omitted_names: frozenset[st
             annotations=server_meta.annotations(read_only=ro, idempotent=idem, open_world=ow),
             structured_output=True,
         )(fn)
-    unified_server._attach_prompts_and_resources(srv)
+    unified_server.attach_server_prompts_and_resources(srv, server_key)
     return srv
 
 
 SERVERS = {
     "/mcp": unified_server.remote_mcp,
-    "/mcp/data": _clone_remote_safe_server(data_server.mcp, HOSTED_LOCAL_ONLY_TOOLS),
-    "/mcp/warden": _clone_remote_safe_server(warden_server.mcp, HOSTED_LOCAL_ONLY_TOOLS),
-    "/mcp/gym": gym_server.mcp,
+    "/mcp/data": _clone_remote_safe_server(
+        data_server.mcp,
+        HOSTED_LOCAL_ONLY_TOOLS,
+        server_key="data",
+        remote_instructions=data_server.REMOTE_INSTRUCTIONS,
+    ),
+    "/mcp/warden": _clone_remote_safe_server(
+        warden_server.mcp,
+        HOSTED_LOCAL_ONLY_TOOLS,
+        server_key="warden",
+        remote_instructions=warden_server.REMOTE_INSTRUCTIONS,
+    ),
+    "/mcp/gym": _clone_remote_safe_server(
+        gym_server.mcp,
+        HOSTED_LOCAL_ONLY_TOOLS,
+        server_key="gym",
+        remote_instructions=gym_server.REMOTE_INSTRUCTIONS,
+    ),
 }
 
 PUBLIC_PATHS = {"/", "/health", "/healthz"}
@@ -277,14 +391,20 @@ class BearerAuthMiddleware:
 
     def __init__(self, app):
         self.app = app
+        self._token_limiter = SlidingWindowRateLimiter()
+        self._heavy_limiter = SlidingWindowRateLimiter()
+        self._discovery_limiter = SlidingWindowRateLimiter()
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if (path in PUBLIC_PATHS or path.endswith(PROTECTED_RESOURCE)
+        if (path in PUBLIC_PATHS
+                or path == f"/{PROTECTED_RESOURCE}"
+                or path.startswith(f"/{PROTECTED_RESOURCE}/")
                 or path == "/.well-known/oauth-authorization-server"
+                or path.startswith("/.well-known/oauth-authorization-server/")
                 or path.startswith(INTERNAL_PREFIX)):
             # Internal routes authenticate with the shared secret inside _app.
             return await self.app(scope, receive, send)
@@ -307,6 +427,13 @@ class BearerAuthMiddleware:
         if not has_cred_attempt and scope.get("method") == "POST" and path in SERVERS:
             body = await _read_body(receive)
             if _is_discovery_only_payload(body):
+                disc_rpm = _env_rpm("SWARM_MCP_DISCOVERY_RPM", DEFAULT_DISCOVERY_RPM)
+                allowed, retry_s = self._discovery_limiter.check_and_consume(
+                    f"ip:{_client_ip_key(scope, headers)}",
+                    limit=disc_rpm,
+                )
+                if not allowed:
+                    return await self._rate_limited(send, "discovery", disc_rpm, retry_s)
                 return await self.app(scope, _replay_receive(body), send)
             return await self._deny(send, scope)
 
@@ -325,6 +452,32 @@ class BearerAuthMiddleware:
             gated = _gated_tool_name(body, ent)
             if gated:
                 return await self._upgrade_required(send, gated, ent)
+
+            # Per-token burst limits run BEFORE credit metering so a throttled
+            # request never deducts hosted compute credits. Heavy-tool sub-limits
+            # check first so a rejected heavy burst does not consume general RPM.
+            if token and not _is_discovery_only_payload(body):
+                calls = _tool_calls(body)
+                tok_key = _token_bucket_key(token)
+                heavy_count = sum(1 for t_name, _ in calls if _is_heavy_tool(t_name))
+                if heavy_count > 0:
+                    heavy_rpm = _env_rpm("SWARM_MCP_HEAVY_RPM", DEFAULT_HEAVY_RPM)
+                    ok_heavy, retry_heavy = self._heavy_limiter.check_and_consume(
+                        f"heavy:{tok_key}",
+                        limit=heavy_rpm,
+                        weight=heavy_count,
+                    )
+                    if not ok_heavy:
+                        return await self._rate_limited(send, "heavy_tools", heavy_rpm, retry_heavy)
+
+                tok_rpm = _env_rpm("SWARM_MCP_TOKEN_RPM", DEFAULT_TOKEN_RPM)
+                ok_tok, retry_tok = self._token_limiter.check_and_consume(
+                    f"tok:{tok_key}",
+                    limit=tok_rpm,
+                    weight=max(1, len(calls)),
+                )
+                if not ok_tok:
+                    return await self._rate_limited(send, "token_requests", tok_rpm, retry_tok)
             # Hosted compute is metered BEFORE it runs: gym replays cost 1 credit
             # per simulated episode, single-shot Pro tools 1 credit. The site
             # decrements the pool and answers with the same structured 402s the
@@ -478,6 +631,37 @@ class BearerAuthMiddleware:
         await send({"type": "http.response.body", "body": body})
 
 
+    @staticmethod
+    async def _rate_limited(send, bucket_scope: str, limit_rpm: int, retry_after_s: int):
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32005,
+                "message": (
+                    f"rate limit exceeded ({bucket_scope}: max {limit_rpm}/min) — "
+                    f"retry after {retry_after_s}s"
+                ),
+                "data": {
+                    "reason": "rate_limited",
+                    "scope": bucket_scope,
+                    "limit_per_minute": limit_rpm,
+                    "retry_after_s": retry_after_s,
+                },
+            },
+        }).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 429,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+                (b"retry-after", str(retry_after_s).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+
 # Hosts that legitimately reach the service (DNS-rebinding protection stays
 # on). The Cloud Run hostname and the Smithery gateway host are included so a
 # clean deploy with no env overrides still accepts remote clients.
@@ -498,6 +682,11 @@ DEFAULT_ALLOWED_HOSTS = [
 def remote_base_url() -> str:
     """Hosted endpoint base this instance advertises (env override first)."""
     return os.environ.get("SWARM_MCP_REMOTE_URL", server_meta.REMOTE_BASE_URL).rstrip("/")
+
+
+def oauth_issuer_url() -> str:
+    """Canonical OAuth 2.1 authorization-server issuer URL (origin without path)."""
+    return os.environ.get("SWARM_MCP_OAUTH_ISSUER", server_meta.OAUTH_ISSUER).rstrip("/")
 
 
 def _transport_security():
@@ -633,22 +822,41 @@ def build_app(*, require_approval_secret: bool | None = None) -> BearerAuthMiddl
             return await JSONResponse({"error": "not found"}, status_code=404)(scope, receive, send)
         if path in ("/health", "/healthz"):
             return await JSONResponse({"status": "ok"})(scope, receive, send)
-        if path in (f"/{PROTECTED_RESOURCE}", "/.well-known/oauth-authorization-server"):
-            # both AS-metadata flavors: the site is the authorization server, this
-            # endpoint is the protected resource (RFC 9728, so clients discover it)
-            site = access.SITE_URL.rstrip("/")
+        if path == f"/{PROTECTED_RESOURCE}" or path.startswith(f"/{PROTECTED_RESOURCE}/"):
+            # RFC 9728 Protected Resource Metadata: identifies this MCP host as the
+            # protected resource and delegates authorization to the site issuer.
+            issuer = oauth_issuer_url()
             return await JSONResponse({
                 "resource": remote_base_url(),
-                "resource_documentation": f"{site}/mcp/",
-                "authorization_servers": [site],
+                "resource_documentation": server_meta.SITE_URL,
+                "authorization_servers": [issuer],
                 "scopes_supported": ["mcp:tools"],
                 "bearer_methods_supported": ["header"],
+            })(scope, receive, send)
+        if (path == "/.well-known/oauth-authorization-server"
+                or path.startswith("/.well-known/oauth-authorization-server/")):
+            # RFC 8414 Authorization Server Metadata: mirrors 1.21initiative.com's
+            # OAuth 2.1 PKCE metadata so MCP clients probing the MCP host directly
+            # receive valid AS endpoints instead of a protected-resource document.
+            issuer = oauth_issuer_url()
+            return await JSONResponse({
+                "issuer": issuer,
+                "authorization_endpoint": f"{issuer}/api/mcp/oauth/authorize",
+                "token_endpoint": f"{issuer}/api/mcp/oauth/token",
+                "revocation_endpoint": f"{issuer}/api/mcp/oauth/revoke",
+                "registration_endpoint": f"{issuer}/api/mcp/oauth/register",
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "code_challenge_methods_supported": ["S256"],
+                "token_endpoint_auth_methods_supported": ["none"],
+                "scopes_supported": ["mcp:tools"],
+                "service_documentation": server_meta.SITE_URL,
             })(scope, receive, send)
         if path == "/":
             return await JSONResponse({
                 "service": "quant-swarm (remote)",
                 "servers": [f"{remote_base_url()}{p}" for p in SERVERS],
-                "request_access_at": access.SITE_URL,
+                "request_access_at": server_meta.SITE_URL,
             })(scope, receive, send)
         child = children.get(path)
         if child is None:

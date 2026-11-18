@@ -7,7 +7,7 @@
 
 ## Security, Privacy & Agent Honesty Rules
 
-- **Strict Transport Isolation:** Local file-path auditing (`audit.backtest`, `audit.report`) exists **only** on `stdio` and is jailed to your active workspace (`SWARM_ALLOWED_WORKSPACE` or `cwd`). Remote HTTP (`https://mcp.1.21initiative.com/mcp`) accepts only bounded inline CSV/row payloads (`<= 250 KB`) with zero server disk I/O.
+- **Strict Transport Isolation:** Local file-path auditing (`audit.backtest`, `audit.preflight`, `audit.quote`, `audit.run`, `audit.report`, `audit.compare`) and local SQLite cache controls (`cache.warm`, `cache.stats`, `cache.offline`) exist **only** on `stdio` and are jailed to your active workspace (`SWARM_ALLOWED_WORKSPACE` or `cwd`). Remote HTTP (`https://mcp.1.21initiative.com/mcp`) accepts only bounded inline CSV/row payloads (`<= 250 KB`) with zero server disk I/O and enforces per-token burst rate limits.
 - **Zero Order Execution:** Read-only diagnostic and research tools only—never places, modifies, or routes live orders. Diagnostic evidence only, not investment advice.
 - **Recommended Agent Rule:** When calling any `quant-swarm` tool, instruct your agent to **quote its verdict verbatim** and **never upgrade a raw p-value** into a significance claim when `bh_q_value > 0.05` or `INSUFFICIENT_EVIDENCE` is returned.
 

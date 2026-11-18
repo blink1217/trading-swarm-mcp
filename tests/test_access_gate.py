@@ -21,7 +21,7 @@ def test_no_token_returns_access_required_on_hosted_tools(monkeypatch):
     ):
         r = run_async(coro)
         assert r.get("access") == "REQUIRED"
-        assert r["request_access_at"] == "https://1.21initiative.com/"
+        assert r["request_access_at"] == "https://1.21initiative.com/mcp/"
         assert "SWARM_MCP_ACCESS_TOKEN" in r["how"]
         assert "error" in r
 
