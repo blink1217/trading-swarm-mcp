@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 
 from swarm_mcp import vendor_path  # noqa: F401
@@ -513,9 +514,72 @@ def _pct_rank(series: pd.Series, value) -> float | None:
     return round(float((s <= value).mean()), 3)
 
 
+LATENT_TO_LABELS: dict[str, set[str]] = {
+    "crisis_down": {"high_vol", "drawdown"},
+    "choppy_correction": {"chop", "drawdown", "gap_heavy"},
+    "volatile_bull": {"high_vol", "melt_up", "gap_heavy"},
+    "calm_trend": {"chop", "melt_up"},
+}
+
+CRISIS_DOWN_DEPRECATION_NOTE = (
+    "state_posteriors.crisis_down is a 4-state forward-filter probability (not the "
+    "deterministic `regime` classifier label). Deprecated in v1.2.x and scheduled for "
+    "removal in v1.3.0 — read `latent_state`, `regime_flags`, and `drivers` instead."
+)
+
+
+def _symbol_regime_flags_and_drivers(sym_df: pd.DataFrame, lookback: int = 250) -> tuple[str, list[str], dict]:
+    """Compute per-symbol priority regime label, all active regime flags, and derived ratio drivers."""
+    from gym.regime import DRAWDOWN_FROM_HIGH, GAP_HEAVY_MEAN_GAP, MELTUP_MOM_60D, VOL_QUANTILE
+
+    rets_full = sym_df["ret_1d"].dropna()
+    if len(rets_full) < 30:
+        return "chop", ["chop"], {
+            "vol20_pct_rank": None,
+            "dd_from_90d_high": 0.0,
+            "mom_60d": 0.0,
+            "avg_abs_gap_20d": 0.0,
+        }
+    rets = rets_full.iloc[-lookback:]
+    vol20 = float(rets_full.iloc[-20:].std() * np.sqrt(252.0)) if len(rets_full) >= 20 else 0.0
+    vol_all = rets_full.rolling(20).std().dropna() * np.sqrt(252.0)
+    vol_rank = _pct_rank(vol_all, vol20) if len(vol_all) >= 20 else None
+
+    cum = (1.0 + rets).cumprod()
+    dd_90 = float(cum.iloc[-1] / (cum.iloc[-90:].max() + 1e-12) - 1.0) if len(cum) >= 90 else float(
+        cum.iloc[-1] / (cum.max() + 1e-12) - 1.0
+    )
+    mom_60 = float(cum.iloc[-1] / (cum.iloc[-61] + 1e-12) - 1.0) if len(cum) >= 61 else float(cum.iloc[-1] - 1.0)
+    avg_gap = float(sym_df["gap_open"].abs().tail(20).mean()) if "gap_open" in sym_df else 0.0
+    if np.isnan(avg_gap):
+        avg_gap = 0.0
+
+    flags: list[str] = []
+    if len(vol_all) >= 20 and vol20 >= float(vol_all.quantile(VOL_QUANTILE)):
+        flags.append("high_vol")
+    if dd_90 <= -DRAWDOWN_FROM_HIGH:
+        flags.append("drawdown")
+    if mom_60 >= MELTUP_MOM_60D:
+        flags.append("melt_up")
+    if avg_gap >= GAP_HEAVY_MEAN_GAP:
+        flags.append("gap_heavy")
+    if not flags:
+        flags.append("chop")
+
+    priority_label = flags[0]
+    drivers = {
+        "vol20_pct_rank": vol_rank,
+        "dd_from_90d_high": round(dd_90, 4),
+        "mom_60d": round(mom_60, 4),
+        "avg_abs_gap_20d": round(avg_gap, 4),
+    }
+    return priority_label, flags, drivers
+
+
 async def regime_snapshot(symbols: list[str] | None = None, bars: list[dict] | None = None) -> dict:
     """Derived-only causal regime labels (high_vol / drawdown / chop / melt_up /
-    gap_heavy) plus forward-filtered latent regime posteriors per symbol. Free tool.
+    gap_heavy), multi-flag breakdown, and tempered causal forward-filtered latent
+    state posteriors per symbol. Free tool.
     """
     redaction.reject_keylike_args({"symbols": symbols, "bars": bars})
 
@@ -528,6 +592,7 @@ async def regime_snapshot(symbols: list[str] | None = None, bars: list[dict] | N
         except Exception:
             regimes = {}
         out: dict[str, dict] = {}
+        coherence_warnings: dict[str, str] = {}
         for sym in syms:
             g = panel[panel["symbol"] == sym].sort_values("ts")
             if g.empty:
@@ -535,25 +600,55 @@ async def regime_snapshot(symbols: list[str] | None = None, bars: list[dict] | N
                 continue
             row = g.iloc[-1]
             posteriors, entropy = causal_regime_posteriors(g["close"])
-            out[sym] = {
+            sym_label, flags, drivers = _symbol_regime_flags_and_drivers(g)
+            label = regimes.get(row["ts"], sym_label) if (regimes and len(syms) == 1) else sym_label
+            panel_label = regimes.get(row["ts"], sym_label) if regimes else sym_label
+            latent_state = max(posteriors, key=lambda k: posteriors[k])
+            allowed_labels = LATENT_TO_LABELS.get(latent_state, set())
+            coherent = bool(label in allowed_labels)
+            entry: dict = {
                 "as_of": str(pd.Timestamp(row["ts"]).date()),
-                "regime": regimes.get(row["ts"], "unknown") if regimes else "unknown",
+                "regime": label,
+                "panel_regime": panel_label,
+                "regime_flags": flags,
+                "regime_model": "gym_priority_v1 (high_vol>drawdown>melt_up>gap_heavy>chop)",
+                "latent_state": latent_state,
                 "state_posteriors": posteriors,
+                "latent_model": "forward_filter_v2 (4-state, causal expanding, tempered)",
+                "drivers": drivers,
+                "coherent": coherent,
+                "deprecated": {"state_posteriors.crisis_down": CRISIS_DOWN_DEPRECATION_NOTE},
                 "regime_entropy": entropy,
                 "session_count": int(len(g)),
             }
+            if not coherent:
+                warn = (
+                    f"COHERENCE_WARNING ({sym}): deterministic `regime` is '{label}' "
+                    f"(active flags={flags}) while forward-filter `latent_state` is '{latent_state}'. "
+                    f"Inspect `regime_flags` and `drivers` rather than relying on a single taxonomy."
+                )
+                entry["coherence_warning"] = warn
+                coherence_warnings[sym] = warn
+            out[sym] = entry
         get_db().log_provenance("market.regime", ",".join(syms), source_note,
                                 "causal regime labels and state posteriors only — no raw OHLCV returned")
-        return {
+        result: dict = {
             "tool": "market.regime",
             "source": source_note,
             "regimes": out,
-            "methodology": ("causal regime labels and forward-filtered latent state posteriors "
-                            "computed from point-in-time bars with no lookahead; raw open/high/low/close/volume "
-                            "are never echoed"),
+            "deprecated": {"state_posteriors.crisis_down": CRISIS_DOWN_DEPRECATION_NOTE},
+            "methodology": (
+                "two-layer causal snapshot: (1) deterministic gym_priority_v1 label + active "
+                "`regime_flags` (`high_vol > drawdown > melt_up > gap_heavy > chop`), and "
+                "(2) 4-state tempered expanding forward filter (`latent_state` + `state_posteriors` — "
+                "filter probabilities, not classifier labels). Raw OHLCV are never echoed."
+            ),
             "not_investment_advice": True,
             "learn_more": access.SITE_URL,
         }
+        if coherence_warnings:
+            result["coherence_warnings"] = coherence_warnings
+        return result
 
     return await run_tool("market.regime", _do)
 

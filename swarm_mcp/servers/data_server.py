@@ -365,6 +365,8 @@ class RegimeSnapshotOut(TypedDict, total=False):
     tool: str
     source: str
     regimes: dict
+    coherence_warnings: dict[str, str]
+    deprecated: dict[str, str]
     methodology: str
     not_investment_advice: bool
     learn_more: str
@@ -511,9 +513,11 @@ async def regime_snapshot(
         description="Optional caller-supplied OHLCV rows [{symbol, ts, open, high, low, "
                     "close, volume}] for symbols the shared cache does not carry.")] = None,
 ) -> RegimeSnapshotOut:
-    """Free tool — causal regime label per symbol (high_vol / drawdown / chop /
-    melt_up / gap_heavy) from point-in-time bars with no lookahead. Includes
-    forward-filtered latent state posteriors and regime entropy.
+    """Free tool — two-layer causal regime snapshot per symbol with no lookahead.
+
+    Combines (1) deterministic `regime` priority label + all active `regime_flags`
+    and ratio `drivers`, with (2) tempered 4-state forward-filter `latent_state` +
+    `state_posteriors` (`coherent` crosswalk and `crisis_down` v1.3.0 deprecation).
     """
     return await data_tools.regime_snapshot(symbols=symbols, bars=bars)
 

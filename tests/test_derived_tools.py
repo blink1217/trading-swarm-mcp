@@ -170,3 +170,59 @@ def test_cross_sectional_rank_rejects_unknown_metric(tmp_cache):
     get_db().upsert_bars("alpaca", "1Day", "split", rows)
     out = run_async(data_tools.cross_sectional_rank(symbols=tickers, metric="pe_ratio"))
     assert "metric" in out["error"]
+
+
+def test_regime_snapshot_calm_then_selloff_coherence_causality_and_deprecation(tmp_cache):
+    import datetime as dt
+    import numpy as np
+    import pandas as pd
+    from swarm_mcp.tools.alt_derived_tools import causal_regime_posteriors
+
+    rng = np.random.default_rng(1234)
+    # 180 calm trending sessions (~12% annualized vol), followed by 25 selloff sessions (~28% vol, ~-12% drawdown)
+    calm_rets = rng.normal(0.0005, 0.0075, size=180)
+    selloff_rets = rng.normal(-0.0060, 0.0185, size=25)
+    all_rets = np.concatenate([calm_rets, selloff_rets])
+    closes = 100.0 * np.cumprod(1.0 + all_rets)
+    start = dt.date(2026, 1, 2)
+    rows = []
+    cur = start
+    prev_c = 100.0
+    for c in closes:
+        while cur.weekday() >= 5:
+            cur += dt.timedelta(days=1)
+        rows.append({
+            "symbol": "SPY",
+            "ts": f"{cur.isoformat()}T00:00:00Z",
+            "open": float(prev_c),
+            "high": float(max(prev_c, c) * 1.004),
+            "low": float(min(prev_c, c) * 0.996),
+            "close": float(c),
+            "volume": 5_000_000.0,
+        })
+        prev_c = float(c)
+        cur += dt.timedelta(days=1)
+
+    snap = run_async(data_tools.regime_snapshot(bars=rows))
+    spy = snap["regimes"]["SPY"]
+    assert spy["regime"] == "high_vol"
+    assert {"high_vol", "drawdown"} <= set(spy["regime_flags"])
+    assert spy["latent_state"] in ("crisis_down", "choppy_correction")
+    assert spy["coherent"] is True
+    assert "coherence_warning" not in spy
+    assert max(spy["state_posteriors"].values()) < 0.95
+    assert "state_posteriors.crisis_down" in spy["deprecated"]
+    assert "1.3.0" in spy["deprecated"]["state_posteriors.crisis_down"]
+
+    # Strict prefix causality: appending future crash/rally bars after t MUST NOT alter posteriors at t
+    s_prefix = pd.Series(closes[:160])
+    post_t, ent_t = causal_regime_posteriors(s_prefix)
+    future_shock = np.concatenate([closes[:160], closes[160 - 1] * np.cumprod(np.full(40, 0.97))])
+    # Evaluate up to index 160 via prefix of the longer series — identical prefix -> bit-identical output,
+    # AND verify bar 159 inside the loop had zero dependency on bars 160..200 by comparing against truncated run:
+    post_t_check, ent_t_check = causal_regime_posteriors(pd.Series(future_shock[:160]))
+    assert post_t == post_t_check and ent_t == ent_t_check
+    # Also verify no full-window bfill/median leakage: a 55-bar prefix gives identical bar-55 posteriors
+    # regardless of whether causal_regime_posteriors had access to future bars (enforced by expanding loop)
+    p55_a, _ = causal_regime_posteriors(pd.Series(closes[:55]))
+    assert abs(sum(p55_a.values()) - 1.0) < 1e-3

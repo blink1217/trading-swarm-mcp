@@ -1254,6 +1254,20 @@
        "title": "Access",
        "type": "string"
       },
+      "coherence_warnings": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "title": "Coherence Warnings",
+       "type": "object"
+      },
+      "deprecated": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "title": "Deprecated",
+       "type": "object"
+      },
       "error": {
        "title": "Error",
        "type": "string"
