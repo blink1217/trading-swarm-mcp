@@ -112,7 +112,9 @@ def _check(body: dict) -> None:
 
 async def fetch_bars(symbols: list[str], days: int, *,
                      timeframe: str = "1Day", adjustment: str = "split",
-                     token: str | None = None) -> list[dict]:
+                     token: str | None = None,
+                     start_date: str | None = None,
+                     end_date: str | None = None) -> list[dict]:
     """Fetch the most-recent `days` split-adjusted bars per symbol via the relay.
 
     Returns the same row shape as bars_fetch.fetch_daily_bars so callers and the
@@ -139,12 +141,22 @@ async def fetch_bars(symbols: list[str], days: int, *,
         auth_token = _access_token()
         headers = {"Authorization": f"Bearer {auth_token}"}
 
+    req_body: dict = {
+        "symbols": symbols,
+        "days": int(days),
+        "timeframe": timeframe,
+        "adjustment": adjustment,
+    }
+    if start_date:
+        req_body["start"] = str(start_date)[:10]
+    if end_date:
+        req_body["end"] = str(end_date)[:10]
+
     async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
         try:
             r = await client.post(
                 f"{relay_base()}/data/bars",
-                json={"symbols": symbols, "days": int(days),
-                      "timeframe": timeframe, "adjustment": adjustment},
+                json=req_body,
                 headers=headers,
             )
         except httpx.HTTPError as e:
@@ -160,12 +172,20 @@ async def fetch_bars(symbols: list[str], days: int, *,
     _check(body)
 
     rows = []
+    start_bound = str(start_date)[:10] if start_date else None
+    end_bound = str(end_date)[:10] if end_date else None
     for sym, bars in (body.get("bars") or {}).items():
         for b in bars:
             try:
+                ts_str = str(b["t"])
+                day_str = ts_str[:10]
+                if start_bound and day_str < start_bound:
+                    continue
+                if end_bound and day_str > end_bound:
+                    continue
                 rows.append({
                     "symbol": sym,
-                    "ts": str(b["t"]),
+                    "ts": ts_str,
                     "open": float(b["o"]),
                     "high": float(b["h"]),
                     "low": float(b["l"]),

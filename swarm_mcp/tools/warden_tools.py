@@ -156,20 +156,30 @@ async def audit_features(manifest: list[dict], tape_started: str | None = None,
 
 
 async def cost_check(gross_edge_bps: float, spread_bps: float, slippage_bps: float,
-                     adverse_selection_bps: float) -> dict:
+                     adverse_selection_bps: float | None = None) -> dict:
     redaction.reject_keylike_args({"gross_edge_bps": gross_edge_bps, "spread_bps": spread_bps,
                                    "slippage_bps": slippage_bps,
                                    "adverse_selection_bps": adverse_selection_bps})
 
     async def _do():
-        one_way = one_way_cost_bps(spread_bps, slippage_bps, adverse_selection_bps)
-        rt = round_trip_cost_bps(spread_bps, slippage_bps, adverse_selection_bps)
-        net = net_return_after_costs(gross_edge_bps, spread_bps, slippage_bps, adverse_selection_bps)
+        defaults_applied: list[str] = []
+        if adverse_selection_bps is None:
+            adv_bps = 0.0
+            defaults_applied.append("adverse_selection_bps=0.0")
+        else:
+            adv_bps = float(adverse_selection_bps)
+        one_way = one_way_cost_bps(spread_bps, slippage_bps, adv_bps)
+        rt = round_trip_cost_bps(spread_bps, slippage_bps, adv_bps)
+        net = net_return_after_costs(gross_edge_bps, spread_bps, slippage_bps, adv_bps)
         return {
             "tool": "warden.cost_check",
             "one_way_cost_bps": one_way,
             "round_trip_cost_bps": rt,
             "gross_edge_bps": gross_edge_bps,
+            "spread_bps": float(spread_bps),
+            "slippage_bps": float(slippage_bps),
+            "adverse_selection_bps_used": adv_bps,
+            "defaults_applied": defaults_applied,
             "net_return_bps": net,
             "verdict": "SURVIVES_COSTS" if net > 0 else "EDGE_CONSUMED_BY_COSTS",
             "provenance": ("pessimistic fill model from the pinned guardrails rules layer: spread + "

@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
+import hashlib
 import json
 import logging
 import os
@@ -63,6 +64,9 @@ CHAMPION_ENV = "SWARM_MCP_CHAMPION_GENOME"
 UNIVERSE_ENV = "SWARM_MCP_TOURNAMENT_UNIVERSE"
 LOOKBACK_ENV = "SWARM_MCP_TOURNAMENT_LOOKBACK_DAYS"
 DEFAULT_LOOKBACK_DAYS = 1010
+DEFAULT_WINDOW_SESSIONS = 700
+DEFAULT_WARMUP_SESSIONS = 260
+MAX_HOLD_DAYS = 10
 MIN_SYMBOLS = 8
 CALLBACK_TIMEOUT_S = 30.0
 
@@ -207,22 +211,120 @@ def classify(stats: dict, violations: int, lookahead: int) -> str:
 
 
 def slice_panel_window(panel: pd.DataFrame, panel_window: dict | None) -> pd.DataFrame:
-    """Pin the evaluation panel to an explicit season [start_session, end_session] window."""
+    """Pin or bound the evaluation panel to an explicit [start_session, end_session] window."""
     if not isinstance(panel_window, dict):
         return panel
     out = panel
     start_s = panel_window.get("start_session")
-    end_s = panel_window.get("end_session")
+    end_s = panel_window.get("end_session") or panel_window.get("as_of")
     if start_s:
         out = out[out["ts"] >= pd.Timestamp(str(start_s))]
     if end_s:
         out = out[out["ts"] <= pd.Timestamp(str(end_s))]
-    return out.reset_index(drop=True)
+    return _recompute_causal_panel_upto_end(out.reset_index(drop=True))
 
 
-async def _load_panel():
+def _recompute_causal_panel_upto_end(panel: pd.DataFrame) -> pd.DataFrame:
+    """Recompute forward-return columns strictly within `panel` so zero bars after
+    `panel['ts'].max()` can ever leak into `entry_open_next` or `fwd_ret_{1..10}d`."""
+    if panel.empty:
+        return panel
+    base_cols = [c for c in ("symbol", "ts", "open", "high", "low", "close", "volume") if c in panel.columns]
+    if len(base_cols) == 7:
+        return gym_v4.prepare_panel_v4(panel[base_cols].copy())
+    out = panel.sort_values(["symbol", "ts"]).reset_index(drop=True).copy()
+    grouped = out.groupby("symbol", sort=False)
+    if "open" in out.columns:
+        out["entry_open_next"] = grouped["open"].shift(-1)
+    if "close" in out.columns and "entry_open_next" in out.columns:
+        for h in range(1, 11):
+            out[f"fwd_ret_{h}d"] = grouped["close"].shift(-h) / out["entry_open_next"] - 1.0
+    return out
+
+
+def compute_panel_data_hash(panel: pd.DataFrame) -> str:
+    """Deterministic SHA-256 over sorted (symbol, ts, o, h, l, c, v) rows."""
+    if panel.empty:
+        return hashlib.sha256(b"").hexdigest()
+    cols = [c for c in ("symbol", "ts", "open", "high", "low", "close", "volume") if c in panel.columns]
+    sub = panel[cols].drop_duplicates(subset=["symbol", "ts"], keep="last").sort_values(["symbol", "ts"])
+    h = hashlib.sha256()
+    for row in sub.itertuples(index=False):
+        sym = str(getattr(row, "symbol", "")).upper()
+        day = str(pd.Timestamp(getattr(row, "ts")).date())
+        o = float(getattr(row, "open", 0.0))
+        hi = float(getattr(row, "high", 0.0))
+        lo = float(getattr(row, "low", 0.0))
+        c = float(getattr(row, "close", 0.0))
+        v = int(getattr(row, "volume", 0))
+        h.update(f"{sym}|{day}|{o:.6f}|{hi:.6f}|{lo:.6f}|{c:.6f}|{v}\n".encode("utf-8"))
+    return h.hexdigest()
+
+
+def build_rolling_window_context(
+    panel: pd.DataFrame,
+    *,
+    as_of: str | None = None,
+    window_sessions: int | None = None,
+    warmup_sessions: int = DEFAULT_WARMUP_SESSIONS,
+    max_hold_days: int = MAX_HOLD_DAYS,
+    data_hash: str | None = None,
+) -> dict:
+    """Build point-in-time causal rolling window metadata & completed episode bounds.
+
+    Guarantees:
+      1. Zero rows with `ts > as_of` survive into feature, regime, or return calculation.
+      2. When `window_sessions` is set (and panel has warm-up depth), `window_start`
+         leaves `warmup_sessions` trailing bars prior to `window_start` so 250d regime
+         quantiles and SMA50/ATR14 are fully warmed up.
+      3. Scored Friday episodes end at `sessions[-1 - max_hold_days]` (when sufficient
+         sessions exist) so every 1..10d hold exit is already realized on or before
+         `as_of` — adding bar `as_of + 1` tomorrow changes ZERO historical scores.
+    """
+    work = panel
+    if as_of:
+        work = work[work["ts"] <= pd.Timestamp(str(as_of)[:10])].reset_index(drop=True)
+    work = _recompute_causal_panel_upto_end(work)
+    if work.empty:
+        raise ValueError(f"panel has zero rows on or before as_of={as_of}")
+    sessions = sorted(pd.to_datetime(work["ts"]).unique())
+    if window_sessions is not None and int(window_sessions) > 0:
+        win_len = int(window_sessions)
+        total_needed = win_len + max(0, int(warmup_sessions))
+        if len(sessions) > total_needed:
+            # Trim excess ancient bars strictly before `warmup_start` so a rolling
+            # window depends ONLY on `[warmup_start .. as_of]` (constant depth).
+            keep_from = sessions[len(sessions) - total_needed]
+            work = _recompute_causal_panel_upto_end(
+                work[work["ts"] >= keep_from].reset_index(drop=True)
+            )
+            sessions = sorted(pd.to_datetime(work["ts"]).unique())
+        win_start_idx = max(0, len(sessions) - win_len) if len(sessions) > win_len else 0
+    else:
+        win_start_idx = 0
+
+    win_start_ts = pd.Timestamp(sessions[win_start_idx])
+    win_end_ts = pd.Timestamp(sessions[-1])
+    if len(sessions) - win_start_idx > max_hold_days + 25:
+        completed_cutoff_ts = pd.Timestamp(sessions[len(sessions) - 1 - max_hold_days])
+    else:
+        completed_cutoff_ts = win_end_ts
+
+    resolved_as_of = str(as_of)[:10] if as_of else str(win_end_ts.date())
+    return {
+        "panel": work,
+        "as_of": resolved_as_of,
+        "window_start": str(win_start_ts.date()),
+        "window_end": str(win_end_ts.date()),
+        "window_start_ts": win_start_ts,
+        "completed_cutoff_ts": completed_cutoff_ts,
+        "data_hash": data_hash or compute_panel_data_hash(work),
+    }
+
+
+async def _load_panel(*, as_of: str | None = None, window_sessions: int | None = None):
     """Fill the hosted panel through the relay with the service token (cached in
-    the service's SQLite afterwards) and prepare it for the gym."""
+    the service's SQLite afterwards) and prepare it causally up to `as_of`."""
     db = get_db()
     syms = universe()
     lookback = int(os.environ.get(LOOKBACK_ENV, "").strip() or DEFAULT_LOOKBACK_DAYS)
@@ -230,7 +332,14 @@ async def _load_panel():
     tok_ctx = request_context.current_token.set(service_token) if service_token else None
     internal_ctx = request_context.internal_runner_fill.set(True)
     try:
-        result = await cache_bars.get_bars_cached(db, syms, lookback)
+        if as_of or window_sessions:
+            total_sessions = int(window_sessions or DEFAULT_WINDOW_SESSIONS) + DEFAULT_WARMUP_SESSIONS
+            cal_days = max(int(lookback) + 420, int(total_sessions * 365 / 245) + 45)
+            result = await cache_bars.get_bars_as_of_cached(
+                db, syms, as_of=as_of, lookback_calendar_days=cal_days
+            )
+        else:
+            result = await cache_bars.get_bars_cached(db, syms, lookback)
     finally:
         request_context.internal_runner_fill.reset(internal_ctx)
         if tok_ctx is not None:
@@ -244,39 +353,141 @@ async def _load_panel():
     return panel
 
 
+def evaluate_champion_margin_gate(
+    panel: pd.DataFrame,
+    champion_genome: dict,
+    seeds: list[int] | None = None,
+    per_regime: int = 4,
+    *,
+    as_of: str | None = None,
+    window_sessions: int | None = DEFAULT_WINDOW_SESSIONS,
+) -> dict:
+    """Check whether a candidate champion has clearly positive expectancy on the warmed-up panel.
+
+    Margin rule: `mean_weekly_bps > 0` over `>= MIN_ACTIVE_EPISODES` (10) active weeks AND
+    (`ci_95_lower > 0.0` OR `mean_weekly_bps >= 2.0`), preventing near-zero/negative champions
+    where abstaining ('trading less') artificially wins.
+    """
+    use_seeds = list(seeds or plans.TOURNAMENT["seeds"])
+    norm_champ, errs = genome_compat.normalize_for_validation(champion_genome)
+    if errs:
+        raise ValueError(f"champion invalid: {errs}")
+    ctx = build_rolling_window_context(panel, as_of=as_of, window_sessions=window_sessions)
+    work = ctx["panel"]
+    labels = label_all_regimes(work)
+    full_pool = episode_pool(work, labels, min_symbols=MIN_SYMBOLS)
+    pool = [
+        ep for ep in full_pool
+        if ctx["window_start_ts"] <= ep["date"] <= ctx["completed_cutoff_ts"]
+    ]
+    matrix = episode_seed_matrix(pool, use_seeds, per_regime)
+    run = evaluate_genome(work, matrix, norm_champ, use_seeds)
+    eps_by_date = {e["date"]: e for e in run["episodes"]}
+    unique_dates = sorted(eps_by_date)
+    vals = [float(eps_by_date[d]["weekly_net_bps"]) for d in unique_dates]
+    active_weeks = sum(
+        1 for d in unique_dates
+        if int(eps_by_date[d].get("n_positions", 0) or 0) > 0 or bool(eps_by_date[d].get("positions"))
+    )
+    mean_bps = float(pd.Series(vals).mean()) if vals else 0.0
+    ci_lo, ci_hi, prob_pos = gym_tools._bootstrap_summary(vals)
+    clearly_positive = (
+        active_weeks >= MIN_ACTIVE_EPISODES
+        and mean_bps > 0.0
+        and (ci_lo > 0.0 or mean_bps >= 2.0)
+    )
+    if clearly_positive:
+        reason = (
+            f"PASS: mean={mean_bps:+.2f} bps/wk, 95% CI=[{ci_lo:+.2f}, {ci_hi:+.2f}], "
+            f"active_weeks={active_weeks} >= {MIN_ACTIVE_EPISODES}"
+        )
+    else:
+        reason = (
+            f"FAIL_MARGIN: mean={mean_bps:+.2f} bps/wk, 95% CI=[{ci_lo:+.2f}, {ci_hi:+.2f}], "
+            f"active_weeks={active_weeks} (requires active_weeks >= {MIN_ACTIVE_EPISODES} and "
+            f"CI lower > 0 or mean >= +2.0 bps/wk)"
+        )
+    return {
+        "passes_margin_gate": clearly_positive,
+        "genome_hash": genome_compat.genome_hash_canonical(champion_genome),
+        "as_of": ctx["as_of"],
+        "window_start": ctx["window_start"],
+        "window_end": ctx["window_end"],
+        "data_hash": ctx["data_hash"],
+        "n_unique_weeks": len(unique_dates),
+        "active_weeks": active_weeks,
+        "mean_weekly_bps": round(mean_bps, 4),
+        "ci_95": [round(ci_lo, 4), round(ci_hi, 4)],
+        "bootstrap_prob_positive": round(prob_pos, 4),
+        "per_regime_bps": gym_tools._regime_scores_nullable([eps_by_date[d] for d in unique_dates]),
+        "reason": reason,
+    }
+
+
 def paired_outcome(panel, champion: dict, challenger: dict, seeds: list[int], per_regime: int,
-                   champion_eval: dict | None = None, challenger_eval: dict | None = None) -> dict:
+                   champion_eval: dict | None = None, challenger_eval: dict | None = None,
+                   *, as_of: str | None = None, window_sessions: int | None = None,
+                   warmup_sessions: int = DEFAULT_WARMUP_SESSIONS,
+                   max_hold_days: int = MAX_HOLD_DAYS,
+                   data_hash: str | None = None) -> dict:
     """Run both genomes on the identical matrix and return the result block.
 
     ``*_eval`` carry the schema-normalized evaluation copies (v2 -> v3); the
     original genomes are only used for their canonical hash identity. Costs are
     the immutable house constants, never the genome's cost genes (A-01).
     """
-    labels = label_all_regimes(panel)
-    pool = episode_pool(panel, labels, min_symbols=MIN_SYMBOLS)
+    ctx = build_rolling_window_context(
+        panel,
+        as_of=as_of,
+        window_sessions=window_sessions,
+        warmup_sessions=warmup_sessions,
+        max_hold_days=max_hold_days,
+        data_hash=data_hash,
+    )
+    work = ctx["panel"]
+    labels = label_all_regimes(work)
+    full_pool = episode_pool(work, labels, min_symbols=MIN_SYMBOLS)
+    pool = [
+        ep for ep in full_pool
+        if ctx["window_start_ts"] <= ep["date"] <= ctx["completed_cutoff_ts"]
+    ]
     matrix = episode_seed_matrix(pool, seeds, per_regime)
-    champ_run = evaluate_genome(panel, matrix, champion_eval or champion, seeds)
-    chal_run = evaluate_genome(panel, matrix, challenger_eval or challenger, seeds,
+    champ_run = evaluate_genome(work, matrix, champion_eval or champion, seeds)
+    chal_run = evaluate_genome(work, matrix, challenger_eval or challenger, seeds,
                                champion_genome=champion_eval or champion)
     stats = gym_tools.paired_stats(champ_run, chal_run)
     per_ep = [{"max_gross_exposure_pct": e["max_gross_exposure_pct"],
                "max_position_pct": e["max_position_pct"]} for e in chal_run["episodes"]]
     violations = hard_constraint_violations(chal_run["weekly_net_bps"], per_ep)
     lookahead = len(chal_run["lookahead_violations"])
-    depth = gym_tools._depth_meta(panel)
     verdict_info = classify_detailed(stats, len(violations), lookahead)
+    win_lo = pd.Timestamp(ctx["window_start"]).date()
+    win_hi = pd.Timestamp(ctx["window_end"]).date()
+    win_weeks = round((win_hi - win_lo).days / 7.0, 2)
     return {
         "outcome": verdict_info["outcome"],
         "outcome_detail": verdict_info["outcome_detail"],
         "benchmark_status": verdict_info["benchmark_status"],
+        "as_of": ctx["as_of"],
+        "window_start": ctx["window_start"],
+        "window_end": ctx["window_end"],
+        "completed_episode_end": str(ctx["completed_cutoff_ts"].date()),
+        "data_hash": ctx["data_hash"],
+        "cost_model": gym_v4.HOUSE_COST_MODEL,
+        "schema_version": gym_v4.EVALUATED_SCHEMA_VERSION,
+        "evaluated_schema_version": gym_v4.EVALUATED_SCHEMA_VERSION,
         "n_paired_episodes": stats["n_paired_episodes"],
         "seed_draws_per_genome": stats["seed_draws_per_genome"],
         "mean_delta_bps": stats["mean_delta_bps"],
         "mean_champion_bps": stats["mean_champion_bps"],
+        "champion_ci_95": stats["champion_ci_95"],
+        "champion_active_episodes": stats["champion_active_episodes"],
         "mean_challenger_bps": stats["mean_challenger_bps"],
         "challenger_active_episodes": stats["challenger_active_episodes"],
         "paired_p_value": stats["paired_p_value"],
         "delta_ci_95": stats["delta_ci_95"],
+        "win_share_pct": stats["win_share_pct"],
+        "bootstrap_prob_positive_delta": stats["bootstrap_prob_positive_delta"],
         "worst_regime_margin_bps": stats["worst_regime_margin_bps"],
         "populated_regimes": stats["populated_regimes"],
         "per_regime_episode_counts": stats["per_regime_episode_counts"],
@@ -291,10 +502,12 @@ def paired_outcome(panel, champion: dict, challenger: dict, seeds: list[int], pe
         "per_regime": per_regime,
         "fidelity": chal_run["fidelity"],
         "panel": {
-            "symbols": int(panel["symbol"].nunique()),
-            "oldest_session": depth["oldest_session"],
-            "newest_session": depth["newest_session"],
-            "depth_weeks": depth["local_depth_weeks"],
+            "symbols": int(work["symbol"].nunique()),
+            "oldest_session": ctx["window_start"],
+            "newest_session": ctx["window_end"],
+            "warmup_oldest_session": str(work["ts"].min().date()),
+            "depth_weeks": win_weeks,
+            "data_hash": ctx["data_hash"],
         },
         "gate_note": ("paired outcome only — the promotion gate (DSR margin, PBO cap, trials ledger) "
                       "runs inside the swarm's registry on qualifying challengers"),
@@ -353,15 +566,28 @@ async def run_job(job: dict) -> None:
         champ_norm, champ_errors = genome_compat.normalize_for_validation(champ_genome)
         if champ_errors or validate_genome(champ_norm):
             raise RuntimeError("champion genome invalid")
-        if not job.get("house_seed"):
+        if not job.get("house_seed") and not job.get("rescore"):
             try:
                 gym_v4.assert_has_scored_change(normalized, champ_norm)
             except gym_v4.NoScoredChangeError as e:
                 await _callback(job_id, error=str(e))
                 return
-        panel = slice_panel_window(await _load_panel(), job.get("panel_window"))
+        raw_window = job.get("panel_window") if isinstance(job.get("panel_window"), dict) else {}
+        job_as_of = job.get("as_of") or raw_window.get("as_of") or raw_window.get("end_session")
+        job_win_sessions = job.get("window_sessions") or raw_window.get("window_sessions")
+        if job_as_of or job_win_sessions:
+            raw_panel = await _load_panel(
+                as_of=str(job_as_of)[:10] if job_as_of else None,
+                window_sessions=int(job_win_sessions) if job_win_sessions else DEFAULT_WINDOW_SESSIONS,
+            )
+            panel = raw_panel
+            eff_win_sessions = int(job_win_sessions) if job_win_sessions else DEFAULT_WINDOW_SESSIONS
+        else:
+            raw_panel = await _load_panel()
+            panel = slice_panel_window(raw_panel, job.get("panel_window"))
+            eff_win_sessions = None
         if panel.empty:
-            raise RuntimeError("hosted panel empty after applying season panel_window")
+            raise RuntimeError("hosted panel empty after applying rolling window")
         loop = asyncio.get_running_loop()
         bound_outcome = functools.partial(
             paired_outcome,
@@ -372,6 +598,8 @@ async def run_job(job: dict) -> None:
             per_regime,
             champion_eval=champ_norm,
             challenger_eval=normalized,
+            as_of=str(job_as_of)[:10] if job_as_of else None,
+            window_sessions=eff_win_sessions,
         )
         try:
             result = await loop.run_in_executor(_SCORER_POOL, bound_outcome)

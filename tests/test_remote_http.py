@@ -412,10 +412,10 @@ def test_http_batch_with_gated_call_is_refused(monkeypatch):
 
 
 def test_http_catalogs_instructions_prompts_and_urls_are_consistent():
-    """Verify hosted catalogs (12/16/12/11), remote-safe instructions, server-scoped
+    """Verify hosted catalogs (12/16/12/12), remote-safe instructions, server-scoped
     prompts, and unified https://1.21initiative.com/mcp/ URLs across all 4 endpoints."""
     headers = {"Accept": "application/json, text/event-stream"}
-    expected_counts = {"/mcp": 12, "/mcp/data": 16, "/mcp/warden": 12, "/mcp/gym": 11}
+    expected_counts = {"/mcp": 12, "/mcp/data": 16, "/mcp/warden": 12, "/mcp/gym": 12}
     expected_prompts = {
         "/mcp": {"pre_trade_check", "explain_pit_significance"},
         "/mcp/data": {"explain_pit_significance", "regime_check"},

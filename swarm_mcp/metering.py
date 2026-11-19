@@ -109,6 +109,7 @@ ZERO_CREDIT_HOSTED_TOOLS = frozenset({
     "warden.promotion_verdict",
     "tournament.leaderboard",
     "tournament.forward_league",
+    "tournament.my_entries",
 })
 
 

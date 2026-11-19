@@ -87,6 +87,10 @@ class CostCheckOut(TypedDict, total=False):
     one_way_cost_bps: float
     round_trip_cost_bps: float
     gross_edge_bps: float
+    spread_bps: float
+    slippage_bps: float
+    adverse_selection_bps_used: float
+    defaults_applied: list[str]
     net_return_bps: float
     verdict: str
     provenance: str
@@ -270,8 +274,9 @@ async def cost_check(
         description="Claimed gross edge in basis points before costs.")],
     spread_bps: Annotated[float, Field(description="Average bid-ask spread in bps.", ge=0.0)],
     slippage_bps: Annotated[float, Field(description="Expected slippage in bps.", ge=0.0)],
-    adverse_selection_bps: Annotated[float, Field(
-        description="Adverse-selection drag in bps.", ge=0.0)],
+    adverse_selection_bps: Annotated[float | None, Field(
+        description="Adverse-selection drag in bps (defaults to 0.0 when omitted; echoed in defaults_applied).",
+        ge=0.0)] = None,
 ) -> CostCheckOut:
     """Convert a claimed gross edge into net-of-cost reality under the pessimistic fill model.
 

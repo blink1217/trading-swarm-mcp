@@ -271,5 +271,5 @@ def test_all_three_servers_register_expected_tools():
     } <= warden_names
     assert len(data_names) == 19
     assert len(warden_names) == 18
-    assert len(gym_names) == 11
-    assert len(data_names | warden_names | gym_names) == 48
+    assert len(gym_names) == 12
+    assert len(data_names | warden_names | gym_names) == 49

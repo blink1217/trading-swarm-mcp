@@ -277,7 +277,7 @@ def causal_regime_posteriors(close_series: pd.Series) -> tuple[dict[str, float],
 
     rets = np.diff(np.log(np.clip(c, 1e-8, None)))
     n = len(rets)
-    win = min(20, max(5, n // 3))
+    win = 20  # Fixed causal 20-bar window (independent of future series length n)
     first_valid = 4  # min_periods=5 -> index 4 is the first formed bar (zero bfill lookahead)
     rvol = pd.Series(rets).rolling(win, min_periods=5).std().to_numpy(dtype=float) * math.sqrt(252.0)
     mom20 = pd.Series(rets).rolling(win, min_periods=5).sum().to_numpy(dtype=float)
@@ -309,13 +309,15 @@ def causal_regime_posteriors(close_series: pd.Series) -> tuple[dict[str, float],
     ], dtype=float)
 
     prob = np.array([0.35, 0.20, 0.30, 0.15], dtype=float)
-    start_idx = max(first_valid, n - 60)
-    for t in range(start_idx, n):
+    # Run strictly forward from first_valid with a bounded causal 252-bar trailing normalization
+    # window so appending bar n+1 NEVER alters the posterior at any earlier date t <= n.
+    for t in range(first_valid, n):
         if np.isnan(rvol[t]) or np.isnan(mom20[t]):
             continue
-        hist_vol = rvol[first_valid : t + 1]
+        trail_lo = max(first_valid, t + 1 - 252)
+        hist_vol = rvol[trail_lo : t + 1]
         hist_vol = hist_vol[~np.isnan(hist_vol)]
-        hist_mom = mom20[first_valid : t + 1]
+        hist_mom = mom20[trail_lo : t + 1]
         hist_mom = hist_mom[~np.isnan(hist_mom)]
         if len(hist_vol) == 0 or len(hist_mom) == 0:
             continue

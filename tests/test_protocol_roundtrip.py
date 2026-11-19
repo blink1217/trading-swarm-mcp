@@ -140,6 +140,7 @@ def _minimal_args_for_tool(name: str) -> dict:
         "tournament.submit": {"genome": champ},
         "tournament.verdict": {"job_id": "job_missing"},
         "tournament.leaderboard": {},
+        "tournament.my_entries": {},
         "tournament.forward_league": {},
     }
     return table[name]
