@@ -3,6 +3,7 @@ refetchable under TTL, explicit backfill only via cache.warm."""
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import os
 
 import httpx
@@ -81,7 +82,9 @@ def byok_enabled() -> bool:
 
 async def fetch_daily_bars(client: httpx.AsyncClient, symbols: list[str], days: int, *,
                            timeframe: str = TIMEFRAME, adjustment: str = ADJUSTMENT,
-                           api_key: str | None = None, api_secret: str | None = None) -> list[dict]:
+                           api_key: str | None = None, api_secret: str | None = None,
+                           start_date: str | None = None,
+                           end_date: str | None = None) -> list[dict]:
     """Fetch bars via the hosted relay by default; direct Alpaca when SWARM_MCP_BYOK=1.
 
     The row shape is identical either way, so the SQLite cache and point-in-time
@@ -89,10 +92,16 @@ async def fetch_daily_bars(client: httpx.AsyncClient, symbols: list[str], days: 
     """
     if byok_enabled():
         key, secret = api_keys()
-        return await _fetch_daily_bars_direct(client, symbols, days,
+        rows = await _fetch_daily_bars_direct(client, symbols, days,
                                               timeframe=timeframe, adjustment=adjustment,
                                               api_key=key, api_secret=secret)
-    return await relay.fetch_bars(symbols, days, timeframe=timeframe, adjustment=adjustment)
+        if start_date:
+            rows = [r for r in rows if str(r["ts"])[:10] >= str(start_date)[:10]]
+        if end_date:
+            rows = [r for r in rows if str(r["ts"])[:10] <= str(end_date)[:10]]
+        return rows
+    return await relay.fetch_bars(symbols, days, timeframe=timeframe, adjustment=adjustment,
+                                  start_date=start_date, end_date=end_date)
 
 
 def _need_api(symbols: list[str], by_symbol: dict[str, list[dict]], now: dt.datetime) -> list[str]:
@@ -157,6 +166,103 @@ async def get_bars_cached(db: CacheDB, symbols: list[str], lookback_days: int,
         "from_cache": from_cache,
         "from_api": from_api,
         "sessions_by_symbol": sessions_by_symbol,
+    }
+
+
+def compute_bars_data_hash(rows: list[dict]) -> str:
+    """Canonical SHA-256 digest of a point-in-time OHLCV bar set."""
+    dedup: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        sym = str(r.get("symbol", "")).strip().upper()
+        day = str(r.get("ts", ""))[:10]
+        if sym and day:
+            dedup[(sym, day)] = r
+    h = hashlib.sha256()
+    for (sym, day) in sorted(dedup):
+        b = dedup[(sym, day)]
+        line = (
+            f"{sym}|{day}|"
+            f"{float(b['open']):.6f}|{float(b['high']):.6f}|"
+            f"{float(b['low']):.6f}|{float(b['close']):.6f}|{int(b['volume'])}\n"
+        )
+        h.update(line.encode("utf-8"))
+    return h.hexdigest()
+
+
+async def get_bars_as_of_cached(
+    db: CacheDB,
+    symbols: list[str],
+    *,
+    as_of: str | None = None,
+    lookback_calendar_days: int = 1520,
+    now: dt.datetime | None = None,
+) -> dict:
+    """Fetch bars strictly bounded by `ts <= as_of` (zero post-as_of leakage).
+
+    Unlike `get_bars_cached` (which advances `start` with `utc_today(now)`),
+    anchoring `[start_date .. as_of]` to `as_of` ensures two evaluations for
+    the same `as_of` on different wall-clock days return bit-identical bars.
+    """
+    now = now or utcnow()
+    symbols = sorted({s.strip().upper() for s in symbols if s and s.strip()})
+    if not symbols:
+        raise ValueError("no symbols given")
+    target_date = dt.date.fromisoformat(str(as_of)[:10]) if as_of else utc_today(now)
+    start_date = (target_date - dt.timedelta(days=max(30, int(lookback_calendar_days)))).isoformat()
+    end_date = target_date.isoformat()
+
+    raw_cached = db.get_bars(PROVIDER, symbols, TIMEFRAME, ADJUSTMENT, start=start_date)
+    cached = [r for r in raw_cached if session_date(r["ts"]) <= target_date]
+    by_symbol: dict[str, list[dict]] = {}
+    for r in cached:
+        by_symbol.setdefault(r["symbol"], []).append(r)
+    from_cache = len(cached)
+
+    from_api = 0
+    if not offline_enabled():
+        need: list[str] = []
+        min_start_tol = dt.date.fromisoformat(start_date) + dt.timedelta(days=14)
+        for s in symbols:
+            s_rows = by_symbol.get(s, [])
+            if not s_rows:
+                need.append(s)
+                continue
+            oldest_d = session_date(s_rows[0]["ts"])
+            newest_d = session_date(s_rows[-1]["ts"])
+            if oldest_d > min_start_tol or (target_date - newest_d).days > STALE_AFTER_DAYS:
+                need.append(s)
+            elif newest_d == utc_today(now) and age_seconds(s_rows[-1]["fetched_at"], now) > BAR_IN_PROGRESS_TTL_S:
+                need.append(s)
+        if need:
+            span_days = max(60, (utc_today(now) - dt.date.fromisoformat(start_date)).days + 5)
+            req_days = min(2500, int(span_days * 253 / 365) + 30)
+            async with RateLimitedClient(PROVIDER) as client:
+                fetched = await fetch_daily_bars(
+                    client,
+                    need,
+                    req_days,
+                    timeframe=TIMEFRAME,
+                    adjustment=ADJUSTMENT,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            from_api = db.upsert_bars(PROVIDER, TIMEFRAME, ADJUSTMENT, fetched)
+            db.log_api_call(PROVIDER, "bars_as_of", len(need), from_api, cached=False)
+            raw_cached = db.get_bars(PROVIDER, symbols, TIMEFRAME, ADJUSTMENT, start=start_date)
+            cached = [r for r in raw_cached if session_date(r["ts"]) <= target_date]
+            by_symbol = {}
+            for r in cached:
+                by_symbol.setdefault(r["symbol"], []).append(r)
+    else:
+        db.log_api_call(PROVIDER, "bars_as_of", len(symbols), from_cache, cached=True)
+
+    return {
+        "rows": cached,
+        "as_of": end_date,
+        "start_date": start_date,
+        "data_hash": compute_bars_data_hash(cached),
+        "from_cache": from_cache,
+        "from_api": from_api,
     }
 
 

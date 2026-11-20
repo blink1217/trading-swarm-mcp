@@ -135,6 +135,7 @@ _ALL_TOOL_SPECS = [
     ("tournament.submit", "Shadow Tournament: Submit", False, False, True, gym_server.tournament_submit),
     ("tournament.verdict", "Shadow Tournament: Verdict", True, True, True, gym_server.tournament_verdict),
     ("tournament.leaderboard", "Shadow Tournament: Leaderboard", True, True, True, gym_server.tournament_leaderboard),
+    ("tournament.my_entries", "Shadow Tournament: My Entries & Rescore History", True, True, True, gym_server.tournament_my_entries),
     ("tournament.forward_league", "Forward League Pre-Commitment Settlement Status & Ledger", True, True, False, gym_server.tournament_forward_league),
 ]
 

@@ -3656,7 +3656,21 @@
      "readOnlyHint": true
     },
     "inputSchema": {
-     "properties": {},
+     "properties": {
+      "season_id": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional season identifier (e.g. '2026-s2-house-v4' to inspect a read-only archived season; omit for the active rolling season).",
+       "title": "Season Id"
+      }
+     },
      "title": "tournament_leaderboardArguments",
      "type": "object"
     },
@@ -3677,6 +3691,24 @@
       "anonymised": {
        "title": "Anonymised",
        "type": "string"
+      },
+      "archived_seasons": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Archived Seasons",
+       "type": "array"
+      },
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
       },
       "baselines": {
        "items": {
@@ -3760,6 +3792,17 @@
        ],
        "title": "Cost Model"
       },
+      "data_hash": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Data Hash"
+      },
       "error": {
        "anyOf": [
         {
@@ -3781,6 +3824,17 @@
         }
        ],
        "title": "Evaluated Schema Version"
+      },
+      "freshness": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Freshness"
       },
       "geometry": {
        "anyOf": [
@@ -3828,6 +3882,17 @@
        ],
        "title": "Pricing"
       },
+      "read_only_archive": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Read Only Archive"
+      },
       "request_access_at": {
        "anyOf": [
         {
@@ -3862,6 +3927,14 @@
        ],
        "title": "Season Panel"
       },
+      "stale_entries": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Stale Entries",
+       "type": "array"
+      },
       "tool": {
        "title": "Tool",
        "type": "string"
@@ -3895,9 +3968,141 @@
         }
        ],
        "title": "Updated At"
+      },
+      "window_end": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window End"
+      },
+      "window_start": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window Start"
       }
      },
      "title": "TournamentLeaderboardOut",
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "destructiveHint": false,
+     "idempotentHint": true,
+     "openWorldHint": true,
+     "readOnlyHint": true
+    },
+    "inputSchema": {
+     "properties": {},
+     "title": "tournament_my_entriesArguments",
+     "type": "object"
+    },
+    "name": "tournament.my_entries",
+    "outputSchema": {
+     "properties": {
+      "access": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Access"
+      },
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      },
+      "caveat": {
+       "title": "Caveat",
+       "type": "string"
+      },
+      "entries": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Entries",
+       "type": "array"
+      },
+      "error": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Error"
+      },
+      "how": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "How"
+      },
+      "notifications": {
+       "items": {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       "title": "Notifications",
+       "type": "array"
+      },
+      "request_access_at": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Request Access At"
+      },
+      "season_id": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Season Id"
+      },
+      "tool": {
+       "title": "Tool",
+       "type": "string"
+      }
+     },
+     "title": "TournamentMyEntriesOut",
      "type": "object"
     }
    },
@@ -3935,6 +4140,25 @@
        "description": "Genome parameter vector (public schema) to score against the swarm's live champion. Validate locally with warden.validate_genome first.",
        "title": "Genome",
        "type": "object"
+      },
+      "notify_mode": {
+       "default": "changes_only",
+       "description": "Notification cadence: 'changes_only' (default) or 'every_rescore'.",
+       "title": "Notify Mode",
+       "type": "string"
+      },
+      "notify_webhook": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Optional HTTPS webhook URL to notify when rolling period rescores change this entry's rank or outcome.",
+       "title": "Notify Webhook"
       },
       "strategy_code": {
        "anyOf": [
@@ -4268,6 +4492,17 @@
        ],
        "title": "Access"
       },
+      "as_of": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      },
       "benchmark_status": {
        "anyOf": [
         {
@@ -4278,6 +4513,17 @@
         }
        ],
        "title": "Benchmark Status"
+      },
+      "bootstrap_prob_positive_delta": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Bootstrap Prob Positive Delta"
       },
       "contribute": {
        "anyOf": [
@@ -4322,6 +4568,28 @@
         }
        ],
        "title": "Credits Charged"
+      },
+      "credits_refunded": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Credits Refunded"
+      },
+      "data_hash": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Data Hash"
       },
       "disclosure_status": {
        "anyOf": [
@@ -4377,6 +4645,17 @@
         }
        ],
        "title": "Job Id"
+      },
+      "net_credits_charged": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Net Credits Charged"
       },
       "next": {
        "anyOf": [
@@ -4475,6 +4754,39 @@
         }
        ],
        "title": "Verification Badge"
+      },
+      "win_share_pct": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Win Share Pct"
+      },
+      "window_end": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window End"
+      },
+      "window_start": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Window Start"
       }
      },
      "title": "TournamentVerdictOut",
@@ -8127,10 +8439,18 @@
     "inputSchema": {
      "properties": {
       "adverse_selection_bps": {
-       "description": "Adverse-selection drag in bps.",
-       "minimum": 0.0,
-       "title": "Adverse Selection Bps",
-       "type": "number"
+       "anyOf": [
+        {
+         "minimum": 0.0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "description": "Adverse-selection drag in bps (defaults to 0.0 when omitted; echoed in defaults_applied).",
+       "title": "Adverse Selection Bps"
       },
       "gross_edge_bps": {
        "description": "Claimed gross edge in basis points before costs.",
@@ -8153,8 +8473,7 @@
      "required": [
       "gross_edge_bps",
       "spread_bps",
-      "slippage_bps",
-      "adverse_selection_bps"
+      "slippage_bps"
      ],
      "title": "cost_checkArguments",
      "type": "object"
@@ -8165,6 +8484,17 @@
       "access": {
        "title": "Access",
        "type": "string"
+      },
+      "adverse_selection_bps_used": {
+       "title": "Adverse Selection Bps Used",
+       "type": "number"
+      },
+      "defaults_applied": {
+       "items": {
+        "type": "string"
+       },
+       "title": "Defaults Applied",
+       "type": "array"
       },
       "error": {
        "title": "Error",
@@ -8196,6 +8526,14 @@
       },
       "round_trip_cost_bps": {
        "title": "Round Trip Cost Bps",
+       "type": "number"
+      },
+      "slippage_bps": {
+       "title": "Slippage Bps",
+       "type": "number"
+      },
+      "spread_bps": {
+       "title": "Spread Bps",
        "type": "number"
       },
       "tool": {

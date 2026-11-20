@@ -46,6 +46,13 @@ from swarm_mcp.tool_runner import run_tool
 
 TIMEOUT_S = 30.0
 
+OPAQUE_COMPETITOR_CAVEAT = (
+    "Competitors' strategies are hidden, so a rank on its own tells you little you can act on. "
+    "The useful parts are your own absolute stats and per-regime breakdown (for example, where "
+    "you lose in chop), not where you sit relative to opaque others. Other entries' per-episode "
+    "results are never exposed."
+)
+
 
 def _token() -> str:
     token = request_context.current_token.get() or access.resolve_token()
@@ -77,9 +84,12 @@ def _raise_for_refusal(r: httpx.Response) -> dict:
 
 
 async def submit(genome: dict, contribute: bool = False,
-                 disclosure: dict | None = None, strategy_code: str | None = None) -> dict:
+                 disclosure: dict | None = None, strategy_code: str | None = None,
+                 notify_webhook: str | None = None,
+                 notify_mode: str = "changes_only") -> dict:
     redaction.reject_keylike_args({"genome": genome, "contribute": contribute,
-                                   "disclosure": disclosure, "strategy_code": strategy_code})
+                                   "disclosure": disclosure, "strategy_code": strategy_code,
+                                   "notify_webhook": notify_webhook, "notify_mode": notify_mode})
 
     async def _do():
         normalized, errors = genome_compat.normalize_for_validation(genome)
@@ -114,6 +124,10 @@ async def submit(genome: dict, contribute: bool = False,
             payload["disclosure"] = disclosure
         if strategy_code:
             payload["strategy_code"] = strategy_code
+        if notify_webhook:
+            payload["notify_webhook"] = str(notify_webhook).strip()
+        if (notify_webhook or notify_mode != "changes_only") and notify_mode in ("changes_only", "every_rescore"):
+            payload["notify_mode"] = notify_mode
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             try:
                 r = await client.post(
@@ -175,10 +189,20 @@ async def verdict(job_id: str) -> dict:
             "contribution": body.get("contribution"),
             "disclosure_status": body.get("disclosure_status"),
             "credits_charged": body.get("credits_charged"),
+            "credits_refunded": body.get("credits_refunded"),
+            "net_credits_charged": body.get("net_credits_charged"),
             "created_at": body.get("created_at"),
             "scored_at": body.get("scored_at"),
+            "as_of": body.get("as_of") or (res_block.get("as_of") if isinstance(res_block, dict) else None),
+            "window_start": res_block.get("window_start") if isinstance(res_block, dict) else None,
+            "window_end": res_block.get("window_end") if isinstance(res_block, dict) else None,
+            "data_hash": res_block.get("data_hash") if isinstance(res_block, dict) else None,
             "rating": body.get("rating"),
             "result": res_block,
+            "win_share_pct": res_block.get("win_share_pct") if isinstance(res_block, dict) else None,
+            "bootstrap_prob_positive_delta": (
+                res_block.get("bootstrap_prob_positive_delta") if isinstance(res_block, dict) else None
+            ),
             "outcome_detail": res_block.get("outcome_detail") if isinstance(res_block, dict) else None,
             "benchmark_status": res_block.get("benchmark_status") if isinstance(res_block, dict) else None,
             "verification_badge": {
@@ -205,11 +229,15 @@ async def verdict(job_id: str) -> dict:
     return await run_tool("tournament.verdict", _do)
 
 
-async def leaderboard() -> dict:
+async def leaderboard(season_id: str | None = None) -> dict:
+    redaction.reject_keylike_args({"season_id": season_id})
+
     async def _do():
+        params = {"season_id": season_id} if season_id else None
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             try:
                 r = await client.get(f"{_base()}/tournament/leaderboard",
+                                     params=params,
                                      headers={"Authorization": f"Bearer {_token()}"})
             except httpx.HTTPError as e:
                 raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
@@ -218,6 +246,12 @@ async def leaderboard() -> dict:
         return {
             "tool": "tournament.leaderboard",
             "season_id": body.get("season_id"),
+            "read_only_archive": bool(body.get("read_only_archive", False)),
+            "as_of": body.get("as_of"),
+            "window_start": body.get("window_start"),
+            "window_end": body.get("window_end"),
+            "data_hash": body.get("data_hash"),
+            "freshness": body.get("freshness"),
             "season_panel": body.get("season_panel"),
             "updated_at": body.get("updated_at"),
             "last_run_age_days": body.get("last_run_age_days"),
@@ -230,6 +264,8 @@ async def leaderboard() -> dict:
             "cost_model": body.get("cost_model"),
             "evaluated_schema_version": body.get("evaluated_schema_version"),
             "top": top_rows,
+            "stale_entries": body.get("stale_entries") or [],
+            "archived_seasons": body.get("archived_seasons") or [],
             "challengers": body.get("challengers") if body.get("challengers") is not None else [
                 x for x in top_rows if not x.get("house_seed")
             ],
@@ -244,6 +280,30 @@ async def leaderboard() -> dict:
         }
 
     return await run_tool("tournament.leaderboard", _do)
+
+
+async def my_entries() -> dict:
+    """Return the authenticated caller's own tournament entries, rank changes, and stats."""
+    async def _do():
+        async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
+            try:
+                r = await client.get(
+                    f"{_base()}/tournament/my-entries",
+                    headers={"Authorization": f"Bearer {_token()}"},
+                )
+            except httpx.HTTPError as e:
+                raise relay.RelayError(f"tournament endpoint unreachable ({type(e).__name__})") from e
+        body = _raise_for_refusal(r)
+        return {
+            "tool": "tournament.my_entries",
+            "season_id": body.get("season_id"),
+            "as_of": body.get("as_of"),
+            "entries": body.get("entries") or [],
+            "notifications": body.get("notifications") or [],
+            "caveat": body.get("caveat") or OPAQUE_COMPETITOR_CAVEAT,
+        }
+
+    return await run_tool("tournament.my_entries", _do)
 
 
 async def forward_league(include_weekly_commits: bool = True) -> dict:

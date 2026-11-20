@@ -113,14 +113,23 @@ def _wilcoxon_paired(deltas: list[float]) -> float | None:
         return None
 
 
-def _bootstrap_ci(deltas: list[float], n_boot: int = 1000, ci: float = 0.95) -> tuple[float, float]:
+def _bootstrap_summary(deltas: list[float], n_boot: int = 1000, ci: float = 0.95) -> tuple[float, float, float]:
     if not deltas:
-        return (0.0, 0.0)
-    arr = np.array(deltas)
+        return (0.0, 0.0, 0.0)
+    arr = np.array(deltas, dtype=float)
     rng = np.random.default_rng(42)
-    means = [float(np.mean(rng.choice(arr, size=len(arr), replace=True))) for _ in range(n_boot)]
+    means = np.array(
+        [float(np.mean(rng.choice(arr, size=len(arr), replace=True))) for _ in range(n_boot)],
+        dtype=float,
+    )
     lo = float(np.percentile(means, (1 - ci) / 2 * 100))
     hi = float(np.percentile(means, (1 + ci) / 2 * 100))
+    prob_pos = float(np.mean(means > 0.0))
+    return lo, hi, prob_pos
+
+
+def _bootstrap_ci(deltas: list[float], n_boot: int = 1000, ci: float = 0.95) -> tuple[float, float]:
+    lo, hi, _ = _bootstrap_summary(deltas, n_boot=n_boot, ci=ci)
     return lo, hi
 
 
@@ -164,17 +173,28 @@ def paired_stats(champ_run: dict, chal_run: dict) -> dict:
         for d in common
         if int(chal_eps[d].get("n_positions", 0) or 0) > 0 or bool(chal_eps[d].get("positions"))
     )
-    ci_lo, ci_hi = _bootstrap_ci(deltas)
+    champion_active_episodes = sum(
+        1
+        for d in common
+        if int(champ_eps[d].get("n_positions", 0) or 0) > 0 or bool(champ_eps[d].get("positions"))
+    )
+    ci_lo, ci_hi, prob_pos_delta = _bootstrap_summary(deltas)
+    champ_ci_lo, champ_ci_hi, _ = _bootstrap_summary(champ_vals)
+    win_share_pct = round(100.0 * sum(1 for x in deltas if x > 0.0) / len(deltas), 2) if deltas else 0.0
     return {
         "n_paired_episodes": len(common),
         "seed_draws_per_genome": len(champ_run["episodes"]),
         "deltas": deltas,
         "mean_delta_bps": float(np.mean(deltas)) if deltas else 0.0,
         "mean_champion_bps": float(np.mean(champ_vals)) if champ_vals else 0.0,
+        "champion_ci_95": [champ_ci_lo, champ_ci_hi],
+        "champion_active_episodes": champion_active_episodes,
         "mean_challenger_bps": float(np.mean(chal_vals)) if chal_vals else 0.0,
         "challenger_active_episodes": active_episodes,
         "paired_p_value": _wilcoxon_paired(deltas),
         "delta_ci_95": [ci_lo, ci_hi],
+        "win_share_pct": win_share_pct,
+        "bootstrap_prob_positive_delta": round(prob_pos_delta, 4),
         "per_regime_episode_counts": regime_counts,
         "populated_regimes": populated_regimes,
         "per_regime_champion": champ_regime,

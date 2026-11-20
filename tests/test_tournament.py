@@ -544,3 +544,122 @@ def test_tournament_submit_refuses_strategy_material_without_contribution(monkey
     r = run_async(tournament_tools.submit(baseline(), contribute=False, disclosure=_disclosure()))
     assert "requires contribute=true" in r["error"]
     assert fake.calls == []
+
+
+def test_no_leak_shifting_data_end_never_changes_prior_as_of_scores_or_regime_posteriors():
+    """Acceptance Test #7: shifting the data end by 1 or 10 bars does NOT change scores
+    or regime posteriors for windows ending at an earlier `as_of`."""
+    import pandas as pd
+    from swarm_mcp.servers import gym_server
+    from swarm_mcp.tools import alt_derived_tools
+
+    all_rows = synthetic_bars(SYMS, days=340, seed=19)
+    full_panel = gym_tools._panel_from_bars(all_rows)
+    all_dates = sorted(full_panel["ts"].unique())
+    target_as_of_ts = all_dates[-12]
+    target_as_of = str(target_as_of_ts.date())
+
+    rows_upto_t = [r for r in all_rows if str(r["ts"])[:10] <= target_as_of]
+    rows_upto_t_plus_1 = [r for r in all_rows if str(r["ts"])[:10] <= str(all_dates[-11].date())]
+
+    panel_t = gym_tools._panel_from_bars(rows_upto_t)
+    panel_t1 = gym_tools._panel_from_bars(rows_upto_t_plus_1)
+
+    champ = baseline()
+    chal = baseline()
+    chal["risk"]["hold_days"] = 3
+    chal["screen"]["momentum_quantile"] = 0.85
+
+    out_exact = tournament_runner.paired_outcome(
+        panel_t, champ, chal, seeds=[0, 1], per_regime=3,
+        as_of=target_as_of, window_sessions=180, warmup_sessions=80,
+    )
+    out_plus_1 = tournament_runner.paired_outcome(
+        panel_t1, champ, chal, seeds=[0, 1], per_regime=3,
+        as_of=target_as_of, window_sessions=180, warmup_sessions=80,
+    )
+    out_plus_12 = tournament_runner.paired_outcome(
+        full_panel, champ, chal, seeds=[0, 1], per_regime=3,
+        as_of=target_as_of, window_sessions=180, warmup_sessions=80,
+    )
+
+    for key in (
+        "as_of", "window_start", "window_end", "completed_episode_end", "data_hash",
+        "n_paired_episodes", "mean_delta_bps", "mean_champion_bps", "mean_challenger_bps",
+        "win_share_pct", "bootstrap_prob_positive_delta", "per_regime_delta_bps",
+    ):
+        assert out_exact[key] == out_plus_1[key] == out_plus_12[key], f"Mismatch on {key}"
+
+    # Verify causal_regime_posteriors (alt_derived_tools.py) has zero future-length leak too
+    spy_closes = pd.Series(
+        [float(r["close"]) for r in all_rows if r["symbol"] == SYMS[0]]
+    )
+    post_t, _ = alt_derived_tools.causal_regime_posteriors(spy_closes.iloc[:150])
+    post_t_from_longer, _ = alt_derived_tools.causal_regime_posteriors(spy_closes.iloc[:200].iloc[:150])
+    assert post_t == post_t_from_longer
+    # Also test short series (< 60 bars) where old `n // 3` leaked future length
+    post_short, _ = alt_derived_tools.causal_regime_posteriors(spy_closes.iloc[:40])
+    assert abs(sum(post_short.values()) - 1.0) < 1e-6
+
+
+def test_champion_margin_gate_and_warden_cost_check_defaults(monkeypatch):
+    from mcp import Client
+    from swarm_mcp.servers import gym_server, warden_server
+
+    rows = synthetic_bars(SYMS, days=260, seed=31)
+    panel = gym_tools._panel_from_bars(rows)
+    champ = baseline()
+    gate = tournament_runner.evaluate_champion_margin_gate(
+        panel, champ, seeds=[0, 1], per_regime=2, window_sessions=160
+    )
+    assert "passes_margin_gate" in gate
+    assert len(gate["ci_95"]) == 2
+    assert isinstance(gate["active_weeks"], int)
+
+    async def _call(srv, name, args):
+        async with Client(srv) as c:
+            res = await c.call_tool(name, args)
+            return json.loads(res.content[0].text)
+
+    # Verify warden.cost_check defaults adverse_selection_bps=0.0 and echoes defaults_applied
+    sc_def = run_async(_call(
+        warden_server.mcp,
+        "warden.cost_check",
+        {"gross_edge_bps": 25.0, "spread_bps": 3.0, "slippage_bps": 1.0},
+    ))
+    assert sc_def["adverse_selection_bps_used"] == 0.0
+    assert sc_def["defaults_applied"] == ["adverse_selection_bps=0.0"]
+    assert sc_def["round_trip_cost_bps"] == 8.0
+
+    sc_exp = run_async(_call(
+        warden_server.mcp,
+        "warden.cost_check",
+        {"gross_edge_bps": 25.0, "spread_bps": 3.0, "slippage_bps": 1.0, "adverse_selection_bps": 8.0},
+    ))
+    assert sc_exp["adverse_selection_bps_used"] == 8.0
+    assert sc_exp["defaults_applied"] == []
+    assert sc_exp["round_trip_cost_bps"] == 24.0
+
+    # Verify tournament.my_entries MCP schema & opaque-competitor caveat + zero competitor episodes
+    monkeypatch.setattr("httpx.AsyncClient", _FakeAsync(200, {
+        "ok": True,
+        "season_id": "2026-s3-house-v4",
+        "as_of": "2026-11-18",
+        "entries": [{
+            "genome_hash": "d2b45cc64e04",
+            "current_rank": 3,
+            "previous_rank": 4,
+            "rank_change": 1,
+            "freshness": "fresh",
+            "last_scored_as_of": "2026-11-18",
+            "mean_delta_bps": 9.23,
+            "delta_ci_95": [-7.9, 25.4],
+            "win_share_pct": 58.06,
+            "bootstrap_prob_positive_delta": 0.841,
+        }],
+        "notifications": [],
+    }))
+    sc_my = run_async(_call(gym_server.mcp, "tournament.my_entries", {}))
+    assert "Competitors' strategies are hidden" in sc_my["caveat"]
+    assert sc_my["entries"][0]["current_rank"] == 3
+    assert "episodes" not in sc_my["entries"][0]

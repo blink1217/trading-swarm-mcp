@@ -97,10 +97,18 @@ class TournamentVerdictOut(TypedDict, total=False):
     contribution: str | None
     disclosure_status: str | None
     credits_charged: int | None
+    credits_refunded: int | None
+    net_credits_charged: int | None
     created_at: str | None
     scored_at: str | None
+    as_of: str | None
+    window_start: str | None
+    window_end: str | None
+    data_hash: str | None
     rating: float | None
     result: dict | None
+    win_share_pct: float | None
+    bootstrap_prob_positive_delta: float | None
     outcome_detail: str | None
     benchmark_status: str | None
     verification_badge: dict | None
@@ -115,6 +123,12 @@ class TournamentVerdictOut(TypedDict, total=False):
 class TournamentLeaderboardOut(TypedDict, total=False):
     tool: str
     season_id: str | None
+    read_only_archive: bool | None
+    as_of: str | None
+    window_start: str | None
+    window_end: str | None
+    data_hash: str | None
+    freshness: str | None
     season_panel: dict | None
     updated_at: str | None
     last_run_age_days: float | None
@@ -127,11 +141,26 @@ class TournamentLeaderboardOut(TypedDict, total=False):
     cost_model: str | None
     evaluated_schema_version: int | None
     top: list[dict]
+    stale_entries: list[dict]
+    archived_seasons: list[str]
     challengers: list[dict]
     baselines: list[dict]
     geometry: dict | None
     pricing: dict | None
     anonymised: str
+    access: str | None
+    error: str | None
+    request_access_at: str | None
+    how: str | None
+
+
+class TournamentMyEntriesOut(TypedDict, total=False):
+    tool: str
+    season_id: str | None
+    as_of: str | None
+    entries: list[dict]
+    notifications: list[dict]
+    caveat: str
     access: str | None
     error: str | None
     request_access_at: str | None
@@ -528,17 +557,21 @@ async def tournament_submit(
                     "reviewer reads it with an LLM and stores only the structured explanation + a "
                     "code hash (raw code is discarded after review). Remove keys/secrets first. "
                     "Requires contribute=true.")] = None,
+    notify_webhook: Annotated[str | None, Field(
+        description="Optional HTTPS webhook URL to notify when rolling period rescores change this "
+                    "entry's rank or outcome.")] = None,
+    notify_mode: Annotated[str, Field(
+        description="Notification cadence: 'changes_only' (default) or 'every_rescore'.")] = "changes_only",
 ) -> TournamentSubmitOut:
     """Submit a genome to the hosted Shadow Tournament. Charges credits (200, or 100 with
-    contribute=true), then replays the genome AND the swarm's current champion over 200 simulated
-    genome-episodes (100 seed draws per genome across 5 regimes x 4 per regime x 5 seeds, yielding
-    ~62 unique paired historical Friday paths) on the pinned season bars_1day panel.
-    Sends only the genome vector, its hash and the contribute flag, plus (strategy tier) a
-    disclosure and/or strategy_code — never symbols, bars or credentials, and never executes code.
-    Returns a job_id to poll with tournament.verdict.
+    contribute=true) and replays the genome and live champion over up to 200 seed draws (~62
+    unique paired historical Fridays across 5 seeds x 4 draws/regime) on the rolling as-of
+    window. Sends only the genome vector, hash, contribute flag, and optional strategy-tier
+    disclosure or strategy_code (never executed). Returns a job_id for tournament.verdict.
     """
     return await tournament_tools.submit(genome=genome, contribute=contribute,
-                                         disclosure=disclosure, strategy_code=strategy_code)
+                                         disclosure=disclosure, strategy_code=strategy_code,
+                                         notify_webhook=notify_webhook, notify_mode=notify_mode)
 
 
 @mcp.tool(
@@ -564,11 +597,31 @@ async def tournament_verdict(
     annotations=annotations(read_only=True, idempotent=True, open_world=True),
     structured_output=True,
 )
-async def tournament_leaderboard() -> TournamentLeaderboardOut:
-    """Anonymised Shadow Tournament board: champion rating, top challengers by ELO (12-char hash
-    prefixes only), run counts and the current credit prices. Free on every plan.
+async def tournament_leaderboard(
+    season_id: Annotated[str | None, Field(
+        description="Optional season identifier (e.g. '2026-s2-house-v4' to inspect a read-only "
+                    "archived season; omit for the active rolling season).")] = None,
+) -> TournamentLeaderboardOut:
+    """Returns the anonymised Shadow Tournament board for a single rolling as_of window.
+    Includes champion rating, confirmed entries at board as_of, freshness status on any
+    unchecked incumbent, run counts, and credit prices. Free on every plan.
     """
-    return await tournament_tools.leaderboard()
+    return await tournament_tools.leaderboard(season_id=season_id)
+
+
+@mcp.tool(
+    name="tournament.my_entries",
+    title="Shadow Tournament: My Entries & Rescore History",
+    annotations=annotations(read_only=True, idempotent=True, open_world=True),
+    structured_output=True,
+)
+async def tournament_my_entries() -> TournamentMyEntriesOut:
+    """Track your own Shadow Tournament entries across rolling rescores.
+    Returns current rank, previous rank, rank change, s2-to-s3 delta, freshness status, and
+    your own stats (mean delta, 95% CI, win_share_pct, bootstrap_prob_positive_delta, per-regime
+    margins, active weeks) without exposing competitors' strategies or episodes. Free on every plan.
+    """
+    return await tournament_tools.my_entries()
 
 
 class EvaluateFormulaOut(TypedDict, total=False):

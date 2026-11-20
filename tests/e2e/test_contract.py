@@ -34,7 +34,7 @@ GYM_TOOLS = {
     "gym.label_regimes", "gym.probe_fragility", "gym.paired_preview",
     "gym.estimate_cloud_run", "gym.evaluate_graph", "gym.prop_challenge_sim",
     "gym.evaluate_formula", "tournament.submit", "tournament.verdict",
-    "tournament.leaderboard", "tournament.forward_league",
+    "tournament.leaderboard", "tournament.my_entries", "tournament.forward_league",
 }
 
 
@@ -60,7 +60,7 @@ def test_contract_inventory_is_expected_tools(contracts):
     assert set(_by_name(contracts, "warden")) == WARDEN_TOOLS
     assert set(_by_name(contracts, "gym")) == GYM_TOOLS
     total = sum(len(v) for v in contracts.values())
-    assert total == 48, total
+    assert total == 49, total
 
 
 def test_contract_matches_golden_snapshot(contracts):

@@ -102,6 +102,7 @@ FREE_TOOLS = frozenset({
     "cache.offline",
     "tournament.leaderboard",
     "tournament.forward_league",
+    "tournament.my_entries",
 })
 
 PRO_TOOLS = frozenset({
